@@ -18,6 +18,7 @@
       --text:#f2f2f2;
       --danger:#a94442;
       --muted:rgba(255,255,255,.75);
+      --booked:#2a5bd7;
     }
     *{ box-sizing:border-box; }
     body{
@@ -218,6 +219,31 @@
       cursor:pointer;
       font-weight:900;
     }
+
+    .client-badge{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:2px 8px;
+      border-radius:999px;
+      border:1px solid rgba(212,175,55,.35);
+      background:rgba(0,0,0,.18);
+      font-size:.78rem;
+      color:rgba(255,255,255,.88);
+      white-space:nowrap;
+      max-width:220px;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .client-badge img{
+      width:16px;height:16px;
+      border-radius:4px;
+      object-fit:cover;
+      border:1px solid rgba(212,175,55,.25);
+      background:var(--panel2);
+      flex:0 0 auto;
+    }
+
     .entry-sub{
       display:flex;
       flex-direction:column;
@@ -251,6 +277,7 @@
     .partial{background:#f9a825; color:#111;}
     .unpaid{background:#616161;}
     .no_show{background:var(--danger);}
+    .booked{background:var(--booked);}
 
     .fab-wrap{
       position:fixed;
@@ -418,6 +445,50 @@
       -webkit-box-orient:vertical;
       overflow:hidden;
     }
+
+    /* Toast notifications */
+    #toasts{
+      position:fixed;
+      right:14px;
+      bottom:14px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      z-index:20000;
+      max-width:min(420px, calc(100vw - 28px));
+      pointer-events:none;
+    }
+    .toast{
+      pointer-events:auto;
+      background:rgba(18,27,23,.96);
+      border:1px solid rgba(212,175,55,.35);
+      border-left:4px solid var(--gold);
+      border-radius:12px;
+      padding:10px 12px;
+      box-shadow:0 14px 40px rgba(0,0,0,.55);
+      animation:toastIn .18s ease-out;
+    }
+    @keyframes toastIn{
+      from{ transform:translateY(8px); opacity:0; }
+      to{ transform:translateY(0); opacity:1; }
+    }
+    .toast .t-title{ font-weight:900; color:var(--gold); }
+    .toast .t-sub{ opacity:.9; margin-top:4px; font-size:.92rem; }
+    .toast .t-mini{ opacity:.75; margin-top:6px; font-size:.86rem; }
+    .toast .t-row{ display:flex; align-items:center; gap:10px; }
+    .toast .t-row img{
+      width:28px;height:28px;border-radius:8px;object-fit:cover;
+      border:1px solid rgba(212,175,55,.25);
+      background:var(--panel2);
+    }
+    .toast .t-actions{ margin-top:8px; display:flex; gap:10px; flex-wrap:wrap; }
+    .toast .t-actions button{
+      margin-top:0;
+      padding:8px 10px;
+      border-radius:10px;
+      background:var(--panel2);
+      border:1px solid rgba(31,111,80,.65);
+    }
   </style>
 </head>
 
@@ -452,6 +523,7 @@
 
         <select id="statusFilter">
           <option value="all">All Status</option>
+          <option value="booked">Booked</option>
           <option value="paid">Paid</option>
           <option value="partial">Partial</option>
           <option value="unpaid">Unpaid</option>
@@ -521,6 +593,7 @@
       </div>
 
       <select id="status">
+        <option value="booked">Booked</option>
         <option value="unpaid">Unpaid</option>
         <option value="partial">Partial</option>
         <option value="paid">Paid</option>
@@ -562,6 +635,7 @@
         <option value="paid">Paid</option>
         <option value="partial">Partial</option>
         <option value="unpaid">Unpaid</option>
+        <option value="booked">Booked</option>
         <option value="no_show">No Show</option>
       </select>
 
@@ -641,6 +715,14 @@
       </div>
 
       <div class="summary-box">
+        <div style="font-weight:900;color:var(--gold);">Client Rewards</div>
+        <div class="hint">Badges + discounts auto-update when you log tattoos.</div>
+        <div class="actions-row">
+          <button type="button" onclick="openRewards()">Open Rewards Setup</button>
+        </div>
+      </div>
+
+      <div class="summary-box">
         <div style="font-weight:900;color:var(--gold);">Backup / Restore</div>
         <div class="hint">Download a backup so you never lose your data.</div>
         <div class="actions-row">
@@ -657,6 +739,42 @@
       <div class="actions-row">
         <button type="button" onclick="saveSplitSettings()">Save Settings</button>
         <button type="button" class="secondarybtn" onclick="closeSettings()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- REWARDS MODAL -->
+  <div class="modal" id="rewardsModal">
+    <div class="modal-box" id="rewardsBox">
+      <div class="modal-title">Client Rewards Setup</div>
+
+      <details open>
+        <summary>Badge Levels</summary>
+        <div class="hint" style="margin-top:8px;">
+          Levels are based on <b>tattoo count</b> (non-deposit-only entries). Highest matching tier wins.
+        </div>
+        <div id="levelsList" style="margin-top:10px;"></div>
+        <div class="actions-row">
+          <button type="button" onclick="addBadgeLevel()">+ Add Badge Level</button>
+        </div>
+      </details>
+
+      <hr>
+
+      <details open>
+        <summary>Discount Tiers</summary>
+        <div class="hint" style="margin-top:8px;">
+          Discounts are also based on tattoo count. Highest matching tier wins.
+        </div>
+        <div id="discountsList" style="margin-top:10px;"></div>
+        <div class="actions-row">
+          <button type="button" onclick="addDiscountTier()">+ Add Discount Tier</button>
+        </div>
+      </details>
+
+      <div class="actions-row">
+        <button type="button" onclick="saveRewards()">Save Rewards</button>
+        <button type="button" class="secondarybtn" onclick="closeRewards()">Close</button>
       </div>
     </div>
   </div>
@@ -721,6 +839,9 @@
       </div>
     </div>
   </div>
+
+  <!-- Toasts -->
+  <div id="toasts"></div>
 
   <script src="app.js"></script>
 </body>

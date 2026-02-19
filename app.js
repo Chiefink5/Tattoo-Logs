@@ -20,8 +20,27 @@ let filters = JSON.parse(localStorage.getItem("filters") || "null") || {
   sort: "newest"
 };
 
-// Prefill targets (for repeat client)
+// Rewards (badge levels + discount tiers)
+let rewardsSettings = JSON.parse(localStorage.getItem("rewardsSettings") || "null") || {
+  levels: [
+    // { id, name, minCount, pngDataUrl }
+    { id: "lvl1", name: "Rookie", minCount: 1, pngDataUrl: "" },
+    { id: "lvl2", name: "Regular", minCount: 5, pngDataUrl: "" },
+    { id: "lvl3", name: "VIP", minCount: 10, pngDataUrl: "" }
+  ],
+  discounts: [
+    // { id, label, minCount, percent }
+    { id: "d1", label: "5% off", minCount: 5, percent: 5 },
+    { id: "d2", label: "10% off", minCount: 10, percent: 10 }
+  ]
+};
+
+// Prefill targets (repeat client)
 let prefillClient = null; // { client, contact, social }
+
+// Toast de-dupe
+let toastQueue = [];
+let toastTimer = null;
 
 // ================= HELPERS =================
 function safeEl(id){ return document.getElementById(id); }
@@ -55,6 +74,7 @@ function clampPct(p){
   return Math.max(0, Math.min(100, p));
 }
 function normalize(s){ return String(s||"").toLowerCase(); }
+function uid(prefix="id"){ return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`; }
 
 function paymentsArray(entry){ return Array.isArray(entry.payments) ? entry.payments : []; }
 function paidAmount(entry){ return paymentsArray(entry).reduce((sum,p)=>sum + Number(p.amount || 0), 0); }
@@ -66,6 +86,11 @@ function hasSessions(entry){ return paymentsArray(entry).some(p => p.kind === "s
 function isDepositOnlyEntry(entry){
   return depositAmount(entry) > 0 && !hasSessions(entry);
 }
+function isTattooEntry(entry){
+  // Counts toward badge/discount progression: anything that isn't deposit-only
+  // (Bammers, full tattoos, sessions, etc. all count)
+  return !isDepositOnlyEntry(entry);
+}
 
 function currentQuarterIndex(dateObj){ return Math.floor(dateObj.getMonth() / 3); }
 
@@ -74,14 +99,16 @@ function totalForTotalsGross(entry){
   const status = (entry.status || "unpaid").toLowerCase();
   if(status === "paid") return Number(entry.total || 0);
   if(status === "partial") return paidAmount(entry);
+  // booked/unpaid/no_show -> 0
   return 0;
 }
 
-// Preview Paid line
+// Preview Paid line (what you see on the card)
 function paidForPreview(entry){
   const status = (entry.status || "unpaid").toLowerCase();
   if(status === "paid") return Number(entry.total || 0);
   if(status === "partial") return paidAmount(entry);
+  if(status === "booked") return depositAmount(entry); // so you can see deposit at a glance
   return 0;
 }
 
@@ -111,6 +138,59 @@ function save(){
 function saveFilters(){
   localStorage.setItem("filters", JSON.stringify(filters));
 }
+function saveRewardsSettings(){
+  localStorage.setItem("rewardsSettings", JSON.stringify(rewardsSettings));
+}
+
+// ================= TOASTS =================
+function pushToast(toast){
+  toastQueue.push(toast);
+  if(!toastTimer) {
+    toastTimer = setInterval(flushToast, 250);
+  }
+}
+function flushToast(){
+  if(!toastQueue.length){
+    clearInterval(toastTimer);
+    toastTimer = null;
+    return;
+  }
+  const t = toastQueue.shift();
+  showToast(t);
+}
+function showToast({ title, sub, mini, imgDataUrl, actionLabel, actionFn }){
+  const wrap = safeEl("toasts");
+  if(!wrap) return;
+
+  const el = document.createElement("div");
+  el.className = "toast";
+
+  const img = imgDataUrl ? `<img src="${imgDataUrl}" alt="badge">` : ``;
+
+  el.innerHTML = `
+    <div class="t-row">
+      ${img}
+      <div style="min-width:0;">
+        <div class="t-title">${title || "Update"}</div>
+        ${sub ? `<div class="t-sub">${sub}</div>` : ``}
+        ${mini ? `<div class="t-mini">${mini}</div>` : ``}
+      </div>
+    </div>
+    ${actionLabel ? `<div class="t-actions"><button type="button">${actionLabel}</button></div>` : ``}
+  `;
+
+  if(actionLabel && typeof actionFn === "function"){
+    const btn = el.querySelector("button");
+    btn.addEventListener("click", ()=>{
+      actionFn();
+      el.remove();
+    });
+  }
+
+  wrap.appendChild(el);
+
+  setTimeout(()=>{ el.remove(); }, 5500);
+}
 
 // ================= MODALS (click off to close) =================
 const formModal = safeEl("formModal");
@@ -127,6 +207,8 @@ const settingsModal = safeEl("settingsModal");
 const settingsBox = safeEl("settingsBox");
 const clientModal = safeEl("clientModal");
 const clientBox = safeEl("clientBox");
+const rewardsModal = safeEl("rewardsModal");
+const rewardsBox = safeEl("rewardsBox");
 
 function wireModal(modal, box, closer){
   if(!modal || !box) return;
@@ -140,6 +222,7 @@ wireModal(bammerModal, bammerBox, closeBammerQuick);
 wireModal(depositModal, depositBox, closeDepositQuick);
 wireModal(settingsModal, settingsBox, closeSettings);
 wireModal(clientModal, clientBox, closeClient);
+wireModal(rewardsModal, rewardsBox, closeRewards);
 
 // ================= LOGO =================
 function initLogo(){
@@ -242,12 +325,13 @@ window.removeMonthOverride = removeMonthOverride;
 // ================= BACKUP / RESTORE =================
 function downloadBackup(){
   const payload = {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     entries,
     payday,
     splitSettings,
-    filters
+    filters,
+    rewardsSettings
   };
 
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
@@ -273,7 +357,6 @@ function restoreBackup(){
   reader.onload = (e)=>{
     try{
       const data = JSON.parse(e.target.result);
-
       if(!data || typeof data !== "object") throw new Error("Invalid backup");
       if(!Array.isArray(data.entries)) throw new Error("Backup missing entries");
 
@@ -293,6 +376,11 @@ function restoreBackup(){
       if(data.filters && typeof data.filters === "object"){
         filters = data.filters;
         saveFilters();
+      }
+
+      if(data.rewardsSettings && typeof data.rewardsSettings === "object"){
+        rewardsSettings = data.rewardsSettings;
+        saveRewardsSettings();
       }
 
       localStorage.setItem("entries", JSON.stringify(entries));
@@ -409,7 +497,6 @@ function getWeekWindowFromDate(anchorDate){
 function getWeekWindow(now){ return getWeekWindowFromDate(now); }
 
 function openExport(){
-  const exportModal = safeEl("exportModal");
   if(!exportModal) return;
 
   const paydaySelect = safeEl("paydaySelect");
@@ -434,7 +521,6 @@ function openExport(){
   exportModal.style.display = "flex";
 }
 function closeExport(){
-  const exportModal = safeEl("exportModal");
   if(!exportModal) return;
   exportModal.style.display = "none";
 }
@@ -566,6 +652,8 @@ function saveBammer(){
   const total = Number(safeVal("bTotal") || 0);
   if(!date || !client){ alert("Date + Client required."); return; }
 
+  const before = getClientProgressSnapshot(client);
+
   entries.push({
     id: Date.now(),
     date,
@@ -586,6 +674,9 @@ function saveBammer(){
 
   save();
   closeBammerQuick();
+
+  const after = getClientProgressSnapshot(client);
+  maybeNotifyClientProgress(client, before, after);
 }
 window.openBammerQuick = openBammerQuick;
 window.closeBammerQuick = closeBammerQuick;
@@ -616,6 +707,7 @@ function saveDepositOnly(){
   if(!date || !client){ alert("Date + Client required."); return; }
   if(!(dep > 0)){ alert("Deposit amount must be > 0."); return; }
 
+  // Deposit-only does NOT affect badge/discount count, so no progress toasts here.
   const total = Number(safeVal("dTotal") || 0);
 
   entries.push({
@@ -629,7 +721,7 @@ function saveDepositOnly(){
     notes: "",
     total,
     payments: [{ amount: dep, kind: "deposit", note: "" }],
-    status: "partial",
+    status: "booked",
     image: null,
     createdAt: new Date().toISOString(),
     updatedAt: null,
@@ -715,6 +807,97 @@ function fillFormForEdit(entry){
   });
 }
 
+// ================= CLIENT REWARDS (badge + discount) =================
+function clientKey(name){ return normalize(String(name||"")).trim(); }
+
+function getClientEntries(name){
+  const key = clientKey(name);
+  return entries
+    .filter(e => clientKey(e.client) === key)
+    .slice()
+    .sort((a,b)=> b.id - a.id);
+}
+
+function getClientTattooCount(name){
+  const list = getClientEntries(name);
+  return list.filter(isTattooEntry).length;
+}
+
+function getBestLevelForCount(count){
+  const levels = Array.isArray(rewardsSettings.levels) ? rewardsSettings.levels : [];
+  const sorted = levels
+    .filter(l => Number(l.minCount||0) > 0)
+    .slice()
+    .sort((a,b)=> Number(a.minCount) - Number(b.minCount));
+  let best = null;
+  for(const l of sorted){
+    if(count >= Number(l.minCount||0)) best = l;
+  }
+  return best;
+}
+
+function getBestDiscountForCount(count){
+  const tiers = Array.isArray(rewardsSettings.discounts) ? rewardsSettings.discounts : [];
+  const sorted = tiers
+    .filter(t => Number(t.minCount||0) > 0)
+    .slice()
+    .sort((a,b)=> Number(a.minCount) - Number(b.minCount));
+  let best = null;
+  for(const t of sorted){
+    if(count >= Number(t.minCount||0)) best = t;
+  }
+  return best;
+}
+
+function getClientNetTotal(name){
+  return getClientEntries(name).reduce((sum,e)=> sum + totalForTotalsNet(e), 0);
+}
+
+function getClientProgressSnapshot(name){
+  const cnt = getClientTattooCount(name);
+  const level = getBestLevelForCount(cnt);
+  const disc = getBestDiscountForCount(cnt);
+  return {
+    tattooCount: cnt,
+    levelId: level ? level.id : "",
+    levelName: level ? level.name : "",
+    levelPng: level ? (level.pngDataUrl || "") : "",
+    discountId: disc ? disc.id : "",
+    discountLabel: disc ? disc.label : "",
+    discountPct: disc ? Number(disc.percent||0) : 0
+  };
+}
+
+function maybeNotifyClientProgress(name, before, after){
+  if(!before || !after) return;
+
+  const net = money(getClientNetTotal(name));
+
+  // Badge upgrade
+  if(before.levelId !== after.levelId && after.levelId){
+    pushToast({
+      title: `New Badge Unlocked — ${after.levelName}`,
+      sub: `${name} hit ${after.tattooCount} tattoos.`,
+      mini: `Client NET total: ${net}`,
+      imgDataUrl: after.levelPng || "",
+      actionLabel: "View Client",
+      actionFn: ()=> openClientProfile(name)
+    });
+  }
+
+  // Discount upgrade
+  if(before.discountId !== after.discountId && after.discountId){
+    pushToast({
+      title: `Discount Tier Unlocked`,
+      sub: `${name} is now eligible: ${after.discountLabel} (${after.discountPct}% off)`,
+      mini: `Client NET total: ${net}`,
+      imgDataUrl: after.levelPng || "",
+      actionLabel: "View Client",
+      actionFn: ()=> openClientProfile(name)
+    });
+  }
+}
+
 // ================= SAVE ENTRY (ADD/EDIT) =================
 function saveEntry(){
   const dateVal = safeVal("date");
@@ -723,6 +906,8 @@ function saveEntry(){
     alert("Date and Client Name are required.");
     return;
   }
+
+  const before = getClientProgressSnapshot(clientVal);
 
   const payments = [];
 
@@ -779,6 +964,10 @@ function saveEntry(){
       entries[idx] = next;
       save();
       closeForm();
+
+      // Progress notifications (only if tattoo count potentially changed)
+      const after = getClientProgressSnapshot(clientVal);
+      maybeNotifyClientProgress(clientVal, before, after);
     } else {
       entries.push(Object.assign({}, base, {
         id: Date.now(),
@@ -789,6 +978,9 @@ function saveEntry(){
       }));
       save();
       closeForm();
+
+      const after = getClientProgressSnapshot(clientVal);
+      maybeNotifyClientProgress(clientVal, before, after);
     }
   };
 
@@ -803,16 +995,6 @@ function saveEntry(){
 window.saveEntry = saveEntry;
 
 // ================= CLIENT PROFILES =================
-function clientKey(name){
-  return normalize(String(name||"")).trim();
-}
-function getClientEntries(name){
-  const key = clientKey(name);
-  return entries
-    .filter(e => clientKey(e.client) === key)
-    .slice()
-    .sort((a,b)=> b.id - a.id);
-}
 function guessLatestField(list, field){
   for(const e of list){
     const v = (e[field] || "").trim();
@@ -820,6 +1002,14 @@ function guessLatestField(list, field){
   }
   return "";
 }
+
+function badgeHtmlForClient(name){
+  const snap = getClientProgressSnapshot(name);
+  if(!snap.levelId) return "";
+  const img = snap.levelPng ? `<img src="${snap.levelPng}" alt="badge">` : "";
+  return `<span class="client-badge" title="Badge level">${img}${snap.levelName} (${snap.tattooCount})</span>`;
+}
+
 function openClientProfile(name){
   if(!clientModal || !clientBox) return;
   const list = getClientEntries(name);
@@ -831,7 +1021,7 @@ function openClientProfile(name){
   const displayName = list[0].client;
 
   let net = 0, gross = 0;
-  const statusCounts = { paid:0, partial:0, unpaid:0, no_show:0 };
+  const statusCounts = { paid:0, partial:0, unpaid:0, no_show:0, booked:0 };
   list.forEach(e=>{
     gross += totalForTotalsGross(e);
     net += totalForTotalsNet(e);
@@ -843,8 +1033,25 @@ function openClientProfile(name){
   const contact = guessLatestField(list, "contact");
   const social = guessLatestField(list, "social");
 
+  const snap = getClientProgressSnapshot(displayName);
+  const discountLine = snap.discountId
+    ? `<div>Discount: <strong>${snap.discountLabel}</strong> (${snap.discountPct}% off)</div>`
+    : `<div style="opacity:.75;">Discount: —</div>`;
+
   clientBox.innerHTML = `
     <div class="modal-title">Client — ${displayName}</div>
+
+    <div class="summary-box" style="margin-top:0;">
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between;">
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+          ${badgeHtmlForClient(displayName) || `<span class="hint">No badge yet</span>`}
+        </div>
+        <div class="hint">Tattoo count: <b style="color:var(--gold)">${snap.tattooCount}</b></div>
+      </div>
+      <div style="margin-top:10px;">
+        ${discountLine}
+      </div>
+    </div>
 
     <div class="summary-grid">
       <div class="summary-box">
@@ -856,6 +1063,7 @@ function openClientProfile(name){
       </div>
       <div class="summary-box">
         <div style="font-weight:900;color:var(--gold);">Status</div>
+        <div>BOOKED: <strong>${statusCounts.booked}</strong></div>
         <div>PAID: <strong>${statusCounts.paid}</strong></div>
         <div>PARTIAL: <strong>${statusCounts.partial}</strong></div>
         <div>UNPAID: <strong>${statusCounts.unpaid}</strong></div>
@@ -882,7 +1090,7 @@ function openClientProfile(name){
         return `
           <div class="client-entry" onclick="openEntryFromClient(${e.id})">
             <div class="top">
-              <div><strong>${e.status.toUpperCase()}</strong> — Paid: ${paidLine}</div>
+              <div><strong>${String(e.status||"").toUpperCase()}</strong> — Paid: ${paidLine}</div>
               <div class="date">${e.date}</div>
             </div>
             <div class="desc">${row2 || ""}</div>
@@ -906,7 +1114,6 @@ function openClientProfile(name){
 function closeClient(){
   if(!clientModal) return;
   clientModal.style.display = "none";
-  // keep prefillClient (so buttons can still use it if you reopen quickly)
 }
 function openEntryFromClient(id){
   closeClient();
@@ -971,9 +1178,12 @@ function viewEntry(id){
       }).join("");
   }
 
+  const badge = badgeHtmlForClient(entry.client);
+
   viewBox.innerHTML = `
     <div class="modal-title">
       <span class="client-link" onclick="openClientProfile(${JSON.stringify(entry.client)})">${entry.client}</span>
+      ${badge ? `&nbsp;${badge}` : ``}
       — ${entry.date}
     </div>
 
@@ -1044,7 +1254,7 @@ function convertDepositToTattoo(){
   fillFormForEdit(entry);
 
   const statusEl = safeEl("status");
-  if(statusEl && (!statusEl.value || statusEl.value === "unpaid")) statusEl.value = "partial";
+  if(statusEl && (!statusEl.value || statusEl.value === "unpaid" || statusEl.value === "booked")) statusEl.value = "partial";
 }
 
 function closeView(){
@@ -1241,7 +1451,7 @@ function buildSummary(mode){
   let netTotal = 0;
   let grossTotal = 0;
 
-  const statusCounts = { paid:0, partial:0, unpaid:0, no_show:0 };
+  const statusCounts = { booked:0, paid:0, partial:0, unpaid:0, no_show:0 };
   const clientTotals = {};
   const locationTotals = {};
 
@@ -1284,6 +1494,7 @@ function buildSummary(mode){
 
       <div class="summary-box">
         <div style="font-weight:900;">Status Counts</div>
+        <div>BOOKED: <strong>${statusCounts.booked}</strong></div>
         <div>PAID: <strong>${statusCounts.paid}</strong></div>
         <div>PARTIAL: <strong>${statusCounts.partial}</strong></div>
         <div>UNPAID: <strong>${statusCounts.unpaid}</strong></div>
@@ -1305,6 +1516,144 @@ function buildSummary(mode){
   `;
 }
 window.buildSummary = buildSummary;
+
+// ================= REWARDS UI =================
+function openRewards(){
+  if(!rewardsModal) return;
+  buildRewardsUI();
+  rewardsModal.style.display = "flex";
+}
+function closeRewards(){
+  if(!rewardsModal) return;
+  rewardsModal.style.display = "none";
+}
+window.openRewards = openRewards;
+window.closeRewards = closeRewards;
+
+function buildRewardsUI(){
+  const levelsList = safeEl("levelsList");
+  const discountsList = safeEl("discountsList");
+  if(!levelsList || !discountsList) return;
+
+  const levels = Array.isArray(rewardsSettings.levels) ? rewardsSettings.levels : [];
+  const discounts = Array.isArray(rewardsSettings.discounts) ? rewardsSettings.discounts : [];
+
+  levelsList.innerHTML = levels.map(l=>{
+    const img = l.pngDataUrl ? `<img src="${l.pngDataUrl}" style="width:28px;height:28px;border-radius:8px;border:1px solid rgba(212,175,55,.25);object-fit:cover;background:#16201b;">` : "";
+    return `
+      <div class="summary-box" data-level="${l.id}" style="margin-top:10px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            ${img}
+            <div style="font-weight:900;color:var(--gold);">${l.name || "Badge"}</div>
+          </div>
+          <button type="button" class="secondarybtn" onclick="removeBadgeLevel('${l.id}')">Remove</button>
+        </div>
+        <div class="row">
+          <input type="text" id="lvlName_${l.id}" placeholder="Badge name" value="${(l.name||"").replace(/"/g,"&quot;")}">
+          <input type="number" id="lvlMin_${l.id}" placeholder="Min tattoos" value="${Number(l.minCount||0)}">
+        </div>
+        <div class="actions-row" style="margin-top:0;">
+          <input type="file" id="lvlFile_${l.id}" accept="image/png,image/*" />
+          <button type="button" class="secondarybtn" onclick="clearBadgePNG('${l.id}')">Clear PNG</button>
+        </div>
+        <div class="hint">Upload a PNG to show this badge next to client names.</div>
+      </div>
+    `;
+  }).join("");
+
+  discountsList.innerHTML = discounts.map(d=>{
+    return `
+      <div class="summary-box" data-disc="${d.id}" style="margin-top:10px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+          <div style="font-weight:900;color:var(--gold);">${d.label || "Discount"}</div>
+          <button type="button" class="secondarybtn" onclick="removeDiscountTier('${d.id}')">Remove</button>
+        </div>
+        <div class="row">
+          <input type="text" id="discLabel_${d.id}" placeholder="Label (e.g. 10% off)" value="${(d.label||"").replace(/"/g,"&quot;")}">
+          <input type="number" id="discMin_${d.id}" placeholder="Min tattoos" value="${Number(d.minCount||0)}">
+        </div>
+        <input type="number" id="discPct_${d.id}" placeholder="Percent" value="${Number(d.percent||0)}">
+      </div>
+    `;
+  }).join("");
+}
+
+function addBadgeLevel(){
+  rewardsSettings.levels = rewardsSettings.levels || [];
+  rewardsSettings.levels.push({ id: uid("lvl"), name: "New Badge", minCount: 1, pngDataUrl: "" });
+  buildRewardsUI();
+}
+function removeBadgeLevel(id){
+  rewardsSettings.levels = (rewardsSettings.levels || []).filter(l=>l.id !== id);
+  buildRewardsUI();
+}
+function clearBadgePNG(id){
+  const lvl = (rewardsSettings.levels || []).find(l=>l.id===id);
+  if(lvl){ lvl.pngDataUrl = ""; }
+  buildRewardsUI();
+}
+window.addBadgeLevel = addBadgeLevel;
+window.removeBadgeLevel = removeBadgeLevel;
+window.clearBadgePNG = clearBadgePNG;
+
+function addDiscountTier(){
+  rewardsSettings.discounts = rewardsSettings.discounts || [];
+  rewardsSettings.discounts.push({ id: uid("disc"), label: "New Discount", minCount: 1, percent: 5 });
+  buildRewardsUI();
+}
+function removeDiscountTier(id){
+  rewardsSettings.discounts = (rewardsSettings.discounts || []).filter(d=>d.id !== id);
+  buildRewardsUI();
+}
+window.addDiscountTier = addDiscountTier;
+window.removeDiscountTier = removeDiscountTier;
+
+function saveRewards(){
+  // Pull edits from inputs + read any badge PNG files
+  const levels = Array.isArray(rewardsSettings.levels) ? rewardsSettings.levels : [];
+  const discounts = Array.isArray(rewardsSettings.discounts) ? rewardsSettings.discounts : [];
+
+  // Update text/number fields first
+  levels.forEach(l=>{
+    const nameEl = safeEl(`lvlName_${l.id}`);
+    const minEl = safeEl(`lvlMin_${l.id}`);
+    if(nameEl) l.name = (nameEl.value || "").trim() || "Badge";
+    if(minEl) l.minCount = Math.max(0, Number(minEl.value || 0));
+  });
+
+  discounts.forEach(d=>{
+    const labelEl = safeEl(`discLabel_${d.id}`);
+    const minEl = safeEl(`discMin_${d.id}`);
+    const pctEl = safeEl(`discPct_${d.id}`);
+    if(labelEl) d.label = (labelEl.value || "").trim() || "Discount";
+    if(minEl) d.minCount = Math.max(0, Number(minEl.value || 0));
+    if(pctEl) d.percent = Math.max(0, Math.min(100, Number(pctEl.value || 0)));
+  });
+
+  // Now load PNG files (async) then save
+  const fileReads = levels.map(l=>{
+    const fileEl = safeEl(`lvlFile_${l.id}`);
+    const file = fileEl && fileEl.files ? fileEl.files[0] : null;
+    if(!file) return Promise.resolve();
+    return new Promise((resolve)=>{
+      const reader = new FileReader();
+      reader.onload = (e)=>{ l.pngDataUrl = e.target.result; resolve(); };
+      reader.readAsDataURL(file);
+    });
+  });
+
+  Promise.all(fileReads).then(()=>{
+    // Clean ordering: sort by minCount ascending
+    rewardsSettings.levels = (rewardsSettings.levels || []).slice().sort((a,b)=> Number(a.minCount||0) - Number(b.minCount||0));
+    rewardsSettings.discounts = (rewardsSettings.discounts || []).slice().sort((a,b)=> Number(a.minCount||0) - Number(b.minCount||0));
+    saveRewardsSettings();
+    pushToast({ title:"Rewards saved", sub:"Badges + discounts will auto-update as you log entries." });
+    closeRewards();
+    render();
+  });
+}
+window.saveRewards = saveRewards;
 
 // ================= UI BUILDERS =================
 function createAccordion(title, badgeText){
@@ -1423,12 +1772,15 @@ function render(){
           const desc = (entry.description || "").trim();
           const row2 = [loc, desc].filter(Boolean).join(" • ");
 
+          const badge = badgeHtmlForClient(entry.client);
+
           const row = document.createElement("div");
           row.className = "entry";
           row.innerHTML = `
             <div class="entry-left">
               <div class="entry-name">
                 <span class="client-link" data-client="${entry.client}">${entry.client}</span>
+                ${badge || ``}
               </div>
               <div class="entry-sub">
                 <div class="sub-row"><strong>Paid:</strong> ${paidLine}</div>
