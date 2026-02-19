@@ -5,22 +5,36 @@ let viewingId = null;
 
 // Payday: 0=Sun..6=Sat
 let payday = Number(localStorage.getItem("payday") || 0);
-
-// Export pay period anchor (start date of the shown pay period)
 let payPeriodAnchor = null;
 
-// ================= HELPERS =================
-function money(n){ return "$" + (Number(n || 0)); }
-function pad2(n){ return String(n).padStart(2,"0"); }
+// Split settings (artist take-home %)
+let splitSettings = JSON.parse(localStorage.getItem("splitSettings") || "null") || {
+  defaultPct: 100,
+  monthOverrides: {} // { "YYYY-MM": pct }
+};
 
+// Active filters
+let filters = JSON.parse(localStorage.getItem("filters") || "null") || {
+  q: "",
+  status: "all",
+  location: "all",
+  from: "",
+  to: "",
+  sort: "newest"
+};
+
+// ================= HELPERS =================
 function safeEl(id){ return document.getElementById(id); }
 function safeVal(id){ const el = safeEl(id); return el ? el.value : ""; }
-
+function pad2(n){ return String(n).padStart(2,"0"); }
+function money(n){
+  const num = Number(n || 0);
+  const v = Number.isFinite(num) ? num : 0;
+  return "$" + v.toFixed(2).replace(/\.00$/,""); // looks clean
+}
 function monthName(year, monthIndex){
   return new Date(year, monthIndex, 1).toLocaleString("default",{month:"long"});
 }
-
-// YYYY-MM-DD -> local midnight Date
 function parseLocalDate(dateStr){
   const parts = String(dateStr || "").split("-");
   if(parts.length !== 3) return null;
@@ -29,43 +43,30 @@ function parseLocalDate(dateStr){
   dt.setHours(0,0,0,0);
   return dt;
 }
-
 function formatYYYYMMDD(d){
   return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
 }
-
-function paymentsArray(entry){
-  return Array.isArray(entry.payments) ? entry.payments : [];
+function formatYYYYMM(d){ // month key
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}`;
 }
 
-function paidAmount(entry){
-  // deposit + sessions
-  return paymentsArray(entry).reduce((sum,p)=>sum + Number(p.amount || 0), 0);
-}
-
+function paymentsArray(entry){ return Array.isArray(entry.payments) ? entry.payments : []; }
+function paidAmount(entry){ return paymentsArray(entry).reduce((sum,p)=>sum + Number(p.amount || 0), 0); }
 function depositAmount(entry){
-  return paymentsArray(entry)
-    .filter(p => p.kind === "deposit")
-    .reduce((sum,p)=>sum + Number(p.amount || 0), 0);
+  return paymentsArray(entry).filter(p=>p.kind==="deposit").reduce((sum,p)=>sum + Number(p.amount||0), 0);
 }
+function hasAnyPayments(entry){ return paymentsArray(entry).some(p => Number(p.amount||0) > 0); }
+function currentQuarterIndex(dateObj){ return Math.floor(dateObj.getMonth() / 3); }
 
-function hasAnyPayments(entry){
-  return paidAmount(entry) > 0;
-}
-
-function currentQuarterIndex(dateObj){
-  return Math.floor(dateObj.getMonth() / 3); // 0..3
-}
-
-// Totals logic (dashboard/exports)
-function totalForTotals(entry){
+// ---- Totals logic (gross) ----
+function totalForTotalsGross(entry){
   const status = (entry.status || "unpaid").toLowerCase();
   if(status === "paid") return Number(entry.total || 0);
   if(status === "partial") return paidAmount(entry);
   return 0;
 }
 
-// For the preview “Paid: $X” line
+// Preview Paid line
 function paidForPreview(entry){
   const status = (entry.status || "unpaid").toLowerCase();
   if(status === "paid") return Number(entry.total || 0);
@@ -73,10 +74,30 @@ function paidForPreview(entry){
   return 0;
 }
 
-// ================= SAVE =================
+// ---- Split math (net) ----
+function getSplitPctForDate(dateStr){
+  const d = parseLocalDate(dateStr);
+  if(!d) return Number(splitSettings.defaultPct || 100);
+  const key = formatYYYYMM(d);
+  const override = splitSettings.monthOverrides && splitSettings.monthOverrides[key];
+  const pct = (override !== undefined && override !== null) ? Number(override) : Number(splitSettings.defaultPct || 100);
+  return clampPct(pct);
+}
+function clampPct(p){ p = Number(p); if(!Number.isFinite(p)) return 100; return Math.max(0, Math.min(100, p)); }
+function netFromGross(gross, pct){ return Number(gross||0) * (clampPct(pct) / 100); }
+function totalForTotalsNet(entry){
+  const gross = totalForTotalsGross(entry);
+  const pct = getSplitPctForDate(entry.date);
+  return netFromGross(gross, pct);
+}
+
+// ================= SAVE/RENDER =================
 function save(){
   localStorage.setItem("entries", JSON.stringify(entries));
   render();
+}
+function saveFilters(){
+  localStorage.setItem("filters", JSON.stringify(filters));
 }
 
 // ================= MODALS (click off to close) =================
@@ -86,16 +107,26 @@ const viewModal = safeEl("viewModal");
 const viewBox = safeEl("viewBox");
 const exportModal = safeEl("exportModal");
 const exportBox = safeEl("exportBox");
+const bammerModal = safeEl("bammerModal");
+const bammerBox = safeEl("bammerBox");
+const depositModal = safeEl("depositModal");
+const depositBox = safeEl("depositBox");
+const settingsModal = safeEl("settingsModal");
+const settingsBox = safeEl("settingsBox");
 
-if (formModal) formModal.addEventListener("click", (e)=>{ if(e.target===formModal) closeForm(); });
-if (viewModal) viewModal.addEventListener("click", (e)=>{ if(e.target===viewModal) closeView(); });
-if (exportModal) exportModal.addEventListener("click", (e)=>{ if(e.target===exportModal) closeExport(); });
+function wireModal(modal, box, closer){
+  if(!modal || !box) return;
+  modal.addEventListener("click",(e)=>{ if(e.target===modal) closer(); });
+  box.addEventListener("click",(e)=> e.stopPropagation());
+}
+wireModal(formModal, formBox, closeForm);
+wireModal(viewModal, viewBox, closeView);
+wireModal(exportModal, exportBox, closeExport);
+wireModal(bammerModal, bammerBox, closeBammerQuick);
+wireModal(depositModal, depositBox, closeDepositQuick);
+wireModal(settingsModal, settingsBox, closeSettings);
 
-if (formBox) formBox.addEventListener("click", (e)=> e.stopPropagation());
-if (viewBox) viewBox.addEventListener("click", (e)=> e.stopPropagation());
-if (exportBox) exportBox.addEventListener("click", (e)=> e.stopPropagation());
-
-// ================= LOGO (editable PNG) =================
+// ================= LOGO =================
 function initLogo(){
   const img = safeEl("logoImg");
   const input = safeEl("logoInput");
@@ -105,32 +136,134 @@ function initLogo(){
   if(saved){
     img.src = saved;
   } else {
-    // default tiny placeholder look
     img.src = "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(`
       <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">
-        <rect width="64" height="64" rx="12" fill="#16201b"/>
-        <text x="50%" y="56%" text-anchor="middle" font-family="Inter" font-size="28" fill="#d4af37">G</text>
+        <rect width="64" height="64" rx="14" fill="#16201b"/>
+        <text x="50%" y="58%" text-anchor="middle" font-family="Inter" font-size="28" font-weight="800" fill="#d4af37">G</text>
       </svg>
     `);
   }
 
   img.addEventListener("click", ()=> input.click());
-
   input.addEventListener("change", ()=>{
     const file = input.files && input.files[0];
     if(!file) return;
-
     const reader = new FileReader();
     reader.onload = (e)=>{
-      const dataUrl = e.target.result;
-      localStorage.setItem("logoDataUrl", dataUrl);
-      img.src = dataUrl;
+      localStorage.setItem("logoDataUrl", e.target.result);
+      img.src = e.target.result;
       input.value = "";
     };
     reader.readAsDataURL(file);
   });
 }
+function removeLogo(){
+  localStorage.removeItem("logoDataUrl");
+  initLogo();
+}
 initLogo();
+window.removeLogo = removeLogo;
+
+// ================= SPLIT SETTINGS =================
+function updateSplitPill(){
+  const pillPct = safeEl("splitPillPct");
+  if(!pillPct) return;
+  pillPct.textContent = `${clampPct(splitSettings.defaultPct)}%`;
+}
+updateSplitPill();
+
+function openSettings(){
+  if(!settingsModal) return;
+
+  const def = safeEl("defaultSplitPct");
+  if(def) def.value = String(clampPct(splitSettings.defaultPct));
+
+  const list = safeEl("overrideList");
+  if(list){
+    const keys = Object.keys(splitSettings.monthOverrides || {}).sort().reverse();
+    if(!keys.length){
+      list.innerHTML = "No monthly overrides yet.";
+    } else {
+      list.innerHTML = keys.map(k => `• <b style="color:var(--gold)">${k}</b> → ${clampPct(splitSettings.monthOverrides[k])}%`).join("<br>");
+    }
+  }
+
+  settingsModal.style.display = "flex";
+}
+function closeSettings(){
+  if(!settingsModal) return;
+  settingsModal.style.display = "none";
+}
+function saveSplitSettings(){
+  const def = clampPct(safeVal("defaultSplitPct"));
+  splitSettings.defaultPct = def;
+  localStorage.setItem("splitSettings", JSON.stringify(splitSettings));
+  updateSplitPill();
+  closeSettings();
+  render();
+}
+function saveMonthOverride(){
+  const m = safeVal("overrideMonth"); // YYYY-MM
+  const pct = clampPct(safeVal("overridePct"));
+  if(!m){ alert("Pick a month."); return; }
+  splitSettings.monthOverrides = splitSettings.monthOverrides || {};
+  splitSettings.monthOverrides[m] = pct;
+  localStorage.setItem("splitSettings", JSON.stringify(splitSettings));
+  openSettings(); // refresh list
+  render();
+}
+function removeMonthOverride(){
+  const m = safeVal("overrideMonth");
+  if(!m){ alert("Pick a month."); return; }
+  if(splitSettings.monthOverrides && splitSettings.monthOverrides[m] !== undefined){
+    delete splitSettings.monthOverrides[m];
+    localStorage.setItem("splitSettings", JSON.stringify(splitSettings));
+    openSettings();
+    render();
+  }
+}
+window.openSettings = openSettings;
+window.closeSettings = closeSettings;
+window.saveSplitSettings = saveSplitSettings;
+window.saveMonthOverride = saveMonthOverride;
+window.removeMonthOverride = removeMonthOverride;
+
+// ================= FILTERS UI =================
+function hydrateFilterUI(){
+  const q = safeEl("q");
+  const status = safeEl("statusFilter");
+  const loc = safeEl("locationFilter");
+  const from = safeEl("fromDate");
+  const to = safeEl("toDate");
+  const sort = safeEl("sortFilter");
+
+  if(q) q.value = filters.q || "";
+  if(status) status.value = filters.status || "all";
+  if(from) from.value = filters.from || "";
+  if(to) to.value = filters.to || "";
+  if(sort) sort.value = filters.sort || "newest";
+
+  // location options are populated in render() so it stays accurate
+  if(loc) loc.value = filters.location || "all";
+}
+function applyFilters(){
+  filters.q = (safeVal("q") || "").trim();
+  filters.status = safeVal("statusFilter") || "all";
+  filters.location = safeVal("locationFilter") || "all";
+  filters.from = safeVal("fromDate") || "";
+  filters.to = safeVal("toDate") || "";
+  filters.sort = safeVal("sortFilter") || "newest";
+  saveFilters();
+  render();
+}
+function clearFilters(){
+  filters = { q:"", status:"all", location:"all", from:"", to:"", sort:"newest" };
+  saveFilters();
+  hydrateFilterUI();
+  render();
+}
+window.applyFilters = applyFilters;
+window.clearFilters = clearFilters;
 
 // ================= PAYDAY WEEK WINDOW =================
 function getWeekWindowFromDate(anchorDate){
@@ -148,10 +281,7 @@ function getWeekWindowFromDate(anchorDate){
 
   return { start, end };
 }
-
-function getWeekWindow(now){
-  return getWeekWindowFromDate(now);
-}
+function getWeekWindow(now){ return getWeekWindowFromDate(now); }
 
 // ================= EXPORT MODAL =================
 function openExport(){
@@ -178,7 +308,6 @@ function openExport(){
 
   exportModal.style.display = "flex";
 }
-
 function closeExport(){
   if(!exportModal) return;
   exportModal.style.display = "none";
@@ -198,7 +327,7 @@ function closeExport(){
     payPeriodAnchor = new Date(w.start);
     updatePayPeriodUI();
 
-    updateStats();
+    render();
   });
 })();
 
@@ -212,7 +341,6 @@ function updatePayPeriodUI(){
   ppStart.value = formatYYYYMMDD(w.start);
   ppEnd.value = formatYYYYMMDD(w.end);
 }
-
 function prevPayPeriod(){
   if(!payPeriodAnchor) payPeriodAnchor = new Date();
   const d = new Date(payPeriodAnchor);
@@ -220,7 +348,6 @@ function prevPayPeriod(){
   payPeriodAnchor = d;
   updatePayPeriodUI();
 }
-
 function nextPayPeriod(){
   if(!payPeriodAnchor) payPeriodAnchor = new Date();
   const d = new Date(payPeriodAnchor);
@@ -228,8 +355,12 @@ function nextPayPeriod(){
   payPeriodAnchor = d;
   updatePayPeriodUI();
 }
+window.openExport = openExport;
+window.closeExport = closeExport;
+window.prevPayPeriod = prevPayPeriod;
+window.nextPayPeriod = nextPayPeriod;
 
-// ================= FORM =================
+// ================= MAIN FORM =================
 function openForm(){
   editingId = null;
   const title = safeEl("formTitle");
@@ -244,7 +375,6 @@ function openForm(){
   const statusEl = safeEl("status");
   if(statusEl) statusEl.value = "unpaid";
 }
-
 function resetForm(){
   const modal = safeEl("formModal");
   if(!modal) return;
@@ -257,14 +387,12 @@ function resetForm(){
   const sessions = safeEl("sessions");
   if(sessions) sessions.innerHTML="";
 }
-
 function closeForm(){
   if (!formModal) return;
   formModal.style.display="none";
   resetForm();
   editingId = null;
 }
-
 function addSession(){
   const container = safeEl("sessions");
   if(!container) return;
@@ -277,52 +405,117 @@ function addSession(){
   `;
   container.appendChild(row);
 }
+window.openForm = openForm;
+window.closeForm = closeForm;
+window.addSession = addSession;
 
-function fillFormForEdit(entry){
-  editingId = entry.id;
-
-  const title = safeEl("formTitle");
-  if(title) title.textContent = "Edit Entry";
-
-  if(!formModal) return;
-  formModal.style.display = "flex";
-
-  const set = (id, val) => { const el = safeEl(id); if(el) el.value = (val === undefined || val === null) ? "" : val; };
-
-  set("date", entry.date);
-  set("client", entry.client);
-  set("contact", entry.contact || "");
-  set("social", entry.social || "");
-  set("description", entry.description || "");
-  set("location", entry.location || "");
-  set("notes", entry.notes || "");
-  set("total", entry.total ?? 0);
-  set("status", entry.status || "unpaid");
-
-  const sessions = safeEl("sessions");
-  if(sessions) sessions.innerHTML = "";
-
-  set("deposit", depositAmount(entry));
-
-  const sessionPays = paymentsArray(entry).filter(p => p.kind !== "deposit");
-  sessionPays.forEach(p=>{
-    addSession();
-    const amounts = document.querySelectorAll(".session-amount");
-    const notes = document.querySelectorAll(".session-note");
-    const idx = amounts.length - 1;
-    if(amounts[idx]) amounts[idx].value = Number(p.amount || 0);
-    if(notes[idx]) notes[idx].value = p.note || "";
-  });
+// ================= QUICK ADD: BAMMER =================
+function openBammerQuick(){
+  if(!bammerModal) return;
+  safeEl("bDate").value = new Date().toISOString().split("T")[0];
+  safeEl("bClient").value = "";
+  safeEl("bDesc").value = "";
+  safeEl("bLocation").value = "";
+  safeEl("bTotal").value = "";
+  safeEl("bStatus").value = "paid";
+  bammerModal.style.display = "flex";
 }
+function closeBammerQuick(){
+  if(!bammerModal) return;
+  bammerModal.style.display = "none";
+}
+function saveBammer(){
+  const date = safeVal("bDate");
+  const client = (safeVal("bClient") || "").trim();
+  const total = Number(safeVal("bTotal") || 0);
+  if(!date || !client){ alert("Date + Client required."); return; }
 
-// ================= EDIT HISTORY (diff logger) =================
+  const entry = {
+    id: Date.now(),
+    date,
+    client,
+    contact: "",
+    social: "",
+    description: safeVal("bDesc") || "",
+    location: safeVal("bLocation") || "",
+    notes: "",
+    total,
+    payments: [], // bammer = no session payment tracking needed
+    status: safeVal("bStatus") || "paid",
+    image: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: null,
+    editHistory: []
+  };
+
+  entries.push(entry);
+  save();
+  closeBammerQuick();
+}
+window.openBammerQuick = openBammerQuick;
+window.closeBammerQuick = closeBammerQuick;
+window.saveBammer = saveBammer;
+
+// ================= QUICK ADD: DEPOSIT ONLY =================
+function openDepositQuick(){
+  if(!depositModal) return;
+  safeEl("dDate").value = new Date().toISOString().split("T")[0];
+  safeEl("dClient").value = "";
+  safeEl("dContact").value = "";
+  safeEl("dSocial").value = "";
+  safeEl("dDesc").value = "";
+  safeEl("dDeposit").value = "";
+  safeEl("dTotal").value = "";
+  safeEl("dLocation").value = "";
+  depositModal.style.display = "flex";
+}
+function closeDepositQuick(){
+  if(!depositModal) return;
+  depositModal.style.display = "none";
+}
+function saveDepositOnly(){
+  const date = safeVal("dDate");
+  const client = (safeVal("dClient") || "").trim();
+  const dep = Number(safeVal("dDeposit") || 0);
+  if(!date || !client){ alert("Date + Client required."); return; }
+  if(!(dep > 0)){ alert("Deposit amount must be > 0."); return; }
+
+  const total = Number(safeVal("dTotal") || 0);
+
+  const entry = {
+    id: Date.now(),
+    date,
+    client,
+    contact: safeVal("dContact") || "",
+    social: safeVal("dSocial") || "",
+    description: safeVal("dDesc") || "",
+    location: safeVal("dLocation") || "",
+    notes: "",
+    total,
+    payments: [{ amount: dep, kind: "deposit", note: "" }],
+    status: "partial",
+    image: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: null,
+    editHistory: []
+  };
+
+  entries.push(entry);
+  save();
+  closeDepositQuick();
+}
+window.openDepositQuick = openDepositQuick;
+window.closeDepositQuick = closeDepositQuick;
+window.saveDepositOnly = saveDepositOnly;
+
+// ================= EDIT HISTORY =================
 function diffFields(oldEntry, newEntry){
   const fields = ["date","client","contact","social","description","location","notes","total","status"];
   const changes = [];
 
   for(const f of fields){
-    const oldV = (oldEntry[f] === undefined || oldEntry[f] === null) ? "" : oldEntry[f];
-    const newV = (newEntry[f] === undefined || newEntry[f] === null) ? "" : newEntry[f];
+    const oldV = (oldEntry[f] ?? "");
+    const newV = (newEntry[f] ?? "");
     if(String(oldV) !== String(newV)){
       changes.push({ field:f, oldValue:oldV, newValue:newV });
     }
@@ -350,10 +543,47 @@ function diffFields(oldEntry, newEntry){
   return changes;
 }
 
-// ================= ENTRY SAVE (ADD/EDIT) =================
+function fillFormForEdit(entry){
+  editingId = entry.id;
+
+  const title = safeEl("formTitle");
+  if(title) title.textContent = "Edit Entry";
+
+  if(!formModal) return;
+  formModal.style.display = "flex";
+
+  const set = (id, val) => { const el = safeEl(id); if(el) el.value = (val ?? ""); };
+
+  set("date", entry.date);
+  set("client", entry.client);
+  set("contact", entry.contact || "");
+  set("social", entry.social || "");
+  set("description", entry.description || "");
+  set("location", entry.location || "");
+  set("notes", entry.notes || "");
+  set("total", entry.total ?? 0);
+  set("status", entry.status || "unpaid");
+
+  const sessions = safeEl("sessions");
+  if(sessions) sessions.innerHTML = "";
+
+  set("deposit", depositAmount(entry));
+
+  const sessionPays = paymentsArray(entry).filter(p => p.kind !== "deposit");
+  sessionPays.forEach(p=>{
+    addSession();
+    const amounts = document.querySelectorAll(".session-amount");
+    const notes = document.querySelectorAll(".session-note");
+    const idx = amounts.length - 1;
+    if(amounts[idx]) amounts[idx].value = Number(p.amount || 0);
+    if(notes[idx]) notes[idx].value = p.note || "";
+  });
+}
+
+// ================= SAVE ENTRY (ADD/EDIT) =================
 function saveEntry(){
   const dateVal = safeVal("date");
-  const clientVal = safeVal("client").trim();
+  const clientVal = (safeVal("client") || "").trim();
   if(!dateVal || !clientVal){
     alert("Date and Client Name are required.");
     return;
@@ -383,11 +613,11 @@ function saveEntry(){
   const base = {
     date: dateVal,
     client: clientVal,
-    contact: safeVal("contact"),
-    social: safeVal("social"),
-    description: safeVal("description"),
-    location: safeVal("location"),
-    notes: safeVal("notes"),
+    contact: safeVal("contact") || "",
+    social: safeVal("social") || "",
+    description: safeVal("description") || "",
+    location: safeVal("location") || "",
+    notes: safeVal("notes") || "",
     total: Number(safeVal("total") || 0),
     payments,
     status: safeVal("status") || "unpaid"
@@ -403,7 +633,6 @@ function saveEntry(){
 
       const old = entries[idx];
       const next = Object.assign({}, old, base);
-
       next.image = newImageDataUrlOrNull ? newImageDataUrlOrNull : (old.image || null);
 
       const ts = new Date().toISOString();
@@ -437,6 +666,7 @@ function saveEntry(){
     applyAndSave(null);
   }
 }
+window.saveEntry = saveEntry;
 
 // ================= VIEW / EDIT / DELETE =================
 function viewEntry(id){
@@ -448,9 +678,14 @@ function viewEntry(id){
   const paidSoFar = paidAmount(entry);
   const dep = depositAmount(entry);
   const remaining = Number(entry.total || 0) - paidSoFar;
-  const counts = totalForTotals(entry);
 
-  const showMoneyDetails = hasAnyPayments(entry); // ONLY if user filled payments (deposit/sessions)
+  const showPaymentsSection = hasAnyPayments(entry);
+  const showDepositLine = dep > 0;
+
+  // NET for this entry (based on date split)
+  const grossCounts = totalForTotalsGross(entry);
+  const pct = getSplitPctForDate(entry.date);
+  const netCounts = totalForTotalsNet(entry);
 
   let historyHtml = "<p style='opacity:.7;'>No edits yet.</p>";
   if(Array.isArray(entry.editHistory) && entry.editHistory.length){
@@ -475,7 +710,7 @@ function viewEntry(id){
       <div>
         <p><strong>Status:</strong> <span class="status ${entry.status}">${entry.status}</span></p>
         <p><strong>Total Price:</strong> ${money(entry.total)}</p>
-        ${showMoneyDetails ? `<p><strong>Deposit:</strong> ${money(dep)}</p>` : ``}
+        ${showDepositLine ? `<p><strong>Deposit:</strong> ${money(dep)}</p>` : ``}
       </div>
       <div>
         <p><strong>Location:</strong> ${entry.location || ""}</p>
@@ -485,24 +720,28 @@ function viewEntry(id){
     <hr>
 
     <p><strong>Description:</strong> ${entry.description || ""}</p>
-    <p><strong>Contact:</strong> ${entry.contact || ""}</p>
-    <p><strong>Social:</strong> ${entry.social || ""}</p>
-    <p><strong>Notes:</strong> ${entry.notes || ""}</p>
+    ${entry.contact ? `<p><strong>Contact:</strong> ${entry.contact}</p>` : ``}
+    ${entry.social ? `<p><strong>Social:</strong> ${entry.social}</p>` : ``}
+    ${entry.notes ? `<p><strong>Notes:</strong> ${entry.notes}</p>` : ``}
 
-    ${showMoneyDetails ? `
+    ${showPaymentsSection ? `
       <h4>Payments</h4>
-      ${
-        paymentsArray(entry).length
-          ? `<ul>${paymentsArray(entry).map(p=>`<li>${money(p.amount)} ${p.kind ? `(${p.kind})` : ""} ${p.note ? `— ${p.note}` : ""}</li>`).join("")}</ul>`
-          : "<p style='opacity:.7;'>No payments recorded.</p>"
-      }
+      <ul>
+        ${paymentsArray(entry).filter(p=>Number(p.amount||0)>0).map(p=>{
+          const label = p.kind ? `(${p.kind})` : "";
+          const note = p.note ? ` — ${p.note}` : "";
+          return `<li>${money(p.amount)} ${label}${note}</li>`;
+        }).join("")}
+      </ul>
 
       <details style="margin-top:12px;">
         <summary>More details</summary>
         <div style="margin-top:10px;">
           <p><strong>Paid So Far:</strong> ${money(paidSoFar)}</p>
-          <p><strong>Remaining:</strong> ${money(remaining)}</p>
-          <p><strong>Counts Toward Totals:</strong> ${money(counts)}</p>
+          ${Number(entry.total||0) > 0 ? `<p><strong>Remaining:</strong> ${money(remaining)}</p>` : ``}
+          <p><strong>Gross counted:</strong> ${money(grossCounts)}</p>
+          <p><strong>Split for month:</strong> ${pct}%</p>
+          <p><strong>Net counted:</strong> ${money(netCounts)}</p>
         </div>
       </details>
     ` : ``}
@@ -529,7 +768,6 @@ function closeView(){
   viewModal.style.display="none";
   viewingId = null;
 }
-
 function editFromView(){
   if(!viewingId) return;
   const entry = entries.find(e=>e.id===viewingId);
@@ -537,7 +775,6 @@ function editFromView(){
   closeView();
   fillFormForEdit(entry);
 }
-
 function deleteFromView(){
   if(!viewingId) return;
   const entry = entries.find(e=>e.id===viewingId);
@@ -550,9 +787,13 @@ function deleteFromView(){
   save();
   closeView();
 }
+window.viewEntry = viewEntry;
+window.closeView = closeView;
+window.editFromView = editFromView;
+window.deleteFromView = deleteFromView;
 
-// ================= STATS =================
-function updateStats(){
+// ================= STATS (NET) =================
+function updateStats(filteredList){
   const todayEl = safeEl("todayTotal");
   const weekEl = safeEl("weekTotal");
   const monthEl = safeEl("monthTotal");
@@ -567,24 +808,25 @@ function updateStats(){
 
   let today=0, week=0, month=0, quarter=0, year=0;
 
-  entries.forEach(entry=>{
-    const amt = totalForTotals(entry);
+  (filteredList || entries).forEach(entry=>{
     const d = parseLocalDate(entry.date);
     if(!d) return;
 
-    if(entry.date === todayStr) today += amt;
+    const amtNet = totalForTotalsNet(entry);
+
+    if(entry.date === todayStr) today += amtNet;
 
     if(d.getFullYear() === now.getFullYear()){
-      year += amt;
-      if(currentQuarterIndex(d) === qNow) quarter += amt;
+      year += amtNet;
+      if(currentQuarterIndex(d) === qNow) quarter += amtNet;
     }
 
     if(d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()){
-      month += amt;
+      month += amtNet;
     }
 
     if(d >= weekWin.start && d <= weekWin.end){
-      week += amt;
+      week += amtNet;
     }
   });
 
@@ -595,13 +837,12 @@ function updateStats(){
   if(yearEl) yearEl.innerText = money(year);
 }
 
-// ================= CSV EXPORT =================
+// ================= CSV EXPORT (adds NET columns) =================
 function csvEscape(v){
   const s = String(v ?? "");
   if (/[",\n]/.test(s)) return `"${s.replace(/"/g,'""')}"`;
   return s;
 }
-
 function downloadCSV(rows, filename){
   const csv = rows.map(r=>r.map(csvEscape).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -622,35 +863,27 @@ function exportCSV(){
   const start = parseLocalDate(startStr);
   const end = parseLocalDate(endStr);
 
-  if(!start || !end){
-    alert("Pick a start and end date.");
-    return;
-  }
-  if(end < start){
-    alert("End date must be after start date.");
-    return;
-  }
+  if(!start || !end){ alert("Pick a start and end date."); return; }
+  if(end < start){ alert("End date must be after start date."); return; }
 
   exportRangeCSV(start, end, `ink-log_${startStr}_to_${endStr}.csv`);
 }
-
 function exportPayPeriodCSV(){
   const ppStartStr = safeVal("ppStart");
   const ppEndStr = safeVal("ppEnd");
   const start = parseLocalDate(ppStartStr);
   const end = parseLocalDate(ppEndStr);
-  if(!start || !end){
-    alert("Pay period dates missing.");
-    return;
-  }
+  if(!start || !end){ alert("Pay period dates missing."); return; }
+
   exportRangeCSV(start, end, `pay_period_${ppStartStr}_to_${ppEndStr}.csv`);
 }
-
 function exportRangeCSV(start, end, filename){
   const rows = [];
   rows.push([
     "date","client","contact","social","description","location",
-    "total_price","paid_so_far","deposit","counts_toward_totals","remaining","status","notes"
+    "total_price","paid_so_far","deposit",
+    "gross_counted","split_pct","net_counted",
+    "remaining","status","notes"
   ]);
 
   entries.forEach(e=>{
@@ -662,7 +895,10 @@ function exportRangeCSV(start, end, filename){
     const dep = depositAmount(e);
     const total = Number(e.total || 0);
     const remaining = total - paidSoFar;
-    const counts = totalForTotals(e);
+
+    const gross = totalForTotalsGross(e);
+    const pct = getSplitPctForDate(e.date);
+    const net = totalForTotalsNet(e);
 
     rows.push([
       e.date,
@@ -674,7 +910,9 @@ function exportRangeCSV(start, end, filename){
       total,
       paidSoFar,
       dep,
-      counts,
+      gross,
+      pct,
+      net,
       remaining,
       e.status || "",
       e.notes || ""
@@ -683,8 +921,10 @@ function exportRangeCSV(start, end, filename){
 
   downloadCSV(rows, filename);
 }
+window.exportCSV = exportCSV;
+window.exportPayPeriodCSV = exportPayPeriodCSV;
 
-// ================= EXPORT SUMMARY =================
+// ================= EXPORT SUMMARY (NET) =================
 function buildSummary(mode){
   let start = null;
   let end = null;
@@ -712,7 +952,8 @@ function buildSummary(mode){
   });
 
   const totalCount = filtered.length;
-  let totalTotalsRule = 0;
+  let netTotal = 0;
+  let grossTotal = 0;
 
   const statusCounts = { paid:0, partial:0, unpaid:0, no_show:0 };
   const clientTotals = {};
@@ -722,20 +963,20 @@ function buildSummary(mode){
     const s = (e.status || "unpaid").toLowerCase();
     if(statusCounts[s] !== undefined) statusCounts[s]++;
 
-    const counts = totalForTotals(e);
-    totalTotalsRule += counts;
+    const gross = totalForTotalsGross(e);
+    const net = totalForTotalsNet(e);
+    grossTotal += gross;
+    netTotal += net;
 
     const c = (e.client || "Unknown").trim() || "Unknown";
-    clientTotals[c] = (clientTotals[c] || 0) + counts;
+    clientTotals[c] = (clientTotals[c] || 0) + net;
 
     const loc = (e.location || "Unknown").trim() || "Unknown";
-    locationTotals[loc] = (locationTotals[loc] || 0) + counts;
+    locationTotals[loc] = (locationTotals[loc] || 0) + net;
   });
 
   function topN(obj, n){
-    return Object.entries(obj)
-      .sort((a,b)=>b[1]-a[1])
-      .slice(0,n);
+    return Object.entries(obj).sort((a,b)=>b[1]-a[1]).slice(0,n);
   }
 
   const topClients = topN(clientTotals, 5);
@@ -745,17 +986,18 @@ function buildSummary(mode){
   if(!out) return;
 
   out.innerHTML = `
-    <div style="font-weight:800; color: var(--gold); margin-bottom:8px;">${title}</div>
+    <div style="font-weight:900; color: var(--gold); margin-bottom:8px;">${title}</div>
 
     <div class="summary-grid">
       <div class="summary-box">
-        <div style="font-weight:800;">Totals</div>
+        <div style="font-weight:900;">Totals</div>
         <div>Entries: <strong>${totalCount}</strong></div>
-        <div>Total: <strong>${money(totalTotalsRule)}</strong></div>
+        <div>Gross: <strong>${money(grossTotal)}</strong></div>
+        <div>Net (after split): <strong>${money(netTotal)}</strong></div>
       </div>
 
       <div class="summary-box">
-        <div style="font-weight:800;">Status Counts</div>
+        <div style="font-weight:900;">Status Counts</div>
         <div>PAID: <strong>${statusCounts.paid}</strong></div>
         <div>PARTIAL: <strong>${statusCounts.partial}</strong></div>
         <div>UNPAID: <strong>${statusCounts.unpaid}</strong></div>
@@ -765,104 +1007,73 @@ function buildSummary(mode){
 
     <div class="summary-grid" style="margin-top:10px;">
       <div class="summary-box">
-        <div style="font-weight:800;">Top Clients</div>
+        <div style="font-weight:900;">Top Clients (NET)</div>
         ${topClients.length ? `<ol style="margin:8px 0 0 18px;">${topClients.map(([k,v])=>`<li>${k}: <strong>${money(v)}</strong></li>`).join("")}</ol>` : "<div style='opacity:.75;'>None</div>"}
       </div>
 
       <div class="summary-box">
-        <div style="font-weight:800;">Top Locations</div>
+        <div style="font-weight:900;">Top Locations (NET)</div>
         ${topLocs.length ? `<ol style="margin:8px 0 0 18px;">${topLocs.map(([k,v])=>`<li>${k}: <strong>${money(v)}</strong></li>`).join("")}</ol>` : "<div style='opacity:.75;'>None</div>"}
       </div>
     </div>
   `;
 }
+window.buildSummary = buildSummary;
 
-// ================= RENDER (Year → Month → Day → Entries) =================
-function render(){
-  const container = safeEl("entries");
-  if(!container) return;
+// ================= FILTERING =================
+function normalize(s){ return String(s||"").toLowerCase(); }
 
-  container.innerHTML = "";
-
-  if(entries.length === 0){
-    container.innerHTML = "<p style='opacity:.65;'>No entries yet.</p>";
-    updateStats();
-    return;
+function passesFilters(entry){
+  // status
+  if(filters.status && filters.status !== "all"){
+    if((entry.status || "unpaid") !== filters.status) return false;
   }
 
-  const grouped = {};
+  // location
+  if(filters.location && filters.location !== "all"){
+    if((entry.location || "") !== filters.location) return false;
+  }
 
-  entries.forEach(e=>{
-    const d = parseLocalDate(e.date);
-    if(!d) return;
+  // date range
+  const d = parseLocalDate(entry.date);
+  if(!d) return false;
 
-    const y = d.getFullYear();
-    const m = d.getMonth();
-    const day = d.getDate();
+  if(filters.from){
+    const from = parseLocalDate(filters.from);
+    if(from && d < from) return false;
+  }
+  if(filters.to){
+    const to = parseLocalDate(filters.to);
+    if(to && d > to) return false;
+  }
 
-    if(!grouped[y]) grouped[y] = {};
-    if(!grouped[y][m]) grouped[y][m] = {};
-    if(!grouped[y][m][day]) grouped[y][m][day] = [];
+  // query
+  const q = normalize(filters.q).trim();
+  if(q){
+    const hay = [
+      entry.client,
+      entry.description,
+      entry.location
+    ].map(normalize).join(" | ");
+    if(!hay.includes(q)) return false;
+  }
 
-    grouped[y][m][day].push(e);
-  });
-
-  Object.keys(grouped).sort((a,b)=>Number(b)-Number(a)).forEach(year=>{
-    const yearAmt = Object.values(grouped[year])
-      .flatMap(mo=>Object.values(mo).flat())
-      .reduce((sum,e)=>sum + totalForTotals(e), 0);
-
-    const yearAcc = createAccordion(String(year), money(yearAmt));
-    container.appendChild(yearAcc.wrap);
-
-    Object.keys(grouped[year]).sort((a,b)=>Number(b)-Number(a)).forEach(monthIdx=>{
-      const monthAmt = Object.values(grouped[year][monthIdx])
-        .flat()
-        .reduce((sum,e)=>sum + totalForTotals(e), 0);
-
-      const monthAcc = createAccordion(monthName(Number(year), Number(monthIdx)), money(monthAmt));
-      yearAcc.content.appendChild(monthAcc.wrap);
-
-      Object.keys(grouped[year][monthIdx]).sort((a,b)=>Number(b)-Number(a)).forEach(dayNum=>{
-        const dayEntries = grouped[year][monthIdx][dayNum];
-        const dayAmt = dayEntries.reduce((sum,e)=>sum + totalForTotals(e), 0);
-
-        const dateLabel = `${year}-${pad2(Number(monthIdx)+1)}-${pad2(dayNum)}`;
-        const dayAcc = createAccordion(dateLabel, money(dayAmt));
-        monthAcc.content.appendChild(dayAcc.wrap);
-
-        dayEntries
-          .slice()
-          .sort((a,b)=>b.id - a.id)
-          .forEach(entry=>{
-            const paidLine = money(paidForPreview(entry));
-            const loc = (entry.location || "").trim();
-            const desc = (entry.description || "").trim();
-            const row2 = [loc, desc].filter(Boolean).join(" • ");
-
-            const row = document.createElement("div");
-            row.className = "entry";
-            row.innerHTML = `
-              <div class="entry-left">
-                <div class="entry-name">${entry.client}</div>
-                <div class="entry-sub">
-                  <div class="sub-row"><strong>Paid:</strong> ${paidLine}</div>
-                  <div class="sub-row">${row2 || ""}</div>
-                </div>
-              </div>
-              <div class="status ${entry.status}">${entry.status}</div>
-            `;
-            row.addEventListener("click", ()=>viewEntry(entry.id));
-            dayAcc.content.appendChild(row);
-          });
-      });
-    });
-  });
-
-  updateStats();
+  return true;
 }
 
-// ================= ACCORDION UI =================
+function getFilteredEntries(){
+  const list = entries.filter(passesFilters);
+
+  // sort
+  list.sort((a,b)=>{
+    if(filters.sort === "oldest") return (a.id - b.id);
+    return (b.id - a.id);
+  });
+
+  return list;
+}
+
+// ================= UI BUILDERS =================
 function createAccordion(title, badgeText){
   const wrap = document.createElement("div");
   wrap.className = "accordion";
@@ -877,7 +1088,6 @@ function createAccordion(title, badgeText){
   const t = document.createElement("div");
   t.className = "accordion-title";
   t.textContent = title;
-
   left.appendChild(t);
 
   if(badgeText !== undefined && badgeText !== null){
@@ -908,6 +1118,113 @@ function createAccordion(title, badgeText){
 
   return { wrap, content };
 }
+
+// ================= RENDER =================
+function render(){
+  // hydrate filters UI once per render (keeps it in sync)
+  hydrateFilterUI();
+
+  // populate location filter options from ALL entries (not only filtered)
+  const locationSelect = safeEl("locationFilter");
+  if(locationSelect){
+    const current = filters.location || "all";
+    const locs = Array.from(new Set(entries.map(e=>e.location).filter(Boolean))).sort();
+    locationSelect.innerHTML = `<option value="all">All Locations</option>` + locs.map(l=>`<option value="${l}">${l}</option>`).join("");
+    locationSelect.value = current;
+  }
+
+  const container = safeEl("entries");
+  if(!container) return;
+  container.innerHTML = "";
+
+  const list = getFilteredEntries();
+
+  if(list.length === 0){
+    container.innerHTML = "<p style='opacity:.65;'>No entries match your filters.</p>";
+    updateStats(list);
+    return;
+  }
+
+  // Group: year -> monthIndex -> dayNumber -> [entries]
+  const grouped = {};
+  list.forEach(e=>{
+    const d = parseLocalDate(e.date);
+    if(!d) return;
+
+    const y = d.getFullYear();
+    const m = d.getMonth();
+    const day = d.getDate();
+
+    if(!grouped[y]) grouped[y] = {};
+    if(!grouped[y][m]) grouped[y][m] = {};
+    if(!grouped[y][m][day]) grouped[y][m][day] = [];
+    grouped[y][m][day].push(e);
+  });
+
+  Object.keys(grouped).sort((a,b)=>Number(b)-Number(a)).forEach(year=>{
+    const yearAmtNet = Object.values(grouped[year])
+      .flatMap(mo=>Object.values(mo).flat())
+      .reduce((sum,e)=>sum + totalForTotalsNet(e), 0);
+
+    const yearAcc = createAccordion(String(year), money(yearAmtNet));
+    container.appendChild(yearAcc.wrap);
+
+    Object.keys(grouped[year]).sort((a,b)=>Number(b)-Number(a)).forEach(monthIdx=>{
+      const monthAmtNet = Object.values(grouped[year][monthIdx])
+        .flat()
+        .reduce((sum,e)=>sum + totalForTotalsNet(e), 0);
+
+      const monthAcc = createAccordion(monthName(Number(year), Number(monthIdx)), money(monthAmtNet));
+      yearAcc.content.appendChild(monthAcc.wrap);
+
+      Object.keys(grouped[year][monthIdx]).sort((a,b)=>Number(b)-Number(a)).forEach(dayNum=>{
+        const dayEntries = grouped[year][monthIdx][dayNum];
+        const dayAmtNet = dayEntries.reduce((sum,e)=>sum + totalForTotalsNet(e), 0);
+
+        const dateLabel = `${year}-${pad2(Number(monthIdx)+1)}-${pad2(dayNum)}`;
+        const dayAcc = createAccordion(dateLabel, money(dayAmtNet));
+        monthAcc.content.appendChild(dayAcc.wrap);
+
+        dayEntries.forEach(entry=>{
+          // Exactly 2 rows under name:
+          // Row1 Paid: $X
+          // Row2 Location • Description
+          const paidLine = money(paidForPreview(entry));
+          const loc = (entry.location || "").trim();
+          const desc = (entry.description || "").trim();
+          const row2 = [loc, desc].filter(Boolean).join(" • ");
+
+          const row = document.createElement("div");
+          row.className = "entry";
+          row.innerHTML = `
+            <div class="entry-left">
+              <div class="entry-name">${entry.client}</div>
+              <div class="entry-sub">
+                <div class="sub-row"><strong>Paid:</strong> ${paidLine}</div>
+                <div class="sub-row clamp2">${row2 || ""}</div>
+              </div>
+            </div>
+            <div class="status ${entry.status}">${entry.status}</div>
+          `;
+          row.addEventListener("click", ()=>viewEntry(entry.id));
+          dayAcc.content.appendChild(row);
+        });
+      });
+    });
+  });
+
+  updateStats(list);
+}
+
+// ================= INIT FILTER BUTTON ENTER KEY =================
+(function wireFilterKeys(){
+  const q = safeEl("q");
+  if(q){
+    q.addEventListener("keydown",(e)=>{
+      if(e.key === "Enter") applyFilters();
+    });
+  }
+})();
 
 // ================= INIT =================
 render();
