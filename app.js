@@ -39,7 +39,7 @@ function paymentsArray(entry){
 }
 
 function paidAmount(entry){
-  // Paid so far (deposit + sessions)
+  // deposit + sessions
   return paymentsArray(entry).reduce((sum,p)=>sum + Number(p.amount || 0), 0);
 }
 
@@ -49,15 +49,24 @@ function depositAmount(entry){
     .reduce((sum,p)=>sum + Number(p.amount || 0), 0);
 }
 
+function hasAnyPayments(entry){
+  return paidAmount(entry) > 0;
+}
+
 function currentQuarterIndex(dateObj){
   return Math.floor(dateObj.getMonth() / 3); // 0..3
 }
 
-// Totals logic (used by dashboard + exports)
-// - PAID => full total price
-// - PARTIAL => paid so far (deposit + sessions)
-// - UNPAID/NO_SHOW => 0
+// Totals logic (dashboard/exports)
 function totalForTotals(entry){
+  const status = (entry.status || "unpaid").toLowerCase();
+  if(status === "paid") return Number(entry.total || 0);
+  if(status === "partial") return paidAmount(entry);
+  return 0;
+}
+
+// For the preview “Paid: $X” line
+function paidForPreview(entry){
   const status = (entry.status || "unpaid").toLowerCase();
   if(status === "paid") return Number(entry.total || 0);
   if(status === "partial") return paidAmount(entry);
@@ -86,10 +95,47 @@ if (formBox) formBox.addEventListener("click", (e)=> e.stopPropagation());
 if (viewBox) viewBox.addEventListener("click", (e)=> e.stopPropagation());
 if (exportBox) exportBox.addEventListener("click", (e)=> e.stopPropagation());
 
+// ================= LOGO (editable PNG) =================
+function initLogo(){
+  const img = safeEl("logoImg");
+  const input = safeEl("logoInput");
+  if(!img || !input) return;
+
+  const saved = localStorage.getItem("logoDataUrl");
+  if(saved){
+    img.src = saved;
+  } else {
+    // default tiny placeholder look
+    img.src = "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(`
+      <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">
+        <rect width="64" height="64" rx="12" fill="#16201b"/>
+        <text x="50%" y="56%" text-anchor="middle" font-family="Inter" font-size="28" fill="#d4af37">G</text>
+      </svg>
+    `);
+  }
+
+  img.addEventListener("click", ()=> input.click());
+
+  input.addEventListener("change", ()=>{
+    const file = input.files && input.files[0];
+    if(!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e)=>{
+      const dataUrl = e.target.result;
+      localStorage.setItem("logoDataUrl", dataUrl);
+      img.src = dataUrl;
+      input.value = "";
+    };
+    reader.readAsDataURL(file);
+  });
+}
+initLogo();
+
 // ================= PAYDAY WEEK WINDOW =================
 function getWeekWindowFromDate(anchorDate){
   const now = new Date(anchorDate);
-  const currentDay = now.getDay(); // 0..6
+  const currentDay = now.getDay();
   const diffToPayday = (currentDay - payday + 7) % 7;
 
   const start = new Date(now);
@@ -102,7 +148,10 @@ function getWeekWindowFromDate(anchorDate){
 
   return { start, end };
 }
-function getWeekWindow(now){ return getWeekWindowFromDate(now); }
+
+function getWeekWindow(now){
+  return getWeekWindowFromDate(now);
+}
 
 // ================= EXPORT MODAL =================
 function openExport(){
@@ -111,7 +160,6 @@ function openExport(){
   const paydaySelect = safeEl("paydaySelect");
   if(paydaySelect) paydaySelect.value = String(payday);
 
-  // Default range: current month
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth(), 1);
   const end = new Date(now.getFullYear(), now.getMonth()+1, 0);
@@ -121,7 +169,6 @@ function openExport(){
   if(exportStart) exportStart.value = formatYYYYMMDD(start);
   if(exportEnd) exportEnd.value = formatYYYYMMDD(end);
 
-  // Pay period defaults to current payday week
   const w = getWeekWindow(now);
   payPeriodAnchor = new Date(w.start);
   updatePayPeriodUI();
@@ -392,12 +439,6 @@ function saveEntry(){
 }
 
 // ================= VIEW / EDIT / DELETE =================
-// ✅ Default view no longer shows:
-// - Paid so far
-// - Remaining
-// - Counts toward totals as
-// - Any rule explanation text
-// Those are only inside "More details" (collapsed).
 function viewEntry(id){
   const entry = entries.find(e=>e.id===id);
   if(!entry || !viewBox) return;
@@ -409,7 +450,8 @@ function viewEntry(id){
   const remaining = Number(entry.total || 0) - paidSoFar;
   const counts = totalForTotals(entry);
 
-  // history html
+  const showMoneyDetails = hasAnyPayments(entry); // ONLY if user filled payments (deposit/sessions)
+
   let historyHtml = "<p style='opacity:.7;'>No edits yet.</p>";
   if(Array.isArray(entry.editHistory) && entry.editHistory.length){
     historyHtml = entry.editHistory
@@ -433,7 +475,7 @@ function viewEntry(id){
       <div>
         <p><strong>Status:</strong> <span class="status ${entry.status}">${entry.status}</span></p>
         <p><strong>Total Price:</strong> ${money(entry.total)}</p>
-        <p><strong>Deposit:</strong> ${money(dep)}</p>
+        ${showMoneyDetails ? `<p><strong>Deposit:</strong> ${money(dep)}</p>` : ``}
       </div>
       <div>
         <p><strong>Location:</strong> ${entry.location || ""}</p>
@@ -447,23 +489,25 @@ function viewEntry(id){
     <p><strong>Social:</strong> ${entry.social || ""}</p>
     <p><strong>Notes:</strong> ${entry.notes || ""}</p>
 
-    <h4>Payments</h4>
-    ${
-      paymentsArray(entry).length
-        ? `<ul>${paymentsArray(entry).map(p=>`<li>${money(p.amount)} ${p.kind ? `(${p.kind})` : ""} ${p.note ? `— ${p.note}` : ""}</li>`).join("")}</ul>`
-        : "<p style='opacity:.7;'>No payments recorded.</p>"
-    }
+    ${showMoneyDetails ? `
+      <h4>Payments</h4>
+      ${
+        paymentsArray(entry).length
+          ? `<ul>${paymentsArray(entry).map(p=>`<li>${money(p.amount)} ${p.kind ? `(${p.kind})` : ""} ${p.note ? `— ${p.note}` : ""}</li>`).join("")}</ul>`
+          : "<p style='opacity:.7;'>No payments recorded.</p>"
+      }
+
+      <details style="margin-top:12px;">
+        <summary>More details</summary>
+        <div style="margin-top:10px;">
+          <p><strong>Paid So Far:</strong> ${money(paidSoFar)}</p>
+          <p><strong>Remaining:</strong> ${money(remaining)}</p>
+          <p><strong>Counts Toward Totals:</strong> ${money(counts)}</p>
+        </div>
+      </details>
+    ` : ``}
 
     ${entry.image ? `<img src="${entry.image}" style="width:100%; margin-top:15px; border-radius:12px; border:1px solid rgba(212,175,55,.3);">` : ""}
-
-    <details style="margin-top:12px;">
-      <summary>More details</summary>
-      <div style="margin-top:10px;">
-        <p><strong>Paid So Far:</strong> ${money(paidSoFar)}</p>
-        <p><strong>Remaining:</strong> ${money(remaining)}</p>
-        <p><strong>Counts Toward Totals As:</strong> ${money(counts)}</p>
-      </div>
-    </details>
 
     <details style="margin-top:12px;">
       <summary>Edit History</summary>
@@ -507,7 +551,7 @@ function deleteFromView(){
   closeView();
 }
 
-// ================= STATS (uses totals logic) =================
+// ================= STATS =================
 function updateStats(){
   const todayEl = safeEl("todayTotal");
   const weekEl = safeEl("weekTotal");
@@ -587,7 +631,7 @@ function exportCSV(){
     return;
   }
 
-  exportRangeCSV(start, end, `tattoo-tracker_${startStr}_to_${endStr}.csv`);
+  exportRangeCSV(start, end, `ink-log_${startStr}_to_${endStr}.csv`);
 }
 
 function exportPayPeriodCSV(){
@@ -668,9 +712,7 @@ function buildSummary(mode){
   });
 
   const totalCount = filtered.length;
-
   let totalTotalsRule = 0;
-  let totalPaidSoFar = 0;
 
   const statusCounts = { paid:0, partial:0, unpaid:0, no_show:0 };
   const clientTotals = {};
@@ -682,8 +724,6 @@ function buildSummary(mode){
 
     const counts = totalForTotals(e);
     totalTotalsRule += counts;
-
-    totalPaidSoFar += paidAmount(e);
 
     const c = (e.client || "Unknown").trim() || "Unknown";
     clientTotals[c] = (clientTotals[c] || 0) + counts;
@@ -705,18 +745,17 @@ function buildSummary(mode){
   if(!out) return;
 
   out.innerHTML = `
-    <div style="font-weight:700; color: var(--gold); margin-bottom:8px;">${title}</div>
+    <div style="font-weight:800; color: var(--gold); margin-bottom:8px;">${title}</div>
 
     <div class="summary-grid">
       <div class="summary-box">
-        <div style="font-weight:700;">Totals</div>
+        <div style="font-weight:800;">Totals</div>
         <div>Entries: <strong>${totalCount}</strong></div>
-        <div>Counts Toward Totals: <strong>${money(totalTotalsRule)}</strong></div>
-        <div style="margin-top:6px;">Paid So Far (raw): <strong>${money(totalPaidSoFar)}</strong></div>
+        <div>Total: <strong>${money(totalTotalsRule)}</strong></div>
       </div>
 
       <div class="summary-box">
-        <div style="font-weight:700;">Status Counts</div>
+        <div style="font-weight:800;">Status Counts</div>
         <div>PAID: <strong>${statusCounts.paid}</strong></div>
         <div>PARTIAL: <strong>${statusCounts.partial}</strong></div>
         <div>UNPAID: <strong>${statusCounts.unpaid}</strong></div>
@@ -726,12 +765,12 @@ function buildSummary(mode){
 
     <div class="summary-grid" style="margin-top:10px;">
       <div class="summary-box">
-        <div style="font-weight:700;">Top Clients</div>
+        <div style="font-weight:800;">Top Clients</div>
         ${topClients.length ? `<ol style="margin:8px 0 0 18px;">${topClients.map(([k,v])=>`<li>${k}: <strong>${money(v)}</strong></li>`).join("")}</ol>` : "<div style='opacity:.75;'>None</div>"}
       </div>
 
       <div class="summary-box">
-        <div style="font-weight:700;">Top Locations</div>
+        <div style="font-weight:800;">Top Locations</div>
         ${topLocs.length ? `<ol style="margin:8px 0 0 18px;">${topLocs.map(([k,v])=>`<li>${k}: <strong>${money(v)}</strong></li>`).join("")}</ol>` : "<div style='opacity:.75;'>None</div>"}
       </div>
     </div>
@@ -751,7 +790,6 @@ function render(){
     return;
   }
 
-  // Group: year -> monthIndex -> dayNumber -> [entries]
   const grouped = {};
 
   entries.forEach(e=>{
@@ -797,9 +835,10 @@ function render(){
           .slice()
           .sort((a,b)=>b.id - a.id)
           .forEach(entry=>{
-            const paidSoFar = paidAmount(entry);
-            const dep = depositAmount(entry);
-            const counts = totalForTotals(entry);
+            const paidLine = money(paidForPreview(entry));
+            const loc = (entry.location || "").trim();
+            const desc = (entry.description || "").trim();
+            const row2 = [loc, desc].filter(Boolean).join(" • ");
 
             const row = document.createElement("div");
             row.className = "entry";
@@ -807,8 +846,8 @@ function render(){
               <div class="entry-left">
                 <div class="entry-name">${entry.client}</div>
                 <div class="entry-sub">
-                  Counted ${money(counts)} • Paid ${money(paidSoFar)} • Dep ${money(dep)} • Total ${money(entry.total)}
-                  ${entry.location ? " • " + entry.location : ""}
+                  <div class="sub-row"><strong>Paid:</strong> ${paidLine}</div>
+                  <div class="sub-row">${row2 || ""}</div>
                 </div>
               </div>
               <div class="status ${entry.status}">${entry.status}</div>
