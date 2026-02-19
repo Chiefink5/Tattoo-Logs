@@ -53,16 +53,15 @@ function currentQuarterIndex(dateObj){
   return Math.floor(dateObj.getMonth() / 3); // 0..3
 }
 
-// ✅ This is the totals rule you asked for:
+// Totals logic:
+// - PAID => full total price
+// - PARTIAL => paid so far (deposit + sessions)
+// - UNPAID/NO_SHOW => 0
 function totalForTotals(entry){
   const status = (entry.status || "unpaid").toLowerCase();
-  if(status === "paid"){
-    return Number(entry.total || 0);        // PAID => full total price
-  }
-  if(status === "partial"){
-    return paidAmount(entry);              // PARTIAL => paid so far (deposit + sessions)
-  }
-  return 0;                                // unpaid / no_show => 0
+  if(status === "paid") return Number(entry.total || 0);
+  if(status === "partial") return paidAmount(entry);
+  return 0;
 }
 
 // ================= SAVE =================
@@ -79,15 +78,10 @@ const viewBox = safeEl("viewBox");
 const exportModal = safeEl("exportModal");
 const exportBox = safeEl("exportBox");
 
-if (formModal){
-  formModal.addEventListener("click", (e)=>{ if(e.target===formModal) closeForm(); });
-}
-if (viewModal){
-  viewModal.addEventListener("click", (e)=>{ if(e.target===viewModal) closeView(); });
-}
-if (exportModal){
-  exportModal.addEventListener("click", (e)=>{ if(e.target===exportModal) closeExport(); });
-}
+if (formModal) formModal.addEventListener("click", (e)=>{ if(e.target===formModal) closeForm(); });
+if (viewModal) viewModal.addEventListener("click", (e)=>{ if(e.target===viewModal) closeView(); });
+if (exportModal) exportModal.addEventListener("click", (e)=>{ if(e.target===exportModal) closeExport(); });
+
 if (formBox) formBox.addEventListener("click", (e)=> e.stopPropagation());
 if (viewBox) viewBox.addEventListener("click", (e)=> e.stopPropagation());
 if (exportBox) exportBox.addEventListener("click", (e)=> e.stopPropagation());
@@ -283,8 +277,7 @@ function diffFields(oldEntry, newEntry){
   const fields = ["date","client","contact","social","description","location","notes","total","status"];
   const changes = [];
 
-  for(let i=0;i<fields.length;i++){
-    const f = fields[i];
+  for(const f of fields){
     const oldV = (oldEntry[f] === undefined || oldEntry[f] === null) ? "" : oldEntry[f];
     const newV = (newEntry[f] === undefined || newEntry[f] === null) ? "" : newEntry[f];
     if(String(oldV) !== String(newV)){
@@ -368,11 +361,7 @@ function saveEntry(){
       const old = entries[idx];
       const next = Object.assign({}, old, base);
 
-      if(newImageDataUrlOrNull){
-        next.image = newImageDataUrlOrNull;
-      } else {
-        next.image = old.image || null;
-      }
+      next.image = newImageDataUrlOrNull ? newImageDataUrlOrNull : (old.image || null);
 
       const ts = new Date().toISOString();
       if(!Array.isArray(next.editHistory)) next.editHistory = [];
@@ -407,6 +396,7 @@ function saveEntry(){
 }
 
 // ================= VIEW / EDIT / DELETE =================
+// ✅ Updated: strong title header, removed rule-explanation text completely
 function viewEntry(id){
   const entry = entries.find(e=>e.id===id);
   if(!entry || !viewBox) return;
@@ -416,10 +406,9 @@ function viewEntry(id){
   const paidSoFar = paidAmount(entry);
   const dep = depositAmount(entry);
   const remaining = Number(entry.total || 0) - paidSoFar;
+  const counts = totalForTotals(entry);
 
-  // What this entry contributes to totals:
-  const contribution = totalForTotals(entry);
-
+  // history html
   let historyHtml = "<p style='opacity:.7;'>No edits yet.</p>";
   if(Array.isArray(entry.editHistory) && entry.editHistory.length){
     historyHtml = entry.editHistory
@@ -437,9 +426,7 @@ function viewEntry(id){
   }
 
   viewBox.innerHTML = `
-    <h3 style="margin-top:0;">${entry.client}</h3>
-    <p><strong>Date:</strong> ${entry.date}</p>
-    <p><strong>Status:</strong> <span class="status ${entry.status}">${entry.status}</span></p>
+    <div class="modal-title">${entry.client} — ${entry.date}</div>
 
     <div class="row">
       <div>
@@ -449,12 +436,12 @@ function viewEntry(id){
         <p><strong>Remaining:</strong> ${money(remaining)}</p>
       </div>
       <div>
-        <p><strong>Counts Toward Totals As:</strong> ${money(contribution)}</p>
-        <p style="opacity:.75;font-size:.9rem;margin-top:-6px;">
-          (PAID=Total Price, PARTIAL=Paid So Far, else 0)
-        </p>
+        <p><strong>Counts Toward Totals:</strong> ${money(counts)}</p>
+        <p><strong>Status:</strong> <span class="status ${entry.status}">${entry.status}</span></p>
       </div>
     </div>
+
+    <hr>
 
     <p><strong>Location:</strong> ${entry.location || ""}</p>
     <p><strong>Description:</strong> ${entry.description || ""}</p>
@@ -469,14 +456,14 @@ function viewEntry(id){
         : "<p style='opacity:.7;'>No payments recorded.</p>"
     }
 
-    ${entry.image ? `<img src="${entry.image}" style="width:100%; margin-top:10px; border-radius:10px; border:1px solid rgba(212,175,55,.25);">` : ""}
+    ${entry.image ? `<img src="${entry.image}" style="width:100%; margin-top:15px; border-radius:12px; border:1px solid rgba(212,175,55,.3);">` : ""}
 
     <details style="margin-top:12px;">
       <summary>Edit History</summary>
       ${historyHtml}
     </details>
 
-    <div class="actions-row">
+    <div class="actions-row" style="margin-top:20px;">
       <button type="button" onclick="editFromView()">Edit</button>
       <button type="button" class="dangerbtn" onclick="deleteFromView()">Delete</button>
       <button type="button" class="secondarybtn" onclick="closeView()">Close</button>
@@ -513,7 +500,7 @@ function deleteFromView(){
   closeView();
 }
 
-// ================= STATS (uses totals rule) =================
+// ================= STATS (uses totals logic) =================
 function updateStats(){
   const todayEl = safeEl("todayTotal");
   const weekEl = safeEl("weekTotal");
@@ -718,7 +705,6 @@ function buildSummary(mode){
         <div style="font-weight:700;">Totals</div>
         <div>Entries: <strong>${totalCount}</strong></div>
         <div>Counts Toward Totals: <strong>${money(totalTotalsRule)}</strong></div>
-        <div style="opacity:.8;">(PAID=Total, PARTIAL=Paid, else 0)</div>
         <div style="margin-top:6px;">Paid So Far (raw): <strong>${money(totalPaidSoFar)}</strong></div>
       </div>
 
@@ -733,12 +719,12 @@ function buildSummary(mode){
 
     <div class="summary-grid" style="margin-top:10px;">
       <div class="summary-box">
-        <div style="font-weight:700;">Top Clients (by totals rule)</div>
+        <div style="font-weight:700;">Top Clients</div>
         ${topClients.length ? `<ol style="margin:8px 0 0 18px;">${topClients.map(([k,v])=>`<li>${k}: <strong>${money(v)}</strong></li>`).join("")}</ol>` : "<div style='opacity:.75;'>None</div>"}
       </div>
 
       <div class="summary-box">
-        <div style="font-weight:700;">Top Locations (by totals rule)</div>
+        <div style="font-weight:700;">Top Locations</div>
         ${topLocs.length ? `<ol style="margin:8px 0 0 18px;">${topLocs.map(([k,v])=>`<li>${k}: <strong>${money(v)}</strong></li>`).join("")}</ol>` : "<div style='opacity:.75;'>None</div>"}
       </div>
     </div>
@@ -814,7 +800,7 @@ function render(){
               <div class="entry-left">
                 <div class="entry-name">${entry.client}</div>
                 <div class="entry-sub">
-                  Counts ${money(counts)} • Paid ${money(paidSoFar)} • Dep ${money(dep)} • Total ${money(entry.total)}
+                  Counted ${money(counts)} • Paid ${money(paidSoFar)} • Dep ${money(dep)} • Total ${money(entry.total)}
                   ${entry.location ? " • " + entry.location : ""}
                 </div>
               </div>
