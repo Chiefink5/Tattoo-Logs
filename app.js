@@ -1,78 +1,116 @@
+// ================= STATE =================
 let entries = JSON.parse(localStorage.getItem("entries") || "[]");
 
-/* ================= SAVE ================= */
+// ================= SAVE =================
 function save() {
   localStorage.setItem("entries", JSON.stringify(entries));
   render();
 }
 
-/* ================= MODALS ================= */
+// ================= MODALS =================
 const formModal = document.getElementById("formModal");
 const viewModal = document.getElementById("viewModal");
 
 function openForm() {
+  if (!formModal) return;
   formModal.style.display = "flex";
-  document.getElementById("date").value =
-    new Date().toISOString().split("T")[0];
+
+  const dateInput = document.getElementById("date");
+  if (dateInput) {
+    dateInput.value = new Date().toISOString().split("T")[0];
+  }
 }
 
 function closeForm() {
+  if (!formModal) return;
   formModal.style.display = "none";
   resetForm();
 }
 
-function resetForm(){
-  document.getElementById("date").value="";
-  document.getElementById("client").value="";
-  document.getElementById("contact").value="";
-  document.getElementById("social").value="";
-  document.getElementById("description").value="";
-  document.getElementById("location").value="";
-  document.getElementById("notes").value="";
-  document.getElementById("total").value="";
-  document.getElementById("deposit").value="";
-  document.getElementById("image").value="";
-  document.getElementById("sessions").innerHTML="";
-  document.getElementById("status").value="unpaid";
-}
-
 function closeView() {
+  if (!viewModal) return;
   viewModal.style.display = "none";
 }
 
-/* Click outside modal to close */
-formModal.addEventListener("click", function (e) {
-  if (e.target === formModal) closeForm();
-});
+// Click outside to close
+if (formModal) {
+  formModal.addEventListener("click", function (e) {
+    if (e.target === formModal) closeForm();
+  });
+}
 
-viewModal.addEventListener("click", function (e) {
-  if (e.target === viewModal) closeView();
-});
+if (viewModal) {
+  viewModal.addEventListener("click", function (e) {
+    if (e.target === viewModal) closeView();
+  });
+}
 
-/* ================= ADD SESSION ================= */
+// ================= RESET FORM =================
+function resetForm() {
+  const modal = document.getElementById("formModal");
+  if (!modal) return;
+
+  modal.querySelectorAll("input, textarea, select").forEach(el => {
+    if (el.type === "file") {
+      el.value = "";
+    } else {
+      el.value = "";
+    }
+  });
+
+  const sessions = document.getElementById("sessions");
+  if (sessions) sessions.innerHTML = "";
+}
+
+// ================= ADD SESSION =================
 function addSession() {
   const container = document.getElementById("sessions");
+  if (!container) return;
+
   const input = document.createElement("input");
   input.type = "number";
   input.className = "session-amount";
   input.placeholder = "Session Amount";
+
   container.appendChild(input);
 }
 
-/* ================= SAVE ENTRY ================= */
-function saveEntry() {
+// ================= STATUS =================
+function getStatus(entry) {
+  if (entry.status) return entry.status;
 
-  const dateVal = document.getElementById("date").value;
-  const clientVal = document.getElementById("client").value.trim();
+  const paid = entry.payments.reduce((sum, p) => sum + p.amount, 0);
+
+  if (paid === 0) return "unpaid";
+  if (paid < entry.total) return "partial";
+  return "paid";
+}
+
+// ================= SAVE ENTRY =================
+function saveEntry() {
+  const dateEl = document.getElementById("date");
+  const clientEl = document.getElementById("client");
+  const totalEl = document.getElementById("total");
+  const depositEl = document.getElementById("deposit");
+  const statusEl = document.getElementById("status");
+  const imageEl = document.getElementById("image");
+
+  if (!dateEl || !clientEl) {
+    alert("Required fields missing.");
+    return;
+  }
+
+  const dateVal = dateEl.value;
+  const clientVal = clientEl.value.trim();
 
   if (!dateVal || !clientVal) {
-    alert("Date and Client Name required.");
+    alert("Date and Client Name are required.");
     return;
   }
 
   const payments = [];
 
-  const depositVal = Number(document.getElementById("deposit").value || 0);
+  const depositVal = depositEl ? Number(depositEl.value || 0) : 0;
   if (depositVal > 0) {
     payments.push({ amount: depositVal });
   }
@@ -86,38 +124,40 @@ function saveEntry() {
     id: Date.now(),
     date: dateVal,
     client: clientVal,
-    contact: document.getElementById("contact").value || "",
-    social: document.getElementById("social").value || "",
-    description: document.getElementById("description").value || "",
-    location: document.getElementById("location").value || "",
-    notes: document.getElementById("notes").value || "",
-    total: Number(document.getElementById("total").value || 0),
+    total: totalEl ? Number(totalEl.value || 0) : 0,
     payments: payments,
-    status: document.getElementById("status").value,
+    status: statusEl ? statusEl.value : "unpaid",
+    contact: document.getElementById("contact") ? document.getElementById("contact").value : "",
+    social: document.getElementById("social") ? document.getElementById("social").value : "",
+    description: document.getElementById("description") ? document.getElementById("description").value : "",
+    location: document.getElementById("location") ? document.getElementById("location").value : "",
+    notes: document.getElementById("notes") ? document.getElementById("notes").value : "",
     image: null
   };
 
-  const file = document.getElementById("image").files[0];
-
-  if (file) {
-    const reader = new FileReader();
-    reader.onload = function (e) {
-      entry.image = e.target.result;
-      entries.push(entry);
-      save();
-      closeForm();
-    };
-    reader.readAsDataURL(file);
-  } else {
+  function finalizeSave() {
     entries.push(entry);
     save();
     closeForm();
   }
+
+  if (imageEl && imageEl.files && imageEl.files[0]) {
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      entry.image = e.target.result;
+      finalizeSave();
+    };
+    reader.readAsDataURL(imageEl.files[0]);
+  } else {
+    finalizeSave();
+  }
 }
 
-/* ================= RENDER ================= */
+// ================= RENDER =================
 function render() {
   const container = document.getElementById("entries");
+  if (!container) return;
+
   container.innerHTML = "";
 
   if (entries.length === 0) {
@@ -126,21 +166,22 @@ function render() {
     return;
   }
 
-  entries.slice().reverse().forEach(e => {
-    const paid = e.payments.reduce((s, p) => s + p.amount, 0);
+  entries.slice().reverse().forEach(entry => {
+    const paid = entry.payments.reduce((sum, p) => sum + p.amount, 0);
+    const status = getStatus(entry);
 
     const div = document.createElement("div");
     div.className = "card";
 
     div.innerHTML = `
-      <strong>${e.client}</strong><br>
-      ${e.date}<br>
-      $${paid} / $${e.total}
-      <span class="status ${e.status}">${e.status}</span>
+      <strong>${entry.client}</strong><br>
+      ${entry.date}<br>
+      $${paid} / $${entry.total}
+      <span class="status ${status}">${status}</span>
     `;
 
     div.onclick = function () {
-      viewEntry(e.id);
+      viewEntry(entry.id);
     };
 
     container.appendChild(div);
@@ -149,15 +190,20 @@ function render() {
   updateStats();
 }
 
-/* ================= VIEW ENTRY ================= */
+// ================= VIEW ENTRY =================
 function viewEntry(id) {
   const entry = entries.find(e => e.id === id);
-  const paid = entry.payments.reduce((s, p) => s + p.amount, 0);
+  if (!entry) return;
+
+  const paid = entry.payments.reduce((sum, p) => sum + p.amount, 0);
   const remaining = entry.total - paid;
 
-  document.getElementById("viewBox").innerHTML = `
+  const viewBox = document.getElementById("viewBox");
+  if (!viewBox) return;
+
+  viewBox.innerHTML = `
     <h3>${entry.client}</h3>
-    <p>Status: ${entry.status}</p>
+    <p>Status: ${getStatus(entry)}</p>
     <p>Total: $${entry.total}</p>
     <p>Paid: $${paid}</p>
     <p>Remaining: $${remaining}</p>
@@ -169,28 +215,36 @@ function viewEntry(id) {
     ${entry.image ? `<img src="${entry.image}" style="width:100%; margin-top:10px;">` : ""}
   `;
 
-  viewModal.style.display = "flex";
+  if (viewModal) viewModal.style.display = "flex";
 }
 
-/* ================= STATS ================= */
+// ================= STATS =================
 function updateStats() {
+  const todayEl = document.getElementById("todayTotal");
+  const weekEl = document.getElementById("weekTotal");
+  const monthEl = document.getElementById("monthTotal");
+  const yearEl = document.getElementById("yearTotal");
+
+  if (!todayEl) return;
+
   const now = new Date();
   let today = 0, week = 0, month = 0, year = 0;
 
-  entries.forEach(e => {
-    const paid = e.payments.reduce((s, p) => s + p.amount, 0);
-    const d = new Date(e.date);
+  entries.forEach(entry => {
+    const paid = entry.payments.reduce((sum, p) => sum + p.amount, 0);
+    const d = new Date(entry.date);
 
-    if (e.date === now.toISOString().split("T")[0]) today += paid;
+    if (entry.date === now.toISOString().split("T")[0]) today += paid;
     if (d.getFullYear() === now.getFullYear()) year += paid;
     if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) month += paid;
     if ((now - d) / (1000 * 60 * 60 * 24) <= 7) week += paid;
   });
 
-  document.getElementById("todayTotal").innerText = "$" + today;
-  document.getElementById("weekTotal").innerText = "$" + week;
-  document.getElementById("monthTotal").innerText = "$" + month;
-  document.getElementById("yearTotal").innerText = "$" + year;
+  todayEl.innerText = "$" + today;
+  if (weekEl) weekEl.innerText = "$" + week;
+  if (monthEl) monthEl.innerText = "$" + month;
+  if (yearEl) yearEl.innerText = "$" + year;
 }
 
+// ================= INIT =================
 render();
