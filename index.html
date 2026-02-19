@@ -7,186 +7,277 @@
 
 <style>
 :root{
---bg:#0e1512;
---panel:#1a241f;
---emerald:#1f6f50;
---gold:#d4af37;
---text:#f2f2f2;
---danger:#a94442;
+  --bg:#0e1512;
+  --panel:#1a241f;
+  --emerald:#1f6f50;
+  --gold:#d4af37;
+  --text:#f2f2f2;
+  --danger:#a94442;
 }
 
 body{
-margin:0;
-background:linear-gradient(160deg,#0e1512,#0a1c16);
-color:var(--text);
-font-family:sans-serif;
+  margin:0;
+  background:linear-gradient(160deg,#0e1512,#0a1c16);
+  color:var(--text);
+  font-family:sans-serif;
 }
 
 header{
-padding:20px;
-font-size:1.6rem;
-font-weight:bold;
-border-bottom:2px solid var(--gold);
+  padding:20px;
+  font-size:1.6rem;
+  font-weight:bold;
+  border-bottom:2px solid var(--gold);
 }
 
 #stats{
-display:flex;
-justify-content:space-around;
-padding:15px;
-border-bottom:1px solid var(--emerald);
+  display:flex;
+  justify-content:space-around;
+  padding:15px;
+  border-bottom:1px solid var(--emerald);
 }
 
 #stats strong{
-color:var(--gold);
+  color:var(--gold);
+  font-size:1.1rem;
 }
 
 .container{
-padding:20px;
+  padding:20px;
 }
 
-.card{
-background:var(--panel);
-border:2px solid var(--emerald);
-border-radius:10px;
-padding:12px;
-margin-bottom:10px;
-cursor:pointer;
+.accordion{
+  background:var(--panel);
+  border:2px solid var(--emerald);
+  border-radius:12px;
+  margin-bottom:12px;
+  overflow:hidden;
 }
 
-.card:hover{
-border-color:var(--gold);
+.accordion-header{
+  padding:12px 14px;
+  cursor:pointer;
+  background:#16201b;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  user-select:none;
+}
+
+.accordion-header:hover{
+  filter:brightness(1.05);
+}
+
+.accordion-title{
+  font-weight:700;
+}
+
+.badge{
+  font-size:.85rem;
+  color:#111;
+  background:var(--gold);
+  border-radius:999px;
+  padding:2px 10px;
+  margin-left:10px;
+}
+
+.chev{
+  opacity:.8;
+  margin-left:10px;
+}
+
+.accordion-content{
+  display:none;
+  padding:10px 12px 12px;
+}
+
+.entry{
+  background:#223029;
+  padding:10px 12px;
+  margin:8px 0;
+  border-left:4px solid var(--gold);
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  cursor:pointer;
+  border-radius:10px;
+}
+
+.entry:hover{
+  outline:1px solid rgba(212,175,55,.35);
+}
+
+.entry-left{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+
+.entry-name{
+  font-weight:700;
+  color:var(--gold);
+}
+
+.entry-sub{
+  font-size:.85rem;
+  opacity:.85;
 }
 
 .status{
-padding:2px 6px;
-border-radius:6px;
-font-size:.8rem;
+  padding:3px 8px;
+  border-radius:8px;
+  font-size:.8rem;
+  text-transform:uppercase;
+  letter-spacing:.04em;
 }
 
 .paid{background:#2e7d32;}
-.partial{background:#f9a825;}
+.partial{background:#f9a825; color:#111;}
 .unpaid{background:#616161;}
+.no_show{background:var(--danger);}
 
 .fab{
-position:fixed;
-bottom:25px;
-right:25px;
-width:65px;
-height:65px;
-border-radius:50%;
-background:var(--emerald);
-display:flex;
-align-items:center;
-justify-content:center;
-font-size:2rem;
-color:white;
-box-shadow:0 0 25px rgba(212,175,55,.4);
-cursor:pointer;
+  position:fixed;
+  bottom:25px;
+  right:25px;
+  width:65px;
+  height:65px;
+  border-radius:50%;
+  background:var(--emerald);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:2rem;
+  color:white;
+  box-shadow:0 0 25px rgba(212,175,55,.4);
+  cursor:pointer;
 }
 
 .modal{
-position:fixed;
-inset:0;
-background:rgba(0,0,0,.85);
-display:none;
-align-items:center;
-justify-content:center;
-padding:20px;
-overflow:auto;
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.85);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+  overflow:auto;
+  z-index:9999;
 }
 
 .modal-box{
-background:var(--panel);
-padding:20px;
-border:2px solid var(--gold);
-border-radius:10px;
-max-width:500px;
-width:100%;
+  background:var(--panel);
+  padding:20px;
+  border:2px solid var(--gold);
+  border-radius:12px;
+  max-width:560px;
+  width:100%;
 }
 
 input, textarea, select{
-display:block;
-margin:8px 0;
-padding:8px;
-width:100%;
-background:#121b17;
-color:white;
-border:1px solid var(--emerald);
-border-radius:4px;
+  display:block;
+  margin:8px 0;
+  padding:10px;
+  width:100%;
+  background:#121b17;
+  color:white;
+  border:1px solid var(--emerald);
+  border-radius:8px;
 }
 
+textarea{min-height:90px;}
+
 button{
-background:var(--emerald);
-color:white;
-border:none;
-padding:10px;
-margin-top:10px;
-cursor:pointer;
-border-radius:6px;
+  background:var(--emerald);
+  color:white;
+  border:none;
+  padding:10px 12px;
+  margin-top:10px;
+  cursor:pointer;
+  border-radius:10px;
+}
+
+button:hover{filter:brightness(1.06);}
+
+.row{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+@media(max-width:640px){
+  .row{grid-template-columns:1fr;}
 }
 </style>
 </head>
 
 <body>
-
 <header>Tattoo Revenue Tracker</header>
 
 <div id="stats">
-<div><strong id="todayTotal">$0</strong><br><small>Today</small></div>
-<div><strong id="weekTotal">$0</strong><br><small>Week</small></div>
-<div><strong id="monthTotal">$0</strong><br><small>Month</small></div>
-<div><strong id="yearTotal">$0</strong><br><small>Year</small></div>
+  <div><strong id="todayTotal">$0</strong><br><small>Today</small></div>
+  <div><strong id="weekTotal">$0</strong><br><small>Week</small></div>
+  <div><strong id="monthTotal">$0</strong><br><small>Month</small></div>
+  <div><strong id="yearTotal">$0</strong><br><small>Year</small></div>
 </div>
 
 <div class="container">
-<div id="entries"></div>
+  <div id="entries"></div>
 </div>
 
 <div class="fab" onclick="openForm()">+</div>
 
 <!-- ADD ENTRY MODAL -->
 <div class="modal" id="formModal">
-<div class="modal-box">
+  <div class="modal-box" id="formBox">
+    <h3>Add Entry</h3>
 
-<h3>Add Entry</h3>
+    <input type="date" id="date">
+    <input type="text" id="client" placeholder="Client Name">
 
-<input type="date" id="date">
-<input type="text" id="client" placeholder="Client Name">
-<input type="text" id="contact" placeholder="Client Contact">
-<input type="text" id="social" placeholder="Client Social">
+    <div class="row">
+      <input type="text" id="contact" placeholder="Client Contact">
+      <input type="text" id="social" placeholder="Client Social">
+    </div>
 
-<textarea id="description" placeholder="Tattoo Description"></textarea>
+    <textarea id="description" placeholder="Tattoo Description"></textarea>
 
-<select id="location">
-<option value="">Location</option>
-<option>Arm</option>
-<option>Leg</option>
-<option>Back</option>
-<option>Chest</option>
-<option>Hand</option>
-<option>Foot</option>
-<option>Neck</option>
-</select>
+    <select id="location">
+      <option value="">Location</option>
+      <option>Arm</option>
+      <option>Leg</option>
+      <option>Back</option>
+      <option>Chest</option>
+      <option>Hand</option>
+      <option>Foot</option>
+      <option>Neck</option>
+    </select>
 
-<input type="number" id="total" placeholder="Total Price">
-<input type="number" id="deposit" placeholder="Deposit">
+    <div class="row">
+      <input type="number" id="total" placeholder="Total Price">
+      <input type="number" id="deposit" placeholder="Deposit">
+    </div>
 
-<div id="sessions"></div>
-<button onclick="addSession()">+ Additional Session</button>
+    <select id="status">
+      <option value="unpaid">Unpaid</option>
+      <option value="partial">Partial</option>
+      <option value="paid">Paid</option>
+      <option value="no_show">No Show</option>
+    </select>
 
-<textarea id="notes" placeholder="Notes"></textarea>
+    <div id="sessions"></div>
+    <button type="button" onclick="addSession()">+ Additional Session</button>
 
-<input type="file" id="image">
+    <textarea id="notes" placeholder="Notes"></textarea>
 
-<button onclick="saveEntry()">Save Entry</button>
-<button onclick="closeForm()">Cancel</button>
+    <input type="file" id="image" accept="image/*">
 
-</div>
+    <button type="button" onclick="saveEntry()">Save Entry</button>
+    <button type="button" onclick="closeForm()">Cancel</button>
+  </div>
 </div>
 
 <!-- VIEW ENTRY MODAL -->
 <div class="modal" id="viewModal">
-<div class="modal-box" id="viewBox"></div>
+  <div class="modal-box" id="viewBox"></div>
 </div>
 
 <script src="app.js"></script>
