@@ -18,7 +18,22 @@ function openForm() {
 
 function closeForm() {
   formModal.style.display = "none";
-  document.getElementById("sessions").innerHTML = "";
+  resetForm();
+}
+
+function resetForm(){
+  document.getElementById("date").value="";
+  document.getElementById("client").value="";
+  document.getElementById("contact").value="";
+  document.getElementById("social").value="";
+  document.getElementById("description").value="";
+  document.getElementById("location").value="";
+  document.getElementById("notes").value="";
+  document.getElementById("total").value="";
+  document.getElementById("deposit").value="";
+  document.getElementById("image").value="";
+  document.getElementById("sessions").innerHTML="";
+  document.getElementById("status").value="unpaid";
 }
 
 function closeView() {
@@ -44,21 +59,14 @@ function addSession() {
   container.appendChild(input);
 }
 
-/* ================= STATUS ================= */
-function getStatus(entry) {
-  const paid = entry.payments.reduce((s, p) => s + p.amount, 0);
-  if (paid === 0) return "unpaid";
-  if (paid < entry.total) return "partial";
-  return "paid";
-}
-
 /* ================= SAVE ENTRY ================= */
 function saveEntry() {
+
   const dateVal = document.getElementById("date").value;
   const clientVal = document.getElementById("client").value.trim();
 
   if (!dateVal || !clientVal) {
-    alert("Date and Client Name are required.");
+    alert("Date and Client Name required.");
     return;
   }
 
@@ -71,26 +79,25 @@ function saveEntry() {
 
   document.querySelectorAll(".session-amount").forEach(input => {
     const val = Number(input.value || 0);
-    if (val > 0) {
-      payments.push({ amount: val });
-    }
+    if (val > 0) payments.push({ amount: val });
   });
 
   const entry = {
     id: Date.now(),
     date: dateVal,
     client: clientVal,
-    contact: document.getElementById("contact")?.value || "",
-    social: document.getElementById("social")?.value || "",
-    description: document.getElementById("description")?.value || "",
-    location: document.getElementById("location")?.value || "",
-    notes: document.getElementById("notes")?.value || "",
+    contact: document.getElementById("contact").value || "",
+    social: document.getElementById("social").value || "",
+    description: document.getElementById("description").value || "",
+    location: document.getElementById("location").value || "",
+    notes: document.getElementById("notes").value || "",
     total: Number(document.getElementById("total").value || 0),
     payments: payments,
+    status: document.getElementById("status").value,
     image: null
   };
 
-  const file = document.getElementById("image")?.files[0];
+  const file = document.getElementById("image").files[0];
 
   if (file) {
     const reader = new FileReader();
@@ -114,35 +121,30 @@ function render() {
   container.innerHTML = "";
 
   if (entries.length === 0) {
-    container.innerHTML =
-      "<p style='opacity:.6;'>No entries yet.</p>";
+    container.innerHTML = "<p style='opacity:.6;'>No entries yet.</p>";
     updateStats();
     return;
   }
 
-  entries
-    .slice()
-    .reverse()
-    .forEach(e => {
-      const paid = e.payments.reduce((s, p) => s + p.amount, 0);
-      const status = getStatus(e);
+  entries.slice().reverse().forEach(e => {
+    const paid = e.payments.reduce((s, p) => s + p.amount, 0);
 
-      const div = document.createElement("div");
-      div.className = "card";
+    const div = document.createElement("div");
+    div.className = "card";
 
-      div.innerHTML = `
-        <strong>${e.client}</strong><br>
-        ${e.date}<br>
-        $${paid} / $${e.total}
-        <span class="status ${status}">${status}</span>
-      `;
+    div.innerHTML = `
+      <strong>${e.client}</strong><br>
+      ${e.date}<br>
+      $${paid} / $${e.total}
+      <span class="status ${e.status}">${e.status}</span>
+    `;
 
-      div.onclick = function () {
-        viewEntry(e.id);
-      };
+    div.onclick = function () {
+      viewEntry(e.id);
+    };
 
-      container.appendChild(div);
-    });
+    container.appendChild(div);
+  });
 
   updateStats();
 }
@@ -155,16 +157,15 @@ function viewEntry(id) {
 
   document.getElementById("viewBox").innerHTML = `
     <h3>${entry.client}</h3>
-    <p><strong>Date:</strong> ${entry.date}</p>
-    <p><strong>Status:</strong> ${getStatus(entry)}</p>
-    <p><strong>Total:</strong> $${entry.total}</p>
-    <p><strong>Paid:</strong> $${paid}</p>
-    <p><strong>Remaining:</strong> $${remaining}</p>
-    <p><strong>Description:</strong> ${entry.description}</p>
-    <p><strong>Location:</strong> ${entry.location}</p>
-    <p><strong>Contact:</strong> ${entry.contact}</p>
-    <p><strong>Social:</strong> ${entry.social}</p>
-    <p><strong>Notes:</strong> ${entry.notes}</p>
+    <p>Status: ${entry.status}</p>
+    <p>Total: $${entry.total}</p>
+    <p>Paid: $${paid}</p>
+    <p>Remaining: $${remaining}</p>
+    <p>Description: ${entry.description}</p>
+    <p>Location: ${entry.location}</p>
+    <p>Contact: ${entry.contact}</p>
+    <p>Social: ${entry.social}</p>
+    <p>Notes: ${entry.notes}</p>
     ${entry.image ? `<img src="${entry.image}" style="width:100%; margin-top:10px;">` : ""}
   `;
 
@@ -174,25 +175,15 @@ function viewEntry(id) {
 /* ================= STATS ================= */
 function updateStats() {
   const now = new Date();
-  let today = 0,
-    week = 0,
-    month = 0,
-    year = 0;
+  let today = 0, week = 0, month = 0, year = 0;
 
   entries.forEach(e => {
     const paid = e.payments.reduce((s, p) => s + p.amount, 0);
     const d = new Date(e.date);
 
     if (e.date === now.toISOString().split("T")[0]) today += paid;
-
-    if (
-      d.getMonth() === now.getMonth() &&
-      d.getFullYear() === now.getFullYear()
-    )
-      month += paid;
-
     if (d.getFullYear() === now.getFullYear()) year += paid;
-
+    if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) month += paid;
     if ((now - d) / (1000 * 60 * 60 * 24) <= 7) week += paid;
   });
 
@@ -202,5 +193,4 @@ function updateStats() {
   document.getElementById("yearTotal").innerText = "$" + year;
 }
 
-/* ================= INIT ================= */
 render();
