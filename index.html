@@ -23,16 +23,36 @@ body{
 }
 
 header{
-  padding:20px;
-  font-size:1.6rem;
+  padding:18px 20px;
+  font-size:1.5rem;
   font-weight:bold;
   border-bottom:2px solid var(--gold);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
 }
+
+.header-actions{
+  display:flex;
+  gap:10px;
+  align-items:center;
+}
+
+.smallbtn{
+  background:#16201b;
+  border:1px solid rgba(212,175,55,.35);
+  color:var(--text);
+  padding:8px 10px;
+  border-radius:10px;
+  cursor:pointer;
+}
+.smallbtn:hover{filter:brightness(1.06);}
 
 #stats{
   display:flex;
   justify-content:space-around;
-  padding:15px;
+  padding:14px 10px;
   border-bottom:1px solid var(--emerald);
 }
 
@@ -41,9 +61,7 @@ header{
   font-size:1.1rem;
 }
 
-.container{
-  padding:20px;
-}
+.container{ padding:20px; }
 
 .accordion{
   background:var(--panel);
@@ -62,14 +80,9 @@ header{
   align-items:center;
   user-select:none;
 }
+.accordion-header:hover{ filter:brightness(1.05); }
 
-.accordion-header:hover{
-  filter:brightness(1.05);
-}
-
-.accordion-title{
-  font-weight:700;
-}
+.accordion-title{ font-weight:700; }
 
 .badge{
   font-size:.85rem;
@@ -101,10 +114,7 @@ header{
   cursor:pointer;
   border-radius:10px;
 }
-
-.entry:hover{
-  outline:1px solid rgba(212,175,55,.35);
-}
+.entry:hover{ outline:1px solid rgba(212,175,55,.35); }
 
 .entry-left{
   display:flex;
@@ -112,15 +122,8 @@ header{
   gap:2px;
 }
 
-.entry-name{
-  font-weight:700;
-  color:var(--gold);
-}
-
-.entry-sub{
-  font-size:.85rem;
-  opacity:.85;
-}
+.entry-name{ font-weight:700; color:var(--gold); }
+.entry-sub{ font-size:.85rem; opacity:.85; }
 
 .status{
   padding:3px 8px;
@@ -129,7 +132,6 @@ header{
   text-transform:uppercase;
   letter-spacing:.04em;
 }
-
 .paid{background:#2e7d32;}
 .partial{background:#f9a825; color:#111;}
 .unpaid{background:#616161;}
@@ -150,6 +152,7 @@ header{
   color:white;
   box-shadow:0 0 25px rgba(212,175,55,.4);
   cursor:pointer;
+  z-index:5000;
 }
 
 .modal{
@@ -195,7 +198,6 @@ button{
   cursor:pointer;
   border-radius:10px;
 }
-
 button:hover{filter:brightness(1.06);}
 
 .row{
@@ -203,14 +205,37 @@ button:hover{filter:brightness(1.06);}
   grid-template-columns:1fr 1fr;
   gap:10px;
 }
-@media(max-width:640px){
-  .row{grid-template-columns:1fr;}
+@media(max-width:640px){ .row{grid-template-columns:1fr;} }
+
+.actions-row{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-top:10px;
+}
+.dangerbtn{
+  background:var(--danger);
+}
+.secondarybtn{
+  background:#16201b;
+  border:1px solid rgba(31,111,80,.6);
+}
+
+hr{
+  border:none;
+  border-top:1px solid rgba(31,111,80,.6);
+  margin:14px 0;
 }
 </style>
 </head>
 
 <body>
-<header>Tattoo Revenue Tracker</header>
+<header>
+  <div>Tattoo Revenue Tracker</div>
+  <div class="header-actions">
+    <button class="smallbtn" type="button" onclick="openExport()">Export</button>
+  </div>
+</header>
 
 <div id="stats">
   <div><strong id="todayTotal">$0</strong><br><small>Today</small></div>
@@ -225,10 +250,10 @@ button:hover{filter:brightness(1.06);}
 
 <div class="fab" onclick="openForm()">+</div>
 
-<!-- ADD ENTRY MODAL -->
+<!-- ADD/EDIT ENTRY MODAL -->
 <div class="modal" id="formModal">
   <div class="modal-box" id="formBox">
-    <h3>Add Entry</h3>
+    <h3 id="formTitle">Add Entry</h3>
 
     <input type="date" id="date">
     <input type="text" id="client" placeholder="Client Name">
@@ -270,14 +295,51 @@ button:hover{filter:brightness(1.06);}
 
     <input type="file" id="image" accept="image/*">
 
-    <button type="button" onclick="saveEntry()">Save Entry</button>
-    <button type="button" onclick="closeForm()">Cancel</button>
+    <div class="actions-row">
+      <button type="button" onclick="saveEntry()">Save</button>
+      <button type="button" class="secondarybtn" onclick="closeForm()">Cancel</button>
+    </div>
   </div>
 </div>
 
 <!-- VIEW ENTRY MODAL -->
 <div class="modal" id="viewModal">
   <div class="modal-box" id="viewBox"></div>
+</div>
+
+<!-- EXPORT MODAL -->
+<div class="modal" id="exportModal">
+  <div class="modal-box" id="exportBox">
+    <h3>Export</h3>
+
+    <label style="font-size:.9rem;opacity:.9;">Payday (week starts on this day)</label>
+    <select id="paydaySelect">
+      <option value="0">Sunday</option>
+      <option value="1">Monday</option>
+      <option value="2">Tuesday</option>
+      <option value="3">Wednesday</option>
+      <option value="4">Thursday</option>
+      <option value="5">Friday</option>
+      <option value="6">Saturday</option>
+    </select>
+
+    <hr>
+
+    <label style="font-size:.9rem;opacity:.9;">CSV Date Range</label>
+    <div class="row">
+      <input type="date" id="exportStart">
+      <input type="date" id="exportEnd">
+    </div>
+
+    <div class="actions-row">
+      <button type="button" onclick="exportCSV()">Download CSV</button>
+      <button type="button" class="secondarybtn" onclick="closeExport()">Close</button>
+    </div>
+
+    <p style="opacity:.7;font-size:.85rem;margin-top:10px;">
+      Export includes: date, client, contact, social, description, location, total, paid, remaining, status, notes.
+    </p>
+  </div>
 </div>
 
 <script src="app.js"></script>
