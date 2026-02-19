@@ -1,32 +1,39 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8" />
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tattoo Tracker</title>
 
 <style>
 body{
-background:#0f1411;
-color:white;
-font-family:sans-serif;
-margin:0;
-padding:20px;
+  background:#0f1411;
+  color:white;
+  font-family:sans-serif;
+  margin:0;
+  padding:20px;
 }
 
 button{
-padding:10px;
-margin-top:8px;
-background:#1f6f50;
-color:white;
-border:none;
+  padding:10px 14px;
+  margin-top:8px;
+  background:#1f6f50;
+  color:white;
+  border:none;
+  cursor:pointer;
+}
+
+input{
+  display:block;
+  margin:6px 0;
+  padding:6px;
 }
 
 .entry{
-background:#1a241f;
-margin:10px 0;
-padding:10px;
-border-left:4px solid gold;
+  background:#1a241f;
+  margin:10px 0;
+  padding:10px;
+  border-left:4px solid gold;
 }
 </style>
 </head>
@@ -38,18 +45,18 @@ border-left:4px solid gold;
 
 <div id="form" style="display:none; margin-top:20px;">
 
-<input type="date" id="date"><br>
-<input type="text" id="client" placeholder="Client Name"><br>
-<input type="number" id="total" placeholder="Total Price"><br>
-<input type="number" id="deposit" placeholder="Deposit"><br>
+<input type="date" id="date">
+<input type="text" id="client" placeholder="Client Name">
+<input type="number" id="total" placeholder="Total Price">
+<input type="number" id="deposit" placeholder="Deposit">
 
 <div id="sessions"></div>
-<button onclick="addSession()">+ Additional Session</button><br>
+<button type="button" onclick="addSession()">+ Additional Session</button>
 
-<input type="file" id="image"><br>
+<input type="file" id="image">
 
-<button onclick="saveEntry()">Save</button>
-<button onclick="closeForm()">Cancel</button>
+<button type="button" onclick="saveEntry()">Save</button>
+<button type="button" onclick="closeForm()">Cancel</button>
 
 </div>
 
