@@ -6,44 +6,104 @@
 <title>Tattoo Tracker</title>
 
 <style>
+:root{
+--bg:#0e1512;
+--panel:#1a241f;
+--emerald:#1f6f50;
+--gold:#d4af37;
+--text:#f2f2f2;
+}
+
 body{
-  background:#0f1411;
-  color:white;
-  font-family:sans-serif;
-  margin:0;
-  padding:20px;
+margin:0;
+background:linear-gradient(160deg,#0e1512,#0a1c16);
+color:var(--text);
+font-family:sans-serif;
+}
+
+header{
+padding:20px;
+font-size:1.6rem;
+font-weight:bold;
+border-bottom:2px solid var(--gold);
+}
+
+.container{
+padding:20px;
 }
 
 button{
-  padding:10px 14px;
-  margin-top:8px;
-  background:#1f6f50;
-  color:white;
-  border:none;
-  cursor:pointer;
+background:var(--emerald);
+color:white;
+border:none;
+padding:10px 14px;
+margin-top:10px;
+cursor:pointer;
+border-radius:6px;
+}
+
+button:hover{
+background:#258a64;
 }
 
 input{
-  display:block;
-  margin:6px 0;
-  padding:6px;
+display:block;
+margin:8px 0;
+padding:8px;
+width:100%;
+background:#121b17;
+color:white;
+border:1px solid var(--emerald);
+border-radius:4px;
 }
 
-.entry{
-  background:#1a241f;
-  margin:10px 0;
-  padding:10px;
-  border-left:4px solid gold;
+.card{
+background:var(--panel);
+border:2px solid var(--emerald);
+border-radius:10px;
+padding:15px;
+margin-top:15px;
+box-shadow:0 0 15px rgba(0,0,0,.5);
+}
+
+.card strong{
+color:var(--gold);
+}
+
+.fab{
+position:fixed;
+bottom:25px;
+right:25px;
+width:65px;
+height:65px;
+border-radius:50%;
+background:var(--emerald);
+display:flex;
+align-items:center;
+justify-content:center;
+font-size:2rem;
+color:white;
+box-shadow:0 0 25px rgba(212,175,55,.4);
+cursor:pointer;
 }
 </style>
 </head>
+
 <body>
 
-<h2>Tattoo Tracker</h2>
+<header>Tattoo Revenue Tracker</header>
 
-<button onclick="openForm()">+ Add Entry</button>
+<div class="container">
+<div id="entries"></div>
+</div>
 
-<div id="form" style="display:none; margin-top:20px;">
+<div class="fab" onclick="openForm()">+</div>
+
+<!-- FORM MODAL -->
+<div id="formModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.8); padding:20px; overflow:auto;">
+<div style="background:var(--panel); padding:20px; border:2px solid var(--gold); border-radius:10px; max-width:500px; margin:auto;">
+
+<h3>Add Entry</h3>
 
 <input type="date" id="date">
 <input type="text" id="client" placeholder="Client Name">
@@ -51,18 +111,15 @@ input{
 <input type="number" id="deposit" placeholder="Deposit">
 
 <div id="sessions"></div>
-<button type="button" onclick="addSession()">+ Additional Session</button>
+<button onclick="addSession()">+ Additional Session</button>
 
 <input type="file" id="image">
 
-<button type="button" onclick="saveEntry()">Save</button>
-<button type="button" onclick="closeForm()">Cancel</button>
+<button onclick="saveEntry()">Save Entry</button>
+<button onclick="closeForm()">Cancel</button>
 
 </div>
-
-<hr>
-
-<div id="entries"></div>
+</div>
 
 <script src="app.js"></script>
 </body>

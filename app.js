@@ -1,112 +1,106 @@
 let entries = JSON.parse(localStorage.getItem("entries") || "[]");
 
-/* ---------- SAVE ---------- */
-function save() {
+function save(){
   localStorage.setItem("entries", JSON.stringify(entries));
   render();
 }
 
-/* ---------- FORM ---------- */
-function openForm() {
-  document.getElementById("form").style.display = "block";
+function openForm(){
+  document.getElementById("formModal").style.display="block";
   document.getElementById("date").value =
-    new Date().toISOString().split("T")[0];
+  new Date().toISOString().split("T")[0];
 }
 
-function closeForm() {
-  document.getElementById("form").style.display = "none";
-  document.getElementById("sessions").innerHTML = "";
+function closeForm(){
+  document.getElementById("formModal").style.display="none";
+  document.getElementById("sessions").innerHTML="";
 }
 
-/* ---------- ADD SESSION ---------- */
-function addSession() {
-  const container = document.getElementById("sessions");
-  const div = document.createElement("div");
+function addSession(){
+  const container=document.getElementById("sessions");
+  const div=document.createElement("div");
 
-  div.innerHTML = `
-    <input type="date" class="session-date">
-    <input type="number" class="session-amount" placeholder="Session Amount">
+  div.innerHTML=`
+  <input type="date" class="session-date">
+  <input type="number" class="session-amount" placeholder="Session Amount">
   `;
 
   container.appendChild(div);
 }
 
-/* ---------- SAVE ENTRY ---------- */
-function saveEntry() {
+function saveEntry(){
 
-  const payments = [];
+  const payments=[];
 
-  const depositVal = Number(document.getElementById("deposit").value || 0);
+  const depositVal=Number(document.getElementById("deposit").value||0);
 
-  if (depositVal > 0) {
-    payments.push({
-      amount: depositVal,
-      type: "deposit"
-    });
+  if(depositVal>0){
+    payments.push({amount:depositVal,type:"deposit"});
   }
 
-  const sessionDates = document.querySelectorAll(".session-date");
-  const sessionAmounts = document.querySelectorAll(".session-amount");
+  const sessionDates=document.querySelectorAll(".session-date");
+  const sessionAmounts=document.querySelectorAll(".session-amount");
 
-  sessionDates.forEach((dateInput, index) => {
-    const amountVal = Number(sessionAmounts[index].value || 0);
-
-    if (amountVal > 0) {
-      payments.push({
-        amount: amountVal,
-        type: "payment"
-      });
+  sessionDates.forEach((d,i)=>{
+    const amountVal=Number(sessionAmounts[i].value||0);
+    if(amountVal>0){
+      payments.push({amount:amountVal,type:"payment"});
     }
   });
 
-  const reader = new FileReader();
-  const file = document.getElementById("image").files[0];
+  const reader=new FileReader();
+  const file=document.getElementById("image").files[0];
 
-  const entry = {
-    id: Date.now(),
-    date: document.getElementById("date").value,
-    client: document.getElementById("client").value,
-    total: Number(document.getElementById("total").value || 0),
-    payments: payments,
-    image: null
+  const entry={
+    id:Date.now(),
+    date:document.getElementById("date").value,
+    client:document.getElementById("client").value || "Unnamed Client",
+    total:Number(document.getElementById("total").value||0),
+    payments:payments,
+    image:null
   };
 
-  if (file) {
-    reader.onload = function(e) {
-      entry.image = e.target.result;
-      entries.push(entry);
-      save();
-    };
-    reader.readAsDataURL(file);
-  } else {
+  function finalizeSave(){
     entries.push(entry);
     save();
+    closeForm();
   }
 
-  closeForm();
+  if(file){
+    reader.onload=function(e){
+      entry.image=e.target.result;
+      finalizeSave();
+    };
+    reader.readAsDataURL(file);
+  }else{
+    finalizeSave();
+  }
 }
 
-/* ---------- RENDER ---------- */
-function render() {
-  const container = document.getElementById("entries");
-  container.innerHTML = "";
+function render(){
+  const container=document.getElementById("entries");
+  container.innerHTML="";
 
-  entries.forEach(e => {
-    const earned = e.payments.reduce((sum, p) => sum + p.amount, 0);
+  if(entries.length===0){
+    container.innerHTML="<p style='opacity:.6;'>No entries yet.</p>";
+    return;
+  }
 
-    const div = document.createElement("div");
-    div.className = "entry";
+  entries.slice().reverse().forEach(e=>{
+    const earned=e.payments.reduce((s,p)=>s+p.amount,0);
 
-    div.innerHTML = `
+    const div=document.createElement("div");
+    div.className="card";
+
+    div.innerHTML=`
       <strong>${e.client}</strong><br>
       Date: ${e.date}<br>
       Paid: $${earned} / $${e.total}
-      ${e.image ? `<br><img src="${e.image}" style="width:100px;">` : ""}
+      ${e.image ? `<br><img src="${e.image}" style="width:100%; margin-top:10px;">` : ""}
     `;
 
     container.appendChild(div);
   });
 }
 
-/* ---------- INIT ---------- */
 render();
