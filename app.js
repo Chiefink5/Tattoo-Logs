@@ -1,16 +1,14 @@
 // ================= STATE =================
 let entries = JSON.parse(localStorage.getItem("entries") || "[]");
 let editingId = null;
+let viewingId = null;
 
 // Payday: 0=Sun..6=Sat
 let payday = Number(localStorage.getItem("payday") || 0);
 
 // ================= HELPERS =================
 function money(n){ return "$" + (Number(n || 0)); }
-
-function paidAmount(entry){
-  return (entry.payments || []).reduce((sum,p)=>sum + Number(p.amount || 0), 0);
-}
+function pad2(n){ return String(n).padStart(2,"0"); }
 
 function safeEl(id){ return document.getElementById(id); }
 function safeVal(id){ const el = safeEl(id); return el ? el.value : ""; }
@@ -19,9 +17,7 @@ function monthName(year, monthIndex){
   return new Date(year, monthIndex, 1).toLocaleString("default",{month:"long"});
 }
 
-function pad2(n){ return String(n).padStart(2,"0"); }
-
-// YYYY-MM-DD -> Date at local midnight
+// YYYY-MM-DD -> local midnight Date
 function parseLocalDate(dateStr){
   const parts = String(dateStr || "").split("-");
   if(parts.length !== 3) return null;
@@ -29,6 +25,25 @@ function parseLocalDate(dateStr){
   const dt = new Date(y, m, d);
   dt.setHours(0,0,0,0);
   return dt;
+}
+
+function paymentsArray(entry){
+  return Array.isArray(entry.payments) ? entry.payments : [];
+}
+
+function paidAmount(entry){
+  // ✅ Total Paid includes deposits + sessions
+  return paymentsArray(entry).reduce((sum,p)=>sum + Number(p.amount || 0), 0);
+}
+
+function depositAmount(entry){
+  return paymentsArray(entry)
+    .filter(p => p.kind === "deposit")
+    .reduce((sum,p)=>sum + Number(p.amount || 0), 0);
+}
+
+function currentQuarterIndex(dateObj){
+  return Math.floor(dateObj.getMonth() / 3); // 0..3
 }
 
 // ================= SAVE =================
@@ -65,7 +80,6 @@ function openExport(){
   const paydaySelect = safeEl("paydaySelect");
   if(paydaySelect) paydaySelect.value = String(payday);
 
-  // Default date range: current month
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth(), 1);
   const end = new Date(now.getFullYear(), now.getMonth()+1, 0);
@@ -108,7 +122,6 @@ function openForm(){
   const dateEl = safeEl("date");
   if(dateEl) dateEl.value = new Date().toISOString().split("T")[0];
 
-  // Default status
   const statusEl = safeEl("status");
   if(statusEl) statusEl.value = "unpaid";
 }
@@ -155,7 +168,7 @@ function fillFormForEdit(entry){
   if(!formModal) return;
   formModal.style.display = "flex";
 
-  const set = (id, val) => { const el = safeEl(id); if(el) el.value = val ?? ""; };
+  const set = (id, val) => { const el = safeEl(id); if(el) el.value = (val === undefined || val === null) ? "" : val; };
 
   set("date", entry.date);
   set("client", entry.client);
@@ -167,19 +180,14 @@ function fillFormForEdit(entry){
   set("total", entry.total ?? 0);
   set("status", entry.status || "unpaid");
 
-  // Rebuild payments into deposit + sessions UI
   const sessions = safeEl("sessions");
   if(sessions) sessions.innerHTML = "";
 
-  let deposit = 0;
-  const sessionPays = [];
+  // deposit + sessions
+  const dep = depositAmount(entry);
+  set("deposit", dep);
 
-  (entry.payments || []).forEach(p=>{
-    if(p.kind === "deposit") deposit += Number(p.amount || 0);
-    else sessionPays.push(p);
-  });
-
-  set("deposit", deposit);
+  const sessionPays = paymentsArray(entry).filter(p => p.kind !== "deposit");
 
   sessionPays.forEach(p=>{
     addSession();
@@ -190,7 +198,45 @@ function fillFormForEdit(entry){
     if(notes[idx]) notes[idx].value = p.note || "";
   });
 
-  // image input cannot be prefilled in browsers (security)
+  // image input cannot be prefilled
+}
+
+// ================= EDIT HISTORY (diff logger) =================
+function diffFields(oldEntry, newEntry){
+  const fields = ["date","client","contact","social","description","location","notes","total","status"];
+  const changes = [];
+
+  for(let i=0;i<fields.length;i++){
+    const f = fields[i];
+    const oldV = (oldEntry[f] === undefined || oldEntry[f] === null) ? "" : oldEntry[f];
+    const newV = (newEntry[f] === undefined || newEntry[f] === null) ? "" : newEntry[f];
+    if(String(oldV) !== String(newV)){
+      changes.push({ field:f, oldValue:oldV, newValue:newV });
+    }
+  }
+
+  // payments diff (simple summary)
+  const oldPaid = paidAmount(oldEntry);
+  const newPaid = paidAmount(newEntry);
+  const oldDep = depositAmount(oldEntry);
+  const newDep = depositAmount(newEntry);
+
+  if(oldPaid !== newPaid || oldDep !== newDep){
+    changes.push({
+      field:"payments",
+      oldValue:`paid=${oldPaid}, deposit=${oldDep}`,
+      newValue:`paid=${newPaid}, deposit=${newDep}`
+    });
+  }
+
+  // image change flag
+  const oldHas = !!oldEntry.image;
+  const newHas = !!newEntry.image;
+  if(oldHas !== newHas){
+    changes.push({ field:"image", oldValue: oldHas ? "has image" : "no image", newValue: newHas ? "has image" : "no image" });
+  }
+
+  return changes;
 }
 
 // ================= ENTRY SAVE (ADD/EDIT) =================
@@ -239,7 +285,7 @@ function saveEntry(){
   const imageEl = safeEl("image");
   const file = imageEl && imageEl.files ? imageEl.files[0] : null;
 
-  const applyAndSave = (imageDataUrlOrNull, keepOldImageIfNull)=>{
+  const applyAndSave = (newImageDataUrlOrNull)=>{
     if(editingId){
       const idx = entries.findIndex(e=>e.id===editingId);
       if(idx === -1){ closeForm(); return; }
@@ -247,16 +293,23 @@ function saveEntry(){
       const old = entries[idx];
       const next = Object.assign({}, old, base);
 
-      if(imageDataUrlOrNull){
-        next.image = imageDataUrlOrNull;
-      } else if(!keepOldImageIfNull){
-        next.image = null;
-      } // else keep old image
+      // image: only replace if user picked a new one
+      if(newImageDataUrlOrNull){
+        next.image = newImageDataUrlOrNull;
+      } else {
+        next.image = old.image || null;
+      }
 
-      // simple edit log
-      next.updatedAt = new Date().toISOString();
+      // history
+      const ts = new Date().toISOString();
       if(!Array.isArray(next.editHistory)) next.editHistory = [];
-      next.editHistory.push({ timestamp: next.updatedAt, action: "edited" });
+      const changes = diffFields(old, next);
+      if(changes.length){
+        next.editHistory.push({ timestamp: ts, changes: changes });
+      } else {
+        next.editHistory.push({ timestamp: ts, changes: [{ field:"(no changes)", oldValue:"", newValue:"" }] });
+      }
+      next.updatedAt = ts;
 
       entries[idx] = next;
       save();
@@ -264,7 +317,7 @@ function saveEntry(){
     } else {
       const entry = Object.assign({}, base, {
         id: Date.now(),
-        image: imageDataUrlOrNull || null,
+        image: newImageDataUrlOrNull || null,
         createdAt: new Date().toISOString(),
         updatedAt: null,
         editHistory: []
@@ -277,11 +330,10 @@ function saveEntry(){
 
   if(file){
     const reader = new FileReader();
-    reader.onload = (e)=> applyAndSave(e.target.result, true);
+    reader.onload = (e)=> applyAndSave(e.target.result);
     reader.readAsDataURL(file);
   } else {
-    // On edit: keep old image if user didn’t pick a new one
-    applyAndSave(null, true);
+    applyAndSave(null);
   }
 }
 
@@ -333,8 +385,6 @@ function createAccordion(title, badgeText){
 }
 
 // ================= VIEW / EDIT / DELETE =================
-let viewingId = null;
-
 function viewEntry(id){
   const entry = entries.find(e=>e.id===id);
   if(!entry || !viewBox) return;
@@ -342,7 +392,25 @@ function viewEntry(id){
   viewingId = id;
 
   const paid = paidAmount(entry);
+  const dep = depositAmount(entry);
   const remaining = Number(entry.total || 0) - paid;
+
+  // history html
+  let historyHtml = "<p style='opacity:.7;'>No edits yet.</p>";
+  if(Array.isArray(entry.editHistory) && entry.editHistory.length){
+    historyHtml = entry.editHistory
+      .slice()
+      .reverse()
+      .map(h=>{
+        const list = (h.changes || []).map(c=>{
+          return `<li><strong>${c.field}:</strong> "${String(c.oldValue)}" → "${String(c.newValue)}"</li>`;
+        }).join("");
+        return `<div style="margin-top:10px;">
+          <div style="opacity:.85;"><strong>${h.timestamp}</strong></div>
+          <ul style="margin:6px 0 0 18px;">${list}</ul>
+        </div>`;
+      }).join("");
+  }
 
   viewBox.innerHTML = `
     <h3 style="margin-top:0;">${entry.client}</h3>
@@ -352,7 +420,8 @@ function viewEntry(id){
     <div class="row">
       <div>
         <p><strong>Total:</strong> ${money(entry.total)}</p>
-        <p><strong>Paid:</strong> ${money(paid)}</p>
+        <p><strong>Paid (includes deposit):</strong> ${money(paid)}</p>
+        <p><strong>Deposit:</strong> ${money(dep)}</p>
         <p><strong>Remaining:</strong> ${money(remaining)}</p>
       </div>
       <div>
@@ -367,12 +436,17 @@ function viewEntry(id){
 
     <h4>Payments</h4>
     ${
-      (entry.payments || []).length
-        ? `<ul>${entry.payments.map(p=>`<li>${money(p.amount)} ${p.kind ? `(${p.kind})` : ""} ${p.note ? `— ${p.note}` : ""}</li>`).join("")}</ul>`
+      paymentsArray(entry).length
+        ? `<ul>${paymentsArray(entry).map(p=>`<li>${money(p.amount)} ${p.kind ? `(${p.kind})` : ""} ${p.note ? `— ${p.note}` : ""}</li>`).join("")}</ul>`
         : "<p style='opacity:.7;'>No payments recorded.</p>"
     }
 
     ${entry.image ? `<img src="${entry.image}" style="width:100%; margin-top:10px; border-radius:10px; border:1px solid rgba(212,175,55,.25);">` : ""}
+
+    <details style="margin-top:12px;">
+      <summary>Edit History</summary>
+      ${historyHtml}
+    </details>
 
     <div class="actions-row">
       <button type="button" onclick="editFromView()">Edit</button>
@@ -411,9 +485,8 @@ function deleteFromView(){
   closeView();
 }
 
-// ================= STATS (Payday-aligned Week) =================
+// ================= PAYDAY WEEK WINDOW =================
 function getWeekWindow(now){
-  // Start of current week = most recent payday (including today if it matches)
   const currentDay = now.getDay(); // 0..6
   const diffToPayday = (currentDay - payday + 7) % 7;
 
@@ -428,18 +501,21 @@ function getWeekWindow(now){
   return { start, end };
 }
 
+// ================= STATS (Paid totals everywhere) =================
 function updateStats(){
   const todayEl = safeEl("todayTotal");
   const weekEl = safeEl("weekTotal");
   const monthEl = safeEl("monthTotal");
+  const quarterEl = safeEl("quarterTotal");
   const yearEl = safeEl("yearTotal");
   if(!todayEl) return;
 
   const now = new Date();
   const todayStr = now.toISOString().split("T")[0];
   const weekWin = getWeekWindow(now);
+  const qNow = currentQuarterIndex(now);
 
-  let today=0, week=0, month=0, year=0;
+  let today=0, week=0, month=0, quarter=0, year=0;
 
   entries.forEach(entry=>{
     const paid = paidAmount(entry);
@@ -447,15 +523,27 @@ function updateStats(){
     if(!d) return;
 
     if(entry.date === todayStr) today += paid;
-    if(d.getFullYear() === now.getFullYear()) year += paid;
-    if(d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) month += paid;
 
-    if(d >= weekWin.start && d <= weekWin.end) week += paid;
+    if(d.getFullYear() === now.getFullYear()){
+      year += paid;
+
+      const qEntry = currentQuarterIndex(d);
+      if(qEntry === qNow) quarter += paid;
+    }
+
+    if(d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()){
+      month += paid;
+    }
+
+    if(d >= weekWin.start && d <= weekWin.end){
+      week += paid;
+    }
   });
 
   todayEl.innerText = money(today);
   if(weekEl) weekEl.innerText = money(week);
   if(monthEl) monthEl.innerText = money(month);
+  if(quarterEl) quarterEl.innerText = money(quarter);
   if(yearEl) yearEl.innerText = money(year);
 }
 
@@ -464,6 +552,20 @@ function csvEscape(v){
   const s = String(v ?? "");
   if (/[",\n]/.test(s)) return `"${s.replace(/"/g,'""')}"`;
   return s;
+}
+
+function downloadCSV(rows, filename){
+  const csv = rows.map(r=>r.map(csvEscape).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function exportCSV(){
@@ -482,10 +584,24 @@ function exportCSV(){
     return;
   }
 
+  exportRangeCSV(start, end, `tattoo-tracker_${startStr}_to_${endStr}.csv`);
+}
+
+function exportPayPeriodCSV(){
+  const now = new Date();
+  const w = getWeekWindow(now);
+
+  const startStr = `${w.start.getFullYear()}-${pad2(w.start.getMonth()+1)}-${pad2(w.start.getDate())}`;
+  const endStr = `${w.end.getFullYear()}-${pad2(w.end.getMonth()+1)}-${pad2(w.end.getDate())}`;
+
+  exportRangeCSV(w.start, w.end, `pay_period_${startStr}_to_${endStr}.csv`);
+}
+
+function exportRangeCSV(start, end, filename){
   const rows = [];
   rows.push([
     "date","client","contact","social","description","location",
-    "total","paid","remaining","status","notes"
+    "total","paid_total","deposit","remaining","status","notes"
   ]);
 
   entries.forEach(e=>{
@@ -493,7 +609,8 @@ function exportCSV(){
     if(!d) return;
     if(d < start || d > end) return;
 
-    const paid = paidAmount(e);
+    const paid = paidAmount(e);          // includes deposit
+    const dep = depositAmount(e);
     const total = Number(e.total || 0);
     const remaining = total - paid;
 
@@ -506,23 +623,14 @@ function exportCSV(){
       e.location || "",
       total,
       paid,
+      dep,
       remaining,
       e.status || "",
       e.notes || ""
     ]);
   });
 
-  const csv = rows.map(r=>r.map(csvEscape).join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `tattoo-tracker_${startStr}_to_${endStr}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  downloadCSV(rows, filename);
 }
 
 // ================= RENDER (Year → Month → Day → Entries) =================
@@ -557,6 +665,7 @@ function render(){
   });
 
   Object.keys(grouped).sort((a,b)=>Number(b)-Number(a)).forEach(year=>{
+    // ✅ year badge uses PAID totals
     const yearPaid = Object.values(grouped[year])
       .flatMap(mo=>Object.values(mo).flat())
       .reduce((sum,e)=>sum + paidAmount(e), 0);
@@ -585,13 +694,17 @@ function render(){
           .sort((a,b)=>b.id - a.id)
           .forEach(entry=>{
             const paid = paidAmount(entry);
+            const dep = depositAmount(entry);
 
             const row = document.createElement("div");
             row.className = "entry";
             row.innerHTML = `
               <div class="entry-left">
                 <div class="entry-name">${entry.client}</div>
-                <div class="entry-sub">${money(paid)} / ${money(entry.total)} ${entry.location ? "• " + entry.location : ""}</div>
+                <div class="entry-sub">
+                  Paid ${money(paid)} • Dep ${money(dep)} • Total ${money(entry.total)}
+                  ${entry.location ? " • " + entry.location : ""}
+                </div>
               </div>
               <div class="status ${entry.status}">${entry.status}</div>
             `;
@@ -603,6 +716,53 @@ function render(){
   });
 
   updateStats();
+}
+
+// ================= ACCORDION UI =================
+function createAccordion(title, badgeText){
+  const wrap = document.createElement("div");
+  wrap.className = "accordion";
+
+  const header = document.createElement("div");
+  header.className = "accordion-header";
+
+  const left = document.createElement("div");
+  left.style.display = "flex";
+  left.style.alignItems = "center";
+
+  const t = document.createElement("div");
+  t.className = "accordion-title";
+  t.textContent = title;
+
+  left.appendChild(t);
+
+  if(badgeText !== undefined && badgeText !== null){
+    const b = document.createElement("span");
+    b.className = "badge";
+    b.textContent = badgeText;
+    left.appendChild(b);
+  }
+
+  const chev = document.createElement("span");
+  chev.className = "chev";
+  chev.textContent = "▾";
+
+  header.appendChild(left);
+  header.appendChild(chev);
+
+  const content = document.createElement("div");
+  content.className = "accordion-content";
+
+  header.addEventListener("click", ()=>{
+    const isOpen = content.style.display === "block";
+    content.style.display = isOpen ? "none" : "block";
+    chev.textContent = isOpen ? "▾" : "▴";
+  });
+
+  wrap.appendChild(header);
+  wrap.appendChild(content);
+
+  return { wrap, content };
 }
 
 // ================= INIT =================

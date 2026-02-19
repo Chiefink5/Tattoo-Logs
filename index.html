@@ -54,6 +54,8 @@ header{
   justify-content:space-around;
   padding:14px 10px;
   border-bottom:1px solid var(--emerald);
+  gap:10px;
+  flex-wrap:wrap;
 }
 
 #stats strong{
@@ -213,9 +215,7 @@ button:hover{filter:brightness(1.06);}
   flex-wrap:wrap;
   margin-top:10px;
 }
-.dangerbtn{
-  background:var(--danger);
-}
+.dangerbtn{ background:var(--danger); }
 .secondarybtn{
   background:#16201b;
   border:1px solid rgba(31,111,80,.6);
@@ -225,6 +225,18 @@ hr{
   border:none;
   border-top:1px solid rgba(31,111,80,.6);
   margin:14px 0;
+}
+
+details{
+  background:#16201b;
+  border:1px solid rgba(212,175,55,.25);
+  padding:10px;
+  border-radius:10px;
+}
+details summary{
+  cursor:pointer;
+  font-weight:700;
+  color:var(--gold);
 }
 </style>
 </head>
@@ -241,6 +253,7 @@ hr{
   <div><strong id="todayTotal">$0</strong><br><small>Today</small></div>
   <div><strong id="weekTotal">$0</strong><br><small>Week</small></div>
   <div><strong id="monthTotal">$0</strong><br><small>Month</small></div>
+  <div><strong id="quarterTotal">$0</strong><br><small>Quarter</small></div>
   <div><strong id="yearTotal">$0</strong><br><small>Year</small></div>
 </div>
 
@@ -323,6 +336,10 @@ hr{
       <option value="6">Saturday</option>
     </select>
 
+    <div class="actions-row">
+      <button type="button" onclick="exportPayPeriodCSV()">Export Current Pay Period</button>
+    </div>
+
     <hr>
 
     <label style="font-size:.9rem;opacity:.9;">CSV Date Range</label>
@@ -337,7 +354,8 @@ hr{
     </div>
 
     <p style="opacity:.7;font-size:.85rem;margin-top:10px;">
-      Export includes: date, client, contact, social, description, location, total, paid, remaining, status, notes.
+      Totals are <strong>Total Paid</strong> (deposit + sessions).
+      CSV includes both <em>paid</em> and <em>deposit</em> columns for auditing.
     </p>
   </div>
 </div>
