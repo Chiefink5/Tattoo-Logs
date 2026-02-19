@@ -53,7 +53,7 @@ function currentQuarterIndex(dateObj){
   return Math.floor(dateObj.getMonth() / 3); // 0..3
 }
 
-// Totals logic:
+// Totals logic (used by dashboard + exports)
 // - PAID => full total price
 // - PARTIAL => paid so far (deposit + sessions)
 // - UNPAID/NO_SHOW => 0
@@ -102,10 +102,7 @@ function getWeekWindowFromDate(anchorDate){
 
   return { start, end };
 }
-
-function getWeekWindow(now){
-  return getWeekWindowFromDate(now);
-}
+function getWeekWindow(now){ return getWeekWindowFromDate(now); }
 
 // ================= EXPORT MODAL =================
 function openExport(){
@@ -149,7 +146,6 @@ function closeExport(){
     payday = Number(this.value);
     localStorage.setItem("payday", String(payday));
 
-    // Re-anchor pay period to new payday rules
     const base = payPeriodAnchor ? new Date(payPeriodAnchor) : new Date();
     const w = getWeekWindowFromDate(base);
     payPeriodAnchor = new Date(w.start);
@@ -396,7 +392,12 @@ function saveEntry(){
 }
 
 // ================= VIEW / EDIT / DELETE =================
-// ✅ Updated: strong title header, removed rule-explanation text completely
+// ✅ Default view no longer shows:
+// - Paid so far
+// - Remaining
+// - Counts toward totals as
+// - Any rule explanation text
+// Those are only inside "More details" (collapsed).
 function viewEntry(id){
   const entry = entries.find(e=>e.id===id);
   if(!entry || !viewBox) return;
@@ -430,20 +431,17 @@ function viewEntry(id){
 
     <div class="row">
       <div>
+        <p><strong>Status:</strong> <span class="status ${entry.status}">${entry.status}</span></p>
         <p><strong>Total Price:</strong> ${money(entry.total)}</p>
-        <p><strong>Paid So Far:</strong> ${money(paidSoFar)}</p>
         <p><strong>Deposit:</strong> ${money(dep)}</p>
-        <p><strong>Remaining:</strong> ${money(remaining)}</p>
       </div>
       <div>
-        <p><strong>Counts Toward Totals:</strong> ${money(counts)}</p>
-        <p><strong>Status:</strong> <span class="status ${entry.status}">${entry.status}</span></p>
+        <p><strong>Location:</strong> ${entry.location || ""}</p>
       </div>
     </div>
 
     <hr>
 
-    <p><strong>Location:</strong> ${entry.location || ""}</p>
     <p><strong>Description:</strong> ${entry.description || ""}</p>
     <p><strong>Contact:</strong> ${entry.contact || ""}</p>
     <p><strong>Social:</strong> ${entry.social || ""}</p>
@@ -457,6 +455,15 @@ function viewEntry(id){
     }
 
     ${entry.image ? `<img src="${entry.image}" style="width:100%; margin-top:15px; border-radius:12px; border:1px solid rgba(212,175,55,.3);">` : ""}
+
+    <details style="margin-top:12px;">
+      <summary>More details</summary>
+      <div style="margin-top:10px;">
+        <p><strong>Paid So Far:</strong> ${money(paidSoFar)}</p>
+        <p><strong>Remaining:</strong> ${money(remaining)}</p>
+        <p><strong>Counts Toward Totals As:</strong> ${money(counts)}</p>
+      </div>
+    </details>
 
     <details style="margin-top:12px;">
       <summary>Edit History</summary>
