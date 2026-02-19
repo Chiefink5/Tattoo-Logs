@@ -8,11 +8,12 @@
 
 <style>
 :root{
---bg:#0f1411;
+--bg:#0e1512;
 --panel:#1a241f;
 --emerald:#1f6f50;
 --gold:#d4af37;
---text:#f5f5f5;
+--text:#f2f2f2;
+--danger:#a94442;
 }
 
 body{
@@ -29,14 +30,10 @@ left:0;
 right:0;
 background:var(--panel);
 border-bottom:3px solid var(--gold);
-padding:10px 20px;
 display:flex;
 justify-content:space-around;
+padding:12px;
 z-index:1000;
-}
-
-.stat{
-text-align:center;
 }
 
 .stat h4{
@@ -45,25 +42,52 @@ color:var(--gold);
 }
 
 main{
-margin-top:100px;
+margin-top:110px;
 padding:20px;
 }
 
 .year, .month, .day{
-margin-bottom:10px;
 border:2px solid var(--emerald);
-border-radius:8px;
-padding:10px;
+border-radius:10px;
+margin-bottom:12px;
 background:var(--panel);
+overflow:hidden;
+}
+
+.accordion-header{
+padding:12px;
+cursor:pointer;
+display:flex;
+justify-content:space-between;
+align-items:center;
+background:#16201b;
+}
+
+.accordion-content{
+display:none;
+padding:10px;
 }
 
 .entry{
 padding:8px;
-margin:5px 0;
-background:#24332c;
-border-left:4px solid var(--gold);
+margin:6px 0;
+background:#223029;
+border-left:5px solid var(--gold);
 cursor:pointer;
+display:flex;
+justify-content:space-between;
 }
+
+.status{
+font-size:0.8rem;
+padding:2px 6px;
+border-radius:6px;
+}
+
+.paid{background:#2e7d32;}
+.partial{background:#f9a825;}
+.unpaid{background:#616161;}
+.no_show{background:var(--danger);}
 
 .fab{
 position:fixed;
@@ -85,11 +109,8 @@ z-index:1000;
 
 .modal{
 position:fixed;
-top:0;
-left:0;
-right:0;
-bottom:0;
-background:rgba(0,0,0,.7);
+inset:0;
+background:rgba(0,0,0,.75);
 display:none;
 align-items:center;
 justify-content:center;
@@ -106,8 +127,8 @@ overflow:auto;
 border-radius:12px;
 }
 
-input, select, textarea{
-margin-bottom:10px;
+button{
+margin-top:8px;
 }
 </style>
 </head>
@@ -116,28 +137,28 @@ margin-bottom:10px;
 
 <header>
 <div class="stat"><h4 id="todayTotal">$0</h4><small>Today</small></div>
-<div class="stat"><h4 id="weekTotal">$0</h4><small>This Week</small></div>
-<div class="stat"><h4 id="monthTotal">$0</h4><small>This Month</small></div>
-<div class="stat"><h4 id="yearTotal">$0</h4><small>This Year</small></div>
+<div class="stat"><h4 id="weekTotal">$0</h4><small>Week</small></div>
+<div class="stat"><h4 id="monthTotal">$0</h4><small>Month</small></div>
+<div class="stat"><h4 id="yearTotal">$0</h4><small>Year</small></div>
 </header>
 
 <main id="app"></main>
 
 <div class="fab" onclick="openForm()">+</div>
 
-<!-- Entry Form Modal -->
+<!-- Entry Form -->
 <div class="modal" id="formModal">
 <div class="modal-content">
-<h3>Add Tattoo Entry</h3>
+<h3>Add Entry</h3>
 
 <input type="date" id="date">
 <input type="text" id="client" placeholder="Client Name">
-<input type="text" id="contact" placeholder="Client Contact">
-<input type="text" id="social" placeholder="Client Social">
-<textarea id="description" placeholder="Tattoo Description"></textarea>
+<input type="text" id="contact" placeholder="Contact">
+<input type="text" id="social" placeholder="Social">
+<textarea id="description" placeholder="Description"></textarea>
 
 <select id="location">
-<option value="">Select Location</option>
+<option value="">Location</option>
 <option>Arm</option>
 <option>Leg</option>
 <option>Back</option>
@@ -148,18 +169,19 @@ margin-bottom:10px;
 </select>
 
 <input type="number" id="total" placeholder="Total Price">
-<input type="number" id="deposit" placeholder="Deposit Paid">
-<input type="number" id="additional" placeholder="Additional Payment">
+<input type="number" id="deposit" placeholder="Deposit">
+
+<div id="sessions"></div>
+<button onclick="addSessionField()">+ Additional Session</button>
 
 <textarea id="notes" placeholder="Notes"></textarea>
-<input type="file" id="image">
 
 <button onclick="saveEntry()">Save</button>
 <button onclick="closeForm()">Cancel</button>
 </div>
 </div>
 
-<!-- View Entry Modal -->
+<!-- View Modal -->
 <div class="modal" id="viewModal">
 <div class="modal-content" id="viewContent"></div>
 </div>
