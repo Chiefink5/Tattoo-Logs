@@ -238,6 +238,25 @@ details summary{
   font-weight:700;
   color:var(--gold);
 }
+
+.mini{
+  font-size:.85rem;
+  opacity:.8;
+}
+
+.summary-box{
+  margin-top:10px;
+  background:#16201b;
+  border:1px solid rgba(212,175,55,.25);
+  padding:10px;
+  border-radius:10px;
+}
+.summary-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+@media(max-width:640px){ .summary-grid{grid-template-columns:1fr;} }
 </style>
 </head>
 
@@ -258,7 +277,10 @@ details summary{
 </div>
 
 <div class="container">
-  <div id="entries"></div>
+  <div class="mini">
+    Totals rule: <strong>PAID = Total Price</strong>, <strong>PARTIAL = Paid So Far</strong>, <strong>UNPAID/NO SHOW = $0</strong>
+  </div>
+  <div id="entries" style="margin-top:12px;"></div>
 </div>
 
 <div class="fab" onclick="openForm()">+</div>
@@ -336,13 +358,22 @@ details summary{
       <option value="6">Saturday</option>
     </select>
 
+    <hr>
+
+    <h4 style="margin:0;">Pay Period (Payday Week)</h4>
+    <div class="row">
+      <input type="date" id="ppStart" disabled>
+      <input type="date" id="ppEnd" disabled>
+    </div>
     <div class="actions-row">
-      <button type="button" onclick="exportPayPeriodCSV()">Export Current Pay Period</button>
+      <button type="button" class="secondarybtn" onclick="prevPayPeriod()">◀ Prev</button>
+      <button type="button" class="secondarybtn" onclick="nextPayPeriod()">Next ▶</button>
+      <button type="button" onclick="exportPayPeriodCSV()">Export This Pay Period</button>
     </div>
 
     <hr>
 
-    <label style="font-size:.9rem;opacity:.9;">CSV Date Range</label>
+    <h4 style="margin:0;">CSV Date Range</h4>
     <div class="row">
       <input type="date" id="exportStart">
       <input type="date" id="exportEnd">
@@ -353,10 +384,15 @@ details summary{
       <button type="button" class="secondarybtn" onclick="closeExport()">Close</button>
     </div>
 
-    <p style="opacity:.7;font-size:.85rem;margin-top:10px;">
-      Totals are <strong>Total Paid</strong> (deposit + sessions).
-      CSV includes both <em>paid</em> and <em>deposit</em> columns for auditing.
-    </p>
+    <div class="summary-box">
+      <h4 style="margin:0 0 8px 0;">Export Summary</h4>
+      <div class="mini">Summary uses the same totals rule: <strong>PAID=Total</strong>, <strong>PARTIAL=Paid</strong>, else $0.</div>
+      <div class="actions-row">
+        <button type="button" onclick="buildSummary('range')">Summary for Date Range</button>
+        <button type="button" class="secondarybtn" onclick="buildSummary('payperiod')">Summary for Pay Period</button>
+      </div>
+      <div id="summaryOut" style="margin-top:10px; opacity:.95;"></div>
+    </div>
   </div>
 </div>
 

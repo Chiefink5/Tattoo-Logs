@@ -6,6 +6,9 @@ let viewingId = null;
 // Payday: 0=Sun..6=Sat
 let payday = Number(localStorage.getItem("payday") || 0);
 
+// Export pay period anchor (start date of the shown pay period)
+let payPeriodAnchor = null;
+
 // ================= HELPERS =================
 function money(n){ return "$" + (Number(n || 0)); }
 function pad2(n){ return String(n).padStart(2,"0"); }
@@ -27,12 +30,16 @@ function parseLocalDate(dateStr){
   return dt;
 }
 
+function formatYYYYMMDD(d){
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+}
+
 function paymentsArray(entry){
   return Array.isArray(entry.payments) ? entry.payments : [];
 }
 
 function paidAmount(entry){
-  // ✅ Total Paid includes deposits + sessions
+  // Paid so far (deposit + sessions)
   return paymentsArray(entry).reduce((sum,p)=>sum + Number(p.amount || 0), 0);
 }
 
@@ -44,6 +51,18 @@ function depositAmount(entry){
 
 function currentQuarterIndex(dateObj){
   return Math.floor(dateObj.getMonth() / 3); // 0..3
+}
+
+// ✅ This is the totals rule you asked for:
+function totalForTotals(entry){
+  const status = (entry.status || "unpaid").toLowerCase();
+  if(status === "paid"){
+    return Number(entry.total || 0);        // PAID => full total price
+  }
+  if(status === "partial"){
+    return paidAmount(entry);              // PARTIAL => paid so far (deposit + sessions)
+  }
+  return 0;                                // unpaid / no_show => 0
 }
 
 // ================= SAVE =================
@@ -73,6 +92,27 @@ if (formBox) formBox.addEventListener("click", (e)=> e.stopPropagation());
 if (viewBox) viewBox.addEventListener("click", (e)=> e.stopPropagation());
 if (exportBox) exportBox.addEventListener("click", (e)=> e.stopPropagation());
 
+// ================= PAYDAY WEEK WINDOW =================
+function getWeekWindowFromDate(anchorDate){
+  const now = new Date(anchorDate);
+  const currentDay = now.getDay(); // 0..6
+  const diffToPayday = (currentDay - payday + 7) % 7;
+
+  const start = new Date(now);
+  start.setDate(now.getDate() - diffToPayday);
+  start.setHours(0,0,0,0);
+
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  end.setHours(23,59,59,999);
+
+  return { start, end };
+}
+
+function getWeekWindow(now){
+  return getWeekWindowFromDate(now);
+}
+
 // ================= EXPORT MODAL =================
 function openExport(){
   if(!exportModal) return;
@@ -80,15 +120,23 @@ function openExport(){
   const paydaySelect = safeEl("paydaySelect");
   if(paydaySelect) paydaySelect.value = String(payday);
 
+  // Default range: current month
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth(), 1);
   const end = new Date(now.getFullYear(), now.getMonth()+1, 0);
 
   const exportStart = safeEl("exportStart");
   const exportEnd = safeEl("exportEnd");
+  if(exportStart) exportStart.value = formatYYYYMMDD(start);
+  if(exportEnd) exportEnd.value = formatYYYYMMDD(end);
 
-  if(exportStart) exportStart.value = `${start.getFullYear()}-${pad2(start.getMonth()+1)}-${pad2(start.getDate())}`;
-  if(exportEnd) exportEnd.value = `${end.getFullYear()}-${pad2(end.getMonth()+1)}-${pad2(end.getDate())}`;
+  // Pay period defaults to current payday week
+  const w = getWeekWindow(now);
+  payPeriodAnchor = new Date(w.start);
+  updatePayPeriodUI();
+
+  const summaryOut = safeEl("summaryOut");
+  if(summaryOut) summaryOut.innerHTML = "";
 
   exportModal.style.display = "flex";
 }
@@ -106,9 +154,43 @@ function closeExport(){
   paydaySelect.addEventListener("change", function(){
     payday = Number(this.value);
     localStorage.setItem("payday", String(payday));
+
+    // Re-anchor pay period to new payday rules
+    const base = payPeriodAnchor ? new Date(payPeriodAnchor) : new Date();
+    const w = getWeekWindowFromDate(base);
+    payPeriodAnchor = new Date(w.start);
+    updatePayPeriodUI();
+
     updateStats();
   });
 })();
+
+function updatePayPeriodUI(){
+  const ppStart = safeEl("ppStart");
+  const ppEnd = safeEl("ppEnd");
+  if(!ppStart || !ppEnd) return;
+
+  const anchor = payPeriodAnchor ? new Date(payPeriodAnchor) : new Date();
+  const w = getWeekWindowFromDate(anchor);
+  ppStart.value = formatYYYYMMDD(w.start);
+  ppEnd.value = formatYYYYMMDD(w.end);
+}
+
+function prevPayPeriod(){
+  if(!payPeriodAnchor) payPeriodAnchor = new Date();
+  const d = new Date(payPeriodAnchor);
+  d.setDate(d.getDate() - 7);
+  payPeriodAnchor = d;
+  updatePayPeriodUI();
+}
+
+function nextPayPeriod(){
+  if(!payPeriodAnchor) payPeriodAnchor = new Date();
+  const d = new Date(payPeriodAnchor);
+  d.setDate(d.getDate() + 7);
+  payPeriodAnchor = d;
+  updatePayPeriodUI();
+}
 
 // ================= FORM =================
 function openForm(){
@@ -183,12 +265,9 @@ function fillFormForEdit(entry){
   const sessions = safeEl("sessions");
   if(sessions) sessions.innerHTML = "";
 
-  // deposit + sessions
-  const dep = depositAmount(entry);
-  set("deposit", dep);
+  set("deposit", depositAmount(entry));
 
   const sessionPays = paymentsArray(entry).filter(p => p.kind !== "deposit");
-
   sessionPays.forEach(p=>{
     addSession();
     const amounts = document.querySelectorAll(".session-amount");
@@ -197,8 +276,6 @@ function fillFormForEdit(entry){
     if(amounts[idx]) amounts[idx].value = Number(p.amount || 0);
     if(notes[idx]) notes[idx].value = p.note || "";
   });
-
-  // image input cannot be prefilled
 }
 
 // ================= EDIT HISTORY (diff logger) =================
@@ -215,7 +292,6 @@ function diffFields(oldEntry, newEntry){
     }
   }
 
-  // payments diff (simple summary)
   const oldPaid = paidAmount(oldEntry);
   const newPaid = paidAmount(newEntry);
   const oldDep = depositAmount(oldEntry);
@@ -224,12 +300,11 @@ function diffFields(oldEntry, newEntry){
   if(oldPaid !== newPaid || oldDep !== newDep){
     changes.push({
       field:"payments",
-      oldValue:`paid=${oldPaid}, deposit=${oldDep}`,
-      newValue:`paid=${newPaid}, deposit=${newDep}`
+      oldValue:`paidSoFar=${oldPaid}, deposit=${oldDep}`,
+      newValue:`paidSoFar=${newPaid}, deposit=${newDep}`
     });
   }
 
-  // image change flag
   const oldHas = !!oldEntry.image;
   const newHas = !!newEntry.image;
   if(oldHas !== newHas){
@@ -293,22 +368,16 @@ function saveEntry(){
       const old = entries[idx];
       const next = Object.assign({}, old, base);
 
-      // image: only replace if user picked a new one
       if(newImageDataUrlOrNull){
         next.image = newImageDataUrlOrNull;
       } else {
         next.image = old.image || null;
       }
 
-      // history
       const ts = new Date().toISOString();
       if(!Array.isArray(next.editHistory)) next.editHistory = [];
       const changes = diffFields(old, next);
-      if(changes.length){
-        next.editHistory.push({ timestamp: ts, changes: changes });
-      } else {
-        next.editHistory.push({ timestamp: ts, changes: [{ field:"(no changes)", oldValue:"", newValue:"" }] });
-      }
+      next.editHistory.push({ timestamp: ts, changes: changes.length ? changes : [{ field:"(no changes)", oldValue:"", newValue:"" }] });
       next.updatedAt = ts;
 
       entries[idx] = next;
@@ -337,53 +406,6 @@ function saveEntry(){
   }
 }
 
-// ================= ACCORDION UI =================
-function createAccordion(title, badgeText){
-  const wrap = document.createElement("div");
-  wrap.className = "accordion";
-
-  const header = document.createElement("div");
-  header.className = "accordion-header";
-
-  const left = document.createElement("div");
-  left.style.display = "flex";
-  left.style.alignItems = "center";
-
-  const t = document.createElement("div");
-  t.className = "accordion-title";
-  t.textContent = title;
-
-  left.appendChild(t);
-
-  if(badgeText !== undefined && badgeText !== null){
-    const b = document.createElement("span");
-    b.className = "badge";
-    b.textContent = badgeText;
-    left.appendChild(b);
-  }
-
-  const chev = document.createElement("span");
-  chev.className = "chev";
-  chev.textContent = "▾";
-
-  header.appendChild(left);
-  header.appendChild(chev);
-
-  const content = document.createElement("div");
-  content.className = "accordion-content";
-
-  header.addEventListener("click", ()=>{
-    const isOpen = content.style.display === "block";
-    content.style.display = isOpen ? "none" : "block";
-    chev.textContent = isOpen ? "▾" : "▴";
-  });
-
-  wrap.appendChild(header);
-  wrap.appendChild(content);
-
-  return { wrap, content };
-}
-
 // ================= VIEW / EDIT / DELETE =================
 function viewEntry(id){
   const entry = entries.find(e=>e.id===id);
@@ -391,11 +413,13 @@ function viewEntry(id){
 
   viewingId = id;
 
-  const paid = paidAmount(entry);
+  const paidSoFar = paidAmount(entry);
   const dep = depositAmount(entry);
-  const remaining = Number(entry.total || 0) - paid;
+  const remaining = Number(entry.total || 0) - paidSoFar;
 
-  // history html
+  // What this entry contributes to totals:
+  const contribution = totalForTotals(entry);
+
   let historyHtml = "<p style='opacity:.7;'>No edits yet.</p>";
   if(Array.isArray(entry.editHistory) && entry.editHistory.length){
     historyHtml = entry.editHistory
@@ -419,19 +443,23 @@ function viewEntry(id){
 
     <div class="row">
       <div>
-        <p><strong>Total:</strong> ${money(entry.total)}</p>
-        <p><strong>Paid (includes deposit):</strong> ${money(paid)}</p>
+        <p><strong>Total Price:</strong> ${money(entry.total)}</p>
+        <p><strong>Paid So Far:</strong> ${money(paidSoFar)}</p>
         <p><strong>Deposit:</strong> ${money(dep)}</p>
         <p><strong>Remaining:</strong> ${money(remaining)}</p>
       </div>
       <div>
-        <p><strong>Contact:</strong> ${entry.contact || ""}</p>
-        <p><strong>Social:</strong> ${entry.social || ""}</p>
+        <p><strong>Counts Toward Totals As:</strong> ${money(contribution)}</p>
+        <p style="opacity:.75;font-size:.9rem;margin-top:-6px;">
+          (PAID=Total Price, PARTIAL=Paid So Far, else 0)
+        </p>
       </div>
     </div>
 
     <p><strong>Location:</strong> ${entry.location || ""}</p>
     <p><strong>Description:</strong> ${entry.description || ""}</p>
+    <p><strong>Contact:</strong> ${entry.contact || ""}</p>
+    <p><strong>Social:</strong> ${entry.social || ""}</p>
     <p><strong>Notes:</strong> ${entry.notes || ""}</p>
 
     <h4>Payments</h4>
@@ -485,23 +513,7 @@ function deleteFromView(){
   closeView();
 }
 
-// ================= PAYDAY WEEK WINDOW =================
-function getWeekWindow(now){
-  const currentDay = now.getDay(); // 0..6
-  const diffToPayday = (currentDay - payday + 7) % 7;
-
-  const start = new Date(now);
-  start.setDate(now.getDate() - diffToPayday);
-  start.setHours(0,0,0,0);
-
-  const end = new Date(start);
-  end.setDate(start.getDate() + 6);
-  end.setHours(23,59,59,999);
-
-  return { start, end };
-}
-
-// ================= STATS (Paid totals everywhere) =================
+// ================= STATS (uses totals rule) =================
 function updateStats(){
   const todayEl = safeEl("todayTotal");
   const weekEl = safeEl("weekTotal");
@@ -518,25 +530,23 @@ function updateStats(){
   let today=0, week=0, month=0, quarter=0, year=0;
 
   entries.forEach(entry=>{
-    const paid = paidAmount(entry);
+    const amt = totalForTotals(entry);
     const d = parseLocalDate(entry.date);
     if(!d) return;
 
-    if(entry.date === todayStr) today += paid;
+    if(entry.date === todayStr) today += amt;
 
     if(d.getFullYear() === now.getFullYear()){
-      year += paid;
-
-      const qEntry = currentQuarterIndex(d);
-      if(qEntry === qNow) quarter += paid;
+      year += amt;
+      if(currentQuarterIndex(d) === qNow) quarter += amt;
     }
 
     if(d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()){
-      month += paid;
+      month += amt;
     }
 
     if(d >= weekWin.start && d <= weekWin.end){
-      week += paid;
+      week += amt;
     }
   });
 
@@ -571,7 +581,6 @@ function downloadCSV(rows, filename){
 function exportCSV(){
   const startStr = safeVal("exportStart");
   const endStr = safeVal("exportEnd");
-
   const start = parseLocalDate(startStr);
   const end = parseLocalDate(endStr);
 
@@ -588,20 +597,22 @@ function exportCSV(){
 }
 
 function exportPayPeriodCSV(){
-  const now = new Date();
-  const w = getWeekWindow(now);
-
-  const startStr = `${w.start.getFullYear()}-${pad2(w.start.getMonth()+1)}-${pad2(w.start.getDate())}`;
-  const endStr = `${w.end.getFullYear()}-${pad2(w.end.getMonth()+1)}-${pad2(w.end.getDate())}`;
-
-  exportRangeCSV(w.start, w.end, `pay_period_${startStr}_to_${endStr}.csv`);
+  const ppStartStr = safeVal("ppStart");
+  const ppEndStr = safeVal("ppEnd");
+  const start = parseLocalDate(ppStartStr);
+  const end = parseLocalDate(ppEndStr);
+  if(!start || !end){
+    alert("Pay period dates missing.");
+    return;
+  }
+  exportRangeCSV(start, end, `pay_period_${ppStartStr}_to_${ppEndStr}.csv`);
 }
 
 function exportRangeCSV(start, end, filename){
   const rows = [];
   rows.push([
     "date","client","contact","social","description","location",
-    "total","paid_total","deposit","remaining","status","notes"
+    "total_price","paid_so_far","deposit","counts_toward_totals","remaining","status","notes"
   ]);
 
   entries.forEach(e=>{
@@ -609,10 +620,11 @@ function exportRangeCSV(start, end, filename){
     if(!d) return;
     if(d < start || d > end) return;
 
-    const paid = paidAmount(e);          // includes deposit
+    const paidSoFar = paidAmount(e);
     const dep = depositAmount(e);
     const total = Number(e.total || 0);
-    const remaining = total - paid;
+    const remaining = total - paidSoFar;
+    const counts = totalForTotals(e);
 
     rows.push([
       e.date,
@@ -622,8 +634,9 @@ function exportRangeCSV(start, end, filename){
       e.description || "",
       e.location || "",
       total,
-      paid,
+      paidSoFar,
       dep,
+      counts,
       remaining,
       e.status || "",
       e.notes || ""
@@ -631,6 +644,105 @@ function exportRangeCSV(start, end, filename){
   });
 
   downloadCSV(rows, filename);
+}
+
+// ================= EXPORT SUMMARY =================
+function buildSummary(mode){
+  let start = null;
+  let end = null;
+  let title = "";
+
+  if(mode === "payperiod"){
+    const s = parseLocalDate(safeVal("ppStart"));
+    const e = parseLocalDate(safeVal("ppEnd"));
+    if(!s || !e){ alert("Pay period dates missing."); return; }
+    start = s; end = e;
+    title = `Pay Period Summary (${safeVal("ppStart")} → ${safeVal("ppEnd")})`;
+  } else {
+    const s = parseLocalDate(safeVal("exportStart"));
+    const e = parseLocalDate(safeVal("exportEnd"));
+    if(!s || !e){ alert("Pick start/end dates."); return; }
+    if(e < s){ alert("End date must be after start date."); return; }
+    start = s; end = e;
+    title = `Date Range Summary (${safeVal("exportStart")} → ${safeVal("exportEnd")})`;
+  }
+
+  const filtered = entries.filter(e=>{
+    const d = parseLocalDate(e.date);
+    if(!d) return false;
+    return d >= start && d <= end;
+  });
+
+  const totalCount = filtered.length;
+
+  let totalTotalsRule = 0;
+  let totalPaidSoFar = 0;
+
+  const statusCounts = { paid:0, partial:0, unpaid:0, no_show:0 };
+  const clientTotals = {};
+  const locationTotals = {};
+
+  filtered.forEach(e=>{
+    const s = (e.status || "unpaid").toLowerCase();
+    if(statusCounts[s] !== undefined) statusCounts[s]++;
+
+    const counts = totalForTotals(e);
+    totalTotalsRule += counts;
+
+    totalPaidSoFar += paidAmount(e);
+
+    const c = (e.client || "Unknown").trim() || "Unknown";
+    clientTotals[c] = (clientTotals[c] || 0) + counts;
+
+    const loc = (e.location || "Unknown").trim() || "Unknown";
+    locationTotals[loc] = (locationTotals[loc] || 0) + counts;
+  });
+
+  function topN(obj, n){
+    return Object.entries(obj)
+      .sort((a,b)=>b[1]-a[1])
+      .slice(0,n);
+  }
+
+  const topClients = topN(clientTotals, 5);
+  const topLocs = topN(locationTotals, 5);
+
+  const out = safeEl("summaryOut");
+  if(!out) return;
+
+  out.innerHTML = `
+    <div style="font-weight:700; color: var(--gold); margin-bottom:8px;">${title}</div>
+
+    <div class="summary-grid">
+      <div class="summary-box">
+        <div style="font-weight:700;">Totals</div>
+        <div>Entries: <strong>${totalCount}</strong></div>
+        <div>Counts Toward Totals: <strong>${money(totalTotalsRule)}</strong></div>
+        <div style="opacity:.8;">(PAID=Total, PARTIAL=Paid, else 0)</div>
+        <div style="margin-top:6px;">Paid So Far (raw): <strong>${money(totalPaidSoFar)}</strong></div>
+      </div>
+
+      <div class="summary-box">
+        <div style="font-weight:700;">Status Counts</div>
+        <div>PAID: <strong>${statusCounts.paid}</strong></div>
+        <div>PARTIAL: <strong>${statusCounts.partial}</strong></div>
+        <div>UNPAID: <strong>${statusCounts.unpaid}</strong></div>
+        <div>NO SHOW: <strong>${statusCounts.no_show}</strong></div>
+      </div>
+    </div>
+
+    <div class="summary-grid" style="margin-top:10px;">
+      <div class="summary-box">
+        <div style="font-weight:700;">Top Clients (by totals rule)</div>
+        ${topClients.length ? `<ol style="margin:8px 0 0 18px;">${topClients.map(([k,v])=>`<li>${k}: <strong>${money(v)}</strong></li>`).join("")}</ol>` : "<div style='opacity:.75;'>None</div>"}
+      </div>
+
+      <div class="summary-box">
+        <div style="font-weight:700;">Top Locations (by totals rule)</div>
+        ${topLocs.length ? `<ol style="margin:8px 0 0 18px;">${topLocs.map(([k,v])=>`<li>${k}: <strong>${money(v)}</strong></li>`).join("")}</ol>` : "<div style='opacity:.75;'>None</div>"}
+      </div>
+    </div>
+  `;
 }
 
 // ================= RENDER (Year → Month → Day → Entries) =================
@@ -665,36 +777,36 @@ function render(){
   });
 
   Object.keys(grouped).sort((a,b)=>Number(b)-Number(a)).forEach(year=>{
-    // ✅ year badge uses PAID totals
-    const yearPaid = Object.values(grouped[year])
+    const yearAmt = Object.values(grouped[year])
       .flatMap(mo=>Object.values(mo).flat())
-      .reduce((sum,e)=>sum + paidAmount(e), 0);
+      .reduce((sum,e)=>sum + totalForTotals(e), 0);
 
-    const yearAcc = createAccordion(String(year), money(yearPaid));
+    const yearAcc = createAccordion(String(year), money(yearAmt));
     container.appendChild(yearAcc.wrap);
 
     Object.keys(grouped[year]).sort((a,b)=>Number(b)-Number(a)).forEach(monthIdx=>{
-      const monthPaid = Object.values(grouped[year][monthIdx])
+      const monthAmt = Object.values(grouped[year][monthIdx])
         .flat()
-        .reduce((sum,e)=>sum + paidAmount(e), 0);
+        .reduce((sum,e)=>sum + totalForTotals(e), 0);
 
-      const monthAcc = createAccordion(monthName(Number(year), Number(monthIdx)), money(monthPaid));
+      const monthAcc = createAccordion(monthName(Number(year), Number(monthIdx)), money(monthAmt));
       yearAcc.content.appendChild(monthAcc.wrap);
 
       Object.keys(grouped[year][monthIdx]).sort((a,b)=>Number(b)-Number(a)).forEach(dayNum=>{
         const dayEntries = grouped[year][monthIdx][dayNum];
-        const dayPaid = dayEntries.reduce((sum,e)=>sum + paidAmount(e), 0);
+        const dayAmt = dayEntries.reduce((sum,e)=>sum + totalForTotals(e), 0);
 
         const dateLabel = `${year}-${pad2(Number(monthIdx)+1)}-${pad2(dayNum)}`;
-        const dayAcc = createAccordion(dateLabel, money(dayPaid));
+        const dayAcc = createAccordion(dateLabel, money(dayAmt));
         monthAcc.content.appendChild(dayAcc.wrap);
 
         dayEntries
           .slice()
           .sort((a,b)=>b.id - a.id)
           .forEach(entry=>{
-            const paid = paidAmount(entry);
+            const paidSoFar = paidAmount(entry);
             const dep = depositAmount(entry);
+            const counts = totalForTotals(entry);
 
             const row = document.createElement("div");
             row.className = "entry";
@@ -702,7 +814,7 @@ function render(){
               <div class="entry-left">
                 <div class="entry-name">${entry.client}</div>
                 <div class="entry-sub">
-                  Paid ${money(paid)} • Dep ${money(dep)} • Total ${money(entry.total)}
+                  Counts ${money(counts)} • Paid ${money(paidSoFar)} • Dep ${money(dep)} • Total ${money(entry.total)}
                   ${entry.location ? " • " + entry.location : ""}
                 </div>
               </div>
