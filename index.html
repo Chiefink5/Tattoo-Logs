@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tattoo Revenue Tracker</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+
+<style>
+:root{
+--bg:#0f1411;
+--panel:#1a241f;
+--emerald:#1f6f50;
+--gold:#d4af37;
+--text:#f5f5f5;
+}
+
+body{
+margin:0;
+background:var(--bg);
+color:var(--text);
+font-family:sans-serif;
+}
+
+header{
+position:fixed;
+top:0;
+left:0;
+right:0;
+background:var(--panel);
+border-bottom:3px solid var(--gold);
+padding:10px 20px;
+display:flex;
+justify-content:space-around;
+z-index:1000;
+}
+
+.stat{
+text-align:center;
+}
+
+.stat h4{
+margin:0;
+color:var(--gold);
+}
+
+main{
+margin-top:100px;
+padding:20px;
+}
+
+.year, .month, .day{
+margin-bottom:10px;
+border:2px solid var(--emerald);
+border-radius:8px;
+padding:10px;
+background:var(--panel);
+}
+
+.entry{
+padding:8px;
+margin:5px 0;
+background:#24332c;
+border-left:4px solid var(--gold);
+cursor:pointer;
+}
+
+.fab{
+position:fixed;
+bottom:30px;
+right:30px;
+width:70px;
+height:70px;
+border-radius:50%;
+background:var(--emerald);
+color:white;
+font-size:2rem;
+display:flex;
+align-items:center;
+justify-content:center;
+box-shadow:0 0 20px rgba(212,175,55,.4);
+cursor:pointer;
+z-index:1000;
+}
+
+.modal{
+position:fixed;
+top:0;
+left:0;
+right:0;
+bottom:0;
+background:rgba(0,0,0,.7);
+display:none;
+align-items:center;
+justify-content:center;
+z-index:2000;
+}
+
+.modal-content{
+background:var(--panel);
+border:3px solid var(--gold);
+padding:20px;
+width:90%;
+max-height:90%;
+overflow:auto;
+border-radius:12px;
+}
+
+input, select, textarea{
+margin-bottom:10px;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+<div class="stat"><h4 id="todayTotal">$0</h4><small>Today</small></div>
+<div class="stat"><h4 id="weekTotal">$0</h4><small>This Week</small></div>
+<div class="stat"><h4 id="monthTotal">$0</h4><small>This Month</small></div>
+<div class="stat"><h4 id="yearTotal">$0</h4><small>This Year</small></div>
+</header>
+
+<main id="app"></main>
+
+<div class="fab" onclick="openForm()">+</div>
+
+<!-- Entry Form Modal -->
+<div class="modal" id="formModal">
+<div class="modal-content">
+<h3>Add Tattoo Entry</h3>
+
+<input type="date" id="date">
+<input type="text" id="client" placeholder="Client Name">
+<input type="text" id="contact" placeholder="Client Contact">
+<input type="text" id="social" placeholder="Client Social">
+<textarea id="description" placeholder="Tattoo Description"></textarea>
+
+<select id="location">
+<option value="">Select Location</option>
+<option>Arm</option>
+<option>Leg</option>
+<option>Back</option>
+<option>Chest</option>
+<option>Hand</option>
+<option>Foot</option>
+<option>Neck</option>
+</select>
+
+<input type="number" id="total" placeholder="Total Price">
+<input type="number" id="deposit" placeholder="Deposit Paid">
+<input type="number" id="additional" placeholder="Additional Payment">
+
+<textarea id="notes" placeholder="Notes"></textarea>
+<input type="file" id="image">
+
+<button onclick="saveEntry()">Save</button>
+<button onclick="closeForm()">Cancel</button>
+</div>
+</div>
+
+<!-- View Entry Modal -->
+<div class="modal" id="viewModal">
+<div class="modal-content" id="viewContent"></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
