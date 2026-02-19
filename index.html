@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tattoo Tracker</title>
+<title>Tattoo Revenue Tracker</title>
 
 <style>
 :root{
@@ -12,6 +12,7 @@
 --emerald:#1f6f50;
 --gold:#d4af37;
 --text:#f2f2f2;
+--danger:#a94442;
 }
 
 body{
@@ -28,47 +29,62 @@ font-weight:bold;
 border-bottom:2px solid var(--gold);
 }
 
+#stats{
+display:flex;
+justify-content:space-around;
+padding:15px;
+border-bottom:1px solid var(--emerald);
+}
+
+#stats strong{
+color:var(--gold);
+font-size:1.2rem;
+}
+
 .container{
 padding:20px;
 }
 
-button{
-background:var(--emerald);
-color:white;
-border:none;
-padding:10px 14px;
-margin-top:10px;
-cursor:pointer;
-border-radius:6px;
-}
-
-button:hover{
-background:#258a64;
-}
-
-input{
-display:block;
-margin:8px 0;
-padding:8px;
-width:100%;
-background:#121b17;
-color:white;
-border:1px solid var(--emerald);
-border-radius:4px;
-}
-
-.card{
+.accordion{
 background:var(--panel);
 border:2px solid var(--emerald);
 border-radius:10px;
-padding:15px;
-margin-top:15px;
-box-shadow:0 0 15px rgba(0,0,0,.5);
+margin-bottom:10px;
+overflow:hidden;
 }
 
-.card strong{
-color:var(--gold);
+.accordion-header{
+padding:12px;
+cursor:pointer;
+background:#16201b;
+display:flex;
+justify-content:space-between;
 }
+
+.accordion-content{
+display:none;
+padding:10px;
+}
+
+.entry{
+background:#223029;
+padding:10px;
+margin:6px 0;
+border-left:4px solid var(--gold);
+display:flex;
+justify-content:space-between;
+cursor:pointer;
+}
+
+.status{
+padding:2px 6px;
+border-radius:6px;
+font-size:.8rem;
+}
+
+.paid{background:#2e7d32;}
+.partial{background:#f9a825;}
+.unpaid{background:#616161;}
 
 .fab{
 position:fixed;
@@ -86,6 +102,46 @@ color:white;
 box-shadow:0 0 25px rgba(212,175,55,.4);
 cursor:pointer;
 }
+
+.modal{
+position:fixed;
+inset:0;
+background:rgba(0,0,0,.8);
+display:none;
+align-items:center;
+justify-content:center;
+padding:20px;
+}
+
+.modal-box{
+background:var(--panel);
+padding:20px;
+border:2px solid var(--gold);
+border-radius:10px;
+max-width:500px;
+width:100%;
+}
+
+input{
+display:block;
+margin:8px 0;
+padding:8px;
+width:100%;
+background:#121b17;
+color:white;
+border:1px solid var(--emerald);
+border-radius:4px;
+}
+
+button{
+background:var(--emerald);
+color:white;
+border:none;
+padding:10px;
+margin-top:10px;
+cursor:pointer;
+border-radius:6px;
+}
 </style>
 </head>
 
@@ -93,15 +149,21 @@ cursor:pointer;
 
 <header>Tattoo Revenue Tracker</header>
 
+<div id="stats">
+<div><strong id="todayTotal">$0</strong><br><small>Today</small></div>
+<div><strong id="weekTotal">$0</strong><br><small>Week</small></div>
+<div><strong id="monthTotal">$0</strong><br><small>Month</small></div>
+<div><strong id="yearTotal">$0</strong><br><small>Year</small></div>
+</div>
+
 <div class="container">
 <div id="entries"></div>
 </div>
 
 <div class="fab" onclick="openForm()">+</div>
 
-<!-- FORM MODAL -->
-<div id="formModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.8); padding:20px; overflow:auto;">
-<div style="background:var(--panel); padding:20px; border:2px solid var(--gold); border-radius:10px; max-width:500px; margin:auto;">
+<div class="modal" id="formModal">
+<div class="modal-box">
 
 <h3>Add Entry</h3>
 
@@ -112,8 +174,6 @@ cursor:pointer;
 
 <div id="sessions"></div>
 <button onclick="addSession()">+ Additional Session</button>
-
-<input type="file" id="image">
 
 <button onclick="saveEntry()">Save Entry</button>
 <button onclick="closeForm()">Cancel</button>
