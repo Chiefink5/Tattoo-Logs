@@ -20,6 +20,9 @@ let filters = JSON.parse(localStorage.getItem("filters") || "null") || {
   sort: "newest"
 };
 
+// Prefill targets (for repeat client)
+let prefillClient = null; // { client, contact, social }
+
 // ================= HELPERS =================
 function safeEl(id){ return document.getElementById(id); }
 function safeVal(id){ const el = safeEl(id); return el ? el.value : ""; }
@@ -88,7 +91,9 @@ function getSplitPctForDate(dateStr){
   if(!d) return clampPct(splitSettings.defaultPct || 100);
   const key = formatYYYYMM(d);
   const override = splitSettings.monthOverrides && splitSettings.monthOverrides[key];
-  const pct = (override !== undefined && override !== null) ? Number(override) : Number(splitSettings.defaultPct || 100);
+  const pct = (override !== undefined && override !== null)
+    ? Number(override)
+    : Number(splitSettings.defaultPct || 100);
   return clampPct(pct);
 }
 function netFromGross(gross, pct){ return Number(gross||0) * (clampPct(pct) / 100); }
@@ -120,6 +125,8 @@ const depositModal = safeEl("depositModal");
 const depositBox = safeEl("depositBox");
 const settingsModal = safeEl("settingsModal");
 const settingsBox = safeEl("settingsBox");
+const clientModal = safeEl("clientModal");
+const clientBox = safeEl("clientBox");
 
 function wireModal(modal, box, closer){
   if(!modal || !box) return;
@@ -132,6 +139,7 @@ wireModal(exportModal, exportBox, closeExport);
 wireModal(bammerModal, bammerBox, closeBammerQuick);
 wireModal(depositModal, depositBox, closeDepositQuick);
 wireModal(settingsModal, settingsBox, closeSettings);
+wireModal(clientModal, clientBox, closeClient);
 
 // ================= LOGO =================
 function initLogo(){
@@ -354,6 +362,7 @@ function passesFilters(entry){
   if(filters.location && filters.location !== "all"){
     if((entry.location || "") !== filters.location) return false;
   }
+
   const d = parseLocalDate(entry.date);
   if(!d) return false;
 
@@ -381,7 +390,7 @@ function getFilteredEntries(){
   return list;
 }
 
-// ================= PAYDAY WINDOW + EXPORT MODAL =================
+// ================= PAYDAY WINDOW + EXPORT =================
 function getWeekWindowFromDate(anchorDate){
   const now = new Date(anchorDate);
   const currentDay = now.getDay();
@@ -400,6 +409,7 @@ function getWeekWindowFromDate(anchorDate){
 function getWeekWindow(now){ return getWeekWindowFromDate(now); }
 
 function openExport(){
+  const exportModal = safeEl("exportModal");
   if(!exportModal) return;
 
   const paydaySelect = safeEl("paydaySelect");
@@ -424,6 +434,7 @@ function openExport(){
   exportModal.style.display = "flex";
 }
 function closeExport(){
+  const exportModal = safeEl("exportModal");
   if(!exportModal) return;
   exportModal.style.display = "none";
 }
@@ -489,7 +500,16 @@ function openForm(){
 
   const statusEl = safeEl("status");
   if(statusEl) statusEl.value = "unpaid";
+
+  // Apply prefill if set (repeat client)
+  if(prefillClient){
+    const c = safeEl("client"); if(c) c.value = prefillClient.client || "";
+    const ct = safeEl("contact"); if(ct) ct.value = prefillClient.contact || "";
+    const s = safeEl("social"); if(s) s.value = prefillClient.social || "";
+    prefillClient = null;
+  }
 }
+
 function resetForm(){
   const modal = safeEl("formModal");
   if(!modal) return;
@@ -528,11 +548,12 @@ window.addSession = addSession;
 function openBammerQuick(){
   if(!bammerModal) return;
   safeEl("bDate").value = new Date().toISOString().split("T")[0];
-  safeEl("bClient").value = "";
+  safeEl("bClient").value = prefillClient?.client || "";
   safeEl("bDesc").value = "";
   safeEl("bLocation").value = "";
   safeEl("bTotal").value = "";
   safeEl("bStatus").value = "paid";
+  prefillClient = null;
   bammerModal.style.display = "flex";
 }
 function closeBammerQuick(){
@@ -574,13 +595,14 @@ window.saveBammer = saveBammer;
 function openDepositQuick(){
   if(!depositModal) return;
   safeEl("dDate").value = new Date().toISOString().split("T")[0];
-  safeEl("dClient").value = "";
-  safeEl("dContact").value = "";
-  safeEl("dSocial").value = "";
+  safeEl("dClient").value = prefillClient?.client || "";
+  safeEl("dContact").value = prefillClient?.contact || "";
+  safeEl("dSocial").value = prefillClient?.social || "";
   safeEl("dDesc").value = "";
   safeEl("dDeposit").value = "";
   safeEl("dTotal").value = "";
   safeEl("dLocation").value = "";
+  prefillClient = null;
   depositModal.style.display = "flex";
 }
 function closeDepositQuick(){
@@ -780,6 +802,140 @@ function saveEntry(){
 }
 window.saveEntry = saveEntry;
 
+// ================= CLIENT PROFILES =================
+function clientKey(name){
+  return normalize(String(name||"")).trim();
+}
+function getClientEntries(name){
+  const key = clientKey(name);
+  return entries
+    .filter(e => clientKey(e.client) === key)
+    .slice()
+    .sort((a,b)=> b.id - a.id);
+}
+function guessLatestField(list, field){
+  for(const e of list){
+    const v = (e[field] || "").trim();
+    if(v) return v;
+  }
+  return "";
+}
+function openClientProfile(name){
+  if(!clientModal || !clientBox) return;
+  const list = getClientEntries(name);
+  if(!list.length){
+    alert("No entries found for that client.");
+    return;
+  }
+
+  const displayName = list[0].client;
+
+  let net = 0, gross = 0;
+  const statusCounts = { paid:0, partial:0, unpaid:0, no_show:0 };
+  list.forEach(e=>{
+    gross += totalForTotalsGross(e);
+    net += totalForTotalsNet(e);
+    const s = (e.status || "unpaid").toLowerCase();
+    if(statusCounts[s] !== undefined) statusCounts[s]++;
+  });
+
+  const lastDate = list[0].date;
+  const contact = guessLatestField(list, "contact");
+  const social = guessLatestField(list, "social");
+
+  clientBox.innerHTML = `
+    <div class="modal-title">Client — ${displayName}</div>
+
+    <div class="summary-grid">
+      <div class="summary-box">
+        <div style="font-weight:900;color:var(--gold);">Totals</div>
+        <div>NET: <strong>${money(net)}</strong></div>
+        <div>Gross: <strong>${money(gross)}</strong></div>
+        <div>Entries: <strong>${list.length}</strong></div>
+        <div>Last: <strong>${lastDate}</strong></div>
+      </div>
+      <div class="summary-box">
+        <div style="font-weight:900;color:var(--gold);">Status</div>
+        <div>PAID: <strong>${statusCounts.paid}</strong></div>
+        <div>PARTIAL: <strong>${statusCounts.partial}</strong></div>
+        <div>UNPAID: <strong>${statusCounts.unpaid}</strong></div>
+        <div>NO SHOW: <strong>${statusCounts.no_show}</strong></div>
+      </div>
+    </div>
+
+    <div class="summary-box">
+      <div style="font-weight:900;color:var(--gold);">Saved info</div>
+      ${contact ? `<div>Contact: <strong>${contact}</strong></div>` : `<div style="opacity:.75;">Contact: —</div>`}
+      ${social ? `<div>Social: <strong>${social}</strong></div>` : `<div style="opacity:.75;">Social: —</div>`}
+      <div class="actions-row">
+        <button type="button" onclick="repeatClientFull()">New Entry (prefill)</button>
+        <button type="button" class="secondarybtn" onclick="repeatClientBammer()">Bammer (prefill)</button>
+        <button type="button" class="secondarybtn" onclick="repeatClientDeposit()">Deposit (prefill)</button>
+      </div>
+    </div>
+
+    <div class="summary-box">
+      <div style="font-weight:900;color:var(--gold);">History</div>
+      ${list.slice(0, 30).map(e=>{
+        const paidLine = money(paidForPreview(e));
+        const row2 = [e.location, e.description].filter(Boolean).join(" • ");
+        return `
+          <div class="client-entry" onclick="openEntryFromClient(${e.id})">
+            <div class="top">
+              <div><strong>${e.status.toUpperCase()}</strong> — Paid: ${paidLine}</div>
+              <div class="date">${e.date}</div>
+            </div>
+            <div class="desc">${row2 || ""}</div>
+          </div>
+        `;
+      }).join("")}
+      ${list.length > 30 ? `<div class="hint" style="margin-top:8px;">Showing newest 30…</div>` : ``}
+    </div>
+
+    <div class="actions-row">
+      <button type="button" class="secondarybtn" onclick="closeClient()">Close</button>
+    </div>
+  `;
+
+  // stash prefill target so buttons can use it
+  prefillClient = { client: displayName, contact, social };
+
+  clientModal.style.display = "flex";
+}
+
+function closeClient(){
+  if(!clientModal) return;
+  clientModal.style.display = "none";
+  // keep prefillClient (so buttons can still use it if you reopen quickly)
+}
+function openEntryFromClient(id){
+  closeClient();
+  viewEntry(id);
+}
+
+function repeatClientFull(){
+  if(!prefillClient) return;
+  closeClient();
+  openForm();
+}
+function repeatClientBammer(){
+  if(!prefillClient) return;
+  closeClient();
+  openBammerQuick();
+}
+function repeatClientDeposit(){
+  if(!prefillClient) return;
+  closeClient();
+  openDepositQuick();
+}
+
+window.openClientProfile = openClientProfile;
+window.closeClient = closeClient;
+window.openEntryFromClient = openEntryFromClient;
+window.repeatClientFull = repeatClientFull;
+window.repeatClientBammer = repeatClientBammer;
+window.repeatClientDeposit = repeatClientDeposit;
+
 // ================= VIEW / EDIT / DELETE =================
 function viewEntry(id){
   const entry = entries.find(e=>e.id===id);
@@ -816,7 +972,10 @@ function viewEntry(id){
   }
 
   viewBox.innerHTML = `
-    <div class="modal-title">${entry.client} — ${entry.date}</div>
+    <div class="modal-title">
+      <span class="client-link" onclick="openClientProfile(${JSON.stringify(entry.client)})">${entry.client}</span>
+      — ${entry.date}
+    </div>
 
     <div class="row">
       <div>
@@ -881,11 +1040,9 @@ function convertDepositToTattoo(){
   const entry = entries.find(e=>e.id===viewingId);
   if(!entry) return;
 
-  // Open the full form in EDIT mode, keeping the deposit already attached.
   closeView();
   fillFormForEdit(entry);
 
-  // nudge status to partial if it was something else
   const statusEl = safeEl("status");
   if(statusEl && (!statusEl.value || statusEl.value === "unpaid")) statusEl.value = "partial";
 }
@@ -1203,7 +1360,9 @@ function render(){
   if(locationSelect){
     const current = filters.location || "all";
     const locs = Array.from(new Set(entries.map(e=>e.location).filter(Boolean))).sort();
-    locationSelect.innerHTML = `<option value="all">All Locations</option>` + locs.map(l=>`<option value="${l}">${l}</option>`).join("");
+    locationSelect.innerHTML =
+      `<option value="all">All Locations</option>` +
+      locs.map(l=>`<option value="${l}">${l}</option>`).join("");
     locationSelect.value = current;
   }
 
@@ -1268,7 +1427,9 @@ function render(){
           row.className = "entry";
           row.innerHTML = `
             <div class="entry-left">
-              <div class="entry-name">${entry.client}</div>
+              <div class="entry-name">
+                <span class="client-link" data-client="${entry.client}">${entry.client}</span>
+              </div>
               <div class="entry-sub">
                 <div class="sub-row"><strong>Paid:</strong> ${paidLine}</div>
                 <div class="sub-row clamp2">${row2 || ""}</div>
@@ -1276,7 +1437,16 @@ function render(){
             </div>
             <div class="status ${entry.status}">${entry.status}</div>
           `;
+
+          // Click client name -> profile
+          row.querySelector(".client-link").addEventListener("click",(ev)=>{
+            ev.stopPropagation();
+            openClientProfile(entry.client);
+          });
+
+          // Click card -> entry view
           row.addEventListener("click", ()=>viewEntry(entry.id));
+
           dayAcc.content.appendChild(row);
         });
       });
