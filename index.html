@@ -1,190 +1,61 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tattoo Revenue Tracker</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+<title>Tattoo Tracker</title>
 
 <style>
-:root{
---bg:#0e1512;
---panel:#1a241f;
---emerald:#1f6f50;
---gold:#d4af37;
---text:#f2f2f2;
---danger:#a94442;
-}
-
 body{
-margin:0;
-background:var(--bg);
-color:var(--text);
-font-family:sans-serif;
-}
-
-header{
-position:fixed;
-top:0;
-left:0;
-right:0;
-background:var(--panel);
-border-bottom:3px solid var(--gold);
-display:flex;
-justify-content:space-around;
-padding:12px;
-z-index:1000;
-}
-
-.stat h4{
-margin:0;
-color:var(--gold);
-}
-
-main{
-margin-top:110px;
-padding:20px;
-}
-
-.year, .month, .day{
-border:2px solid var(--emerald);
-border-radius:10px;
-margin-bottom:12px;
-background:var(--panel);
-overflow:hidden;
-}
-
-.accordion-header{
-padding:12px;
-cursor:pointer;
-display:flex;
-justify-content:space-between;
-align-items:center;
-background:#16201b;
-}
-
-.accordion-content{
-display:none;
-padding:10px;
-}
-
-.entry{
-padding:8px;
-margin:6px 0;
-background:#223029;
-border-left:5px solid var(--gold);
-cursor:pointer;
-display:flex;
-justify-content:space-between;
-}
-
-.status{
-font-size:0.8rem;
-padding:2px 6px;
-border-radius:6px;
-}
-
-.paid{background:#2e7d32;}
-.partial{background:#f9a825;}
-.unpaid{background:#616161;}
-.no_show{background:var(--danger);}
-
-.fab{
-position:fixed;
-bottom:30px;
-right:30px;
-width:70px;
-height:70px;
-border-radius:50%;
-background:var(--emerald);
+background:#0f1411;
 color:white;
-font-size:2rem;
-display:flex;
-align-items:center;
-justify-content:center;
-box-shadow:0 0 20px rgba(212,175,55,.4);
-cursor:pointer;
-z-index:1000;
-}
-
-.modal{
-position:fixed;
-inset:0;
-background:rgba(0,0,0,.75);
-display:none;
-align-items:center;
-justify-content:center;
-z-index:2000;
-}
-
-.modal-content{
-background:var(--panel);
-border:3px solid var(--gold);
+font-family:sans-serif;
+margin:0;
 padding:20px;
-width:90%;
-max-height:90%;
-overflow:auto;
-border-radius:12px;
 }
 
 button{
+padding:10px;
 margin-top:8px;
+background:#1f6f50;
+color:white;
+border:none;
+}
+
+.entry{
+background:#1a241f;
+margin:10px 0;
+padding:10px;
+border-left:4px solid gold;
 }
 </style>
 </head>
-
 <body>
 
-<header>
-<div class="stat"><h4 id="todayTotal">$0</h4><small>Today</small></div>
-<div class="stat"><h4 id="weekTotal">$0</h4><small>Week</small></div>
-<div class="stat"><h4 id="monthTotal">$0</h4><small>Month</small></div>
-<div class="stat"><h4 id="yearTotal">$0</h4><small>Year</small></div>
-</header>
+<h2>Tattoo Tracker</h2>
 
-<main id="app"></main>
+<button onclick="openForm()">+ Add Entry</button>
 
-<div class="fab" onclick="openForm()">+</div>
+<div id="form" style="display:none; margin-top:20px;">
 
-<!-- Entry Form -->
-<div class="modal" id="formModal">
-<div class="modal-content">
-<h3>Add Entry</h3>
-
-<input type="date" id="date">
-<input type="text" id="client" placeholder="Client Name">
-<input type="text" id="contact" placeholder="Contact">
-<input type="text" id="social" placeholder="Social">
-<textarea id="description" placeholder="Description"></textarea>
-
-<select id="location">
-<option value="">Location</option>
-<option>Arm</option>
-<option>Leg</option>
-<option>Back</option>
-<option>Chest</option>
-<option>Hand</option>
-<option>Foot</option>
-<option>Neck</option>
-</select>
-
-<input type="number" id="total" placeholder="Total Price">
-<input type="number" id="deposit" placeholder="Deposit">
+<input type="date" id="date"><br>
+<input type="text" id="client" placeholder="Client Name"><br>
+<input type="number" id="total" placeholder="Total Price"><br>
+<input type="number" id="deposit" placeholder="Deposit"><br>
 
 <div id="sessions"></div>
-<button onclick="addSessionField()">+ Additional Session</button>
+<button onclick="addSession()">+ Additional Session</button><br>
 
-<textarea id="notes" placeholder="Notes"></textarea>
+<input type="file" id="image"><br>
 
 <button onclick="saveEntry()">Save</button>
 <button onclick="closeForm()">Cancel</button>
-</div>
+
 </div>
 
-<!-- View Modal -->
-<div class="modal" id="viewModal">
-<div class="modal-content" id="viewContent"></div>
-</div>
+<hr>
+
+<div id="entries"></div>
 
 <script src="app.js"></script>
 </body>
