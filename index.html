@@ -162,20 +162,21 @@ header{
   inset:0;
   background:rgba(0,0,0,.85);
   display:none;
-  align-items:center;
+  align-items:flex-start; /* was center */
   justify-content:center;
-  padding:20px;
+  padding:60px 20px 40px; /* extra top padding */
   overflow:auto;
   z-index:9999;
 }
 
 .modal-box{
   background:var(--panel);
-  padding:20px;
+  padding:30px 20px 20px; /* extra top padding inside card */
   border:2px solid var(--gold);
   border-radius:12px;
   max-width:560px;
   width:100%;
+  margin-top:20px; /* breathing room */
 }
 
 input, textarea, select{
