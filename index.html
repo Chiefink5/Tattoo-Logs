@@ -11,7 +11,6 @@
 
   <style>
     :root{
-      --bg:#0e1512;
       --panel:#1a241f;
       --panel2:#16201b;
       --emerald:#1f6f50;
@@ -106,7 +105,6 @@
 
     .container{ padding:16px 18px 90px; }
 
-    /* FILTER BAR */
     .filterbar{
       background:var(--panel);
       border:2px solid rgba(31,111,80,.8);
@@ -150,7 +148,6 @@
 
     .hint{ font-size:.9rem; opacity:.85; color:var(--muted); }
 
-    /* ACCORDION */
     .accordion{
       background:var(--panel);
       border:2px solid var(--emerald);
@@ -182,7 +179,6 @@
     .chev{ opacity:.85; margin-left:10px; }
     .accordion-content{ display:none; padding:10px 12px 12px; }
 
-    /* ENTRY CARD (LIST) */
     .entry{
       background:#223029;
       padding:10px 12px;
@@ -246,7 +242,6 @@
     .unpaid{background:#616161;}
     .no_show{background:var(--danger);}
 
-    /* FLOATING ACTIONS */
     .fab-wrap{
       position:fixed;
       right:18px;
@@ -274,12 +269,8 @@
       background:#245a46;
       border:1px solid rgba(212,175,55,.25);
     }
-    .fab small{
-      font-size:.65rem;
-      opacity:.95;
-    }
+    .fab small{ font-size:.65rem; opacity:.95; }
 
-    /* MODALS */
     .modal{
       position:fixed;
       inset:0;
@@ -416,7 +407,6 @@
   </div>
 
   <div class="container">
-    <!-- FILTERS -->
     <div class="filterbar">
       <div class="row">
         <input id="q" type="text" placeholder="Search (client, description, location)">
@@ -435,8 +425,8 @@
       </div>
 
       <div class="row2">
-        <input id="fromDate" type="date" placeholder="From">
-        <input id="toDate" type="date" placeholder="To">
+        <input id="fromDate" type="date">
+        <input id="toDate" type="date">
         <select id="sortFilter">
           <option value="newest">Sort: Newest</option>
           <option value="oldest">Sort: Oldest</option>
@@ -455,7 +445,6 @@
     <div id="entries"></div>
   </div>
 
-  <!-- Floating actions -->
   <div class="fab-wrap">
     <div class="fab small" title="Quick Add: Deposit Only" onclick="openDepositQuick()">
       <small>DEP</small>
@@ -582,20 +571,20 @@
     <div class="modal-box" id="viewBox"></div>
   </div>
 
-  <!-- SETTINGS MODAL (split) -->
+  <!-- SETTINGS MODAL -->
   <div class="modal" id="settingsModal">
     <div class="modal-box" id="settingsBox">
-      <div class="modal-title">Settings — Payout Split</div>
+      <div class="modal-title">Settings</div>
 
       <div class="summary-box" style="margin-top:0;">
-        <div style="font-weight:900;color:var(--gold);">Default artist take-home %</div>
+        <div style="font-weight:900;color:var(--gold);">Payout Split</div>
         <div class="hint">Used for NET totals unless a month override exists.</div>
         <input id="defaultSplitPct" type="number" min="0" max="100" step="1" placeholder="e.g. 60">
       </div>
 
       <div class="summary-box">
         <div style="font-weight:900;color:var(--gold);">Monthly override</div>
-        <div class="hint">Set a different % for a specific month (for incentives).</div>
+        <div class="hint">Set a different % for a specific month.</div>
         <div class="row">
           <input id="overrideMonth" type="month">
           <input id="overridePct" type="number" min="0" max="100" step="1" placeholder="e.g. 65">
@@ -605,6 +594,20 @@
           <button type="button" class="secondarybtn" onclick="removeMonthOverride()">Remove Override</button>
         </div>
         <div id="overrideList" class="hint" style="margin-top:10px;"></div>
+      </div>
+
+      <div class="summary-box">
+        <div style="font-weight:900;color:var(--gold);">Backup / Restore</div>
+        <div class="hint">Download a backup so you never lose your data.</div>
+        <div class="actions-row">
+          <button type="button" onclick="downloadBackup()">Download Backup (JSON)</button>
+        </div>
+        <hr>
+        <div class="hint">Restore from a backup JSON file.</div>
+        <input id="restoreFile" type="file" accept="application/json">
+        <div class="actions-row">
+          <button type="button" class="dangerbtn" onclick="restoreBackup()">Restore Backup</button>
+        </div>
       </div>
 
       <div class="actions-row">

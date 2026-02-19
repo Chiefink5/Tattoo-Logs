@@ -3,17 +3,14 @@ let entries = JSON.parse(localStorage.getItem("entries") || "[]");
 let editingId = null;
 let viewingId = null;
 
-// Payday: 0=Sun..6=Sat
 let payday = Number(localStorage.getItem("payday") || 0);
 let payPeriodAnchor = null;
 
-// Split settings (artist take-home %)
 let splitSettings = JSON.parse(localStorage.getItem("splitSettings") || "null") || {
   defaultPct: 100,
   monthOverrides: {} // { "YYYY-MM": pct }
 };
 
-// Active filters
 let filters = JSON.parse(localStorage.getItem("filters") || "null") || {
   q: "",
   status: "all",
@@ -30,7 +27,7 @@ function pad2(n){ return String(n).padStart(2,"0"); }
 function money(n){
   const num = Number(n || 0);
   const v = Number.isFinite(num) ? num : 0;
-  return "$" + v.toFixed(2).replace(/\.00$/,""); // looks clean
+  return "$" + v.toFixed(2).replace(/\.00$/,"");
 }
 function monthName(year, monthIndex){
   return new Date(year, monthIndex, 1).toLocaleString("default",{month:"long"});
@@ -46,9 +43,15 @@ function parseLocalDate(dateStr){
 function formatYYYYMMDD(d){
   return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
 }
-function formatYYYYMM(d){ // month key
+function formatYYYYMM(d){
   return `${d.getFullYear()}-${pad2(d.getMonth()+1)}`;
 }
+function clampPct(p){
+  p = Number(p);
+  if(!Number.isFinite(p)) return 100;
+  return Math.max(0, Math.min(100, p));
+}
+function normalize(s){ return String(s||"").toLowerCase(); }
 
 function paymentsArray(entry){ return Array.isArray(entry.payments) ? entry.payments : []; }
 function paidAmount(entry){ return paymentsArray(entry).reduce((sum,p)=>sum + Number(p.amount || 0), 0); }
@@ -56,6 +59,11 @@ function depositAmount(entry){
   return paymentsArray(entry).filter(p=>p.kind==="deposit").reduce((sum,p)=>sum + Number(p.amount||0), 0);
 }
 function hasAnyPayments(entry){ return paymentsArray(entry).some(p => Number(p.amount||0) > 0); }
+function hasSessions(entry){ return paymentsArray(entry).some(p => p.kind === "session" && Number(p.amount||0) > 0); }
+function isDepositOnlyEntry(entry){
+  return depositAmount(entry) > 0 && !hasSessions(entry);
+}
+
 function currentQuarterIndex(dateObj){ return Math.floor(dateObj.getMonth() / 3); }
 
 // ---- Totals logic (gross) ----
@@ -77,13 +85,12 @@ function paidForPreview(entry){
 // ---- Split math (net) ----
 function getSplitPctForDate(dateStr){
   const d = parseLocalDate(dateStr);
-  if(!d) return Number(splitSettings.defaultPct || 100);
+  if(!d) return clampPct(splitSettings.defaultPct || 100);
   const key = formatYYYYMM(d);
   const override = splitSettings.monthOverrides && splitSettings.monthOverrides[key];
   const pct = (override !== undefined && override !== null) ? Number(override) : Number(splitSettings.defaultPct || 100);
   return clampPct(pct);
 }
-function clampPct(p){ p = Number(p); if(!Number.isFinite(p)) return 100; return Math.max(0, Math.min(100, p)); }
 function netFromGross(gross, pct){ return Number(gross||0) * (clampPct(pct) / 100); }
 function totalForTotalsNet(entry){
   const gross = totalForTotalsGross(entry);
@@ -91,7 +98,7 @@ function totalForTotalsNet(entry){
   return netFromGross(gross, pct);
 }
 
-// ================= SAVE/RENDER =================
+// ================= PERSIST =================
 function save(){
   localStorage.setItem("entries", JSON.stringify(entries));
   render();
@@ -167,8 +174,7 @@ window.removeLogo = removeLogo;
 // ================= SPLIT SETTINGS =================
 function updateSplitPill(){
   const pillPct = safeEl("splitPillPct");
-  if(!pillPct) return;
-  pillPct.textContent = `${clampPct(splitSettings.defaultPct)}%`;
+  if(pillPct) pillPct.textContent = `${clampPct(splitSettings.defaultPct)}%`;
 }
 updateSplitPill();
 
@@ -181,11 +187,9 @@ function openSettings(){
   const list = safeEl("overrideList");
   if(list){
     const keys = Object.keys(splitSettings.monthOverrides || {}).sort().reverse();
-    if(!keys.length){
-      list.innerHTML = "No monthly overrides yet.";
-    } else {
-      list.innerHTML = keys.map(k => `• <b style="color:var(--gold)">${k}</b> → ${clampPct(splitSettings.monthOverrides[k])}%`).join("<br>");
-    }
+    list.innerHTML = keys.length
+      ? keys.map(k => `• <b style="color:var(--gold)">${k}</b> → ${clampPct(splitSettings.monthOverrides[k])}%`).join("<br>")
+      : "No monthly overrides yet.";
   }
 
   settingsModal.style.display = "flex";
@@ -195,8 +199,7 @@ function closeSettings(){
   settingsModal.style.display = "none";
 }
 function saveSplitSettings(){
-  const def = clampPct(safeVal("defaultSplitPct"));
-  splitSettings.defaultPct = def;
+  splitSettings.defaultPct = clampPct(safeVal("defaultSplitPct"));
   localStorage.setItem("splitSettings", JSON.stringify(splitSettings));
   updateSplitPill();
   closeSettings();
@@ -209,7 +212,7 @@ function saveMonthOverride(){
   splitSettings.monthOverrides = splitSettings.monthOverrides || {};
   splitSettings.monthOverrides[m] = pct;
   localStorage.setItem("splitSettings", JSON.stringify(splitSettings));
-  openSettings(); // refresh list
+  openSettings();
   render();
 }
 function removeMonthOverride(){
@@ -228,7 +231,79 @@ window.saveSplitSettings = saveSplitSettings;
 window.saveMonthOverride = saveMonthOverride;
 window.removeMonthOverride = removeMonthOverride;
 
-// ================= FILTERS UI =================
+// ================= BACKUP / RESTORE =================
+function downloadBackup(){
+  const payload = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    entries,
+    payday,
+    splitSettings,
+    filters
+  };
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `globbers-ink-log_backup_${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function restoreBackup(){
+  const input = safeEl("restoreFile");
+  const file = input && input.files ? input.files[0] : null;
+  if(!file){ alert("Pick a backup JSON file first."); return; }
+
+  const ok = confirm("Restore backup? This will overwrite your current data.");
+  if(!ok) return;
+
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    try{
+      const data = JSON.parse(e.target.result);
+
+      if(!data || typeof data !== "object") throw new Error("Invalid backup");
+      if(!Array.isArray(data.entries)) throw new Error("Backup missing entries");
+
+      entries = data.entries;
+
+      if(typeof data.payday === "number"){
+        payday = data.payday;
+        localStorage.setItem("payday", String(payday));
+      }
+
+      if(data.splitSettings && typeof data.splitSettings === "object"){
+        splitSettings = data.splitSettings;
+        localStorage.setItem("splitSettings", JSON.stringify(splitSettings));
+        updateSplitPill();
+      }
+
+      if(data.filters && typeof data.filters === "object"){
+        filters = data.filters;
+        saveFilters();
+      }
+
+      localStorage.setItem("entries", JSON.stringify(entries));
+      alert("Backup restored ✅");
+      closeSettings();
+      render();
+    }catch(err){
+      alert("Couldn’t restore that file. Make sure it’s a real backup JSON.");
+    }finally{
+      if(input) input.value = "";
+    }
+  };
+  reader.readAsText(file);
+}
+
+window.downloadBackup = downloadBackup;
+window.restoreBackup = restoreBackup;
+
+// ================= FILTERS =================
 function hydrateFilterUI(){
   const q = safeEl("q");
   const status = safeEl("statusFilter");
@@ -242,8 +317,6 @@ function hydrateFilterUI(){
   if(from) from.value = filters.from || "";
   if(to) to.value = filters.to || "";
   if(sort) sort.value = filters.sort || "newest";
-
-  // location options are populated in render() so it stays accurate
   if(loc) loc.value = filters.location || "all";
 }
 function applyFilters(){
@@ -265,7 +338,50 @@ function clearFilters(){
 window.applyFilters = applyFilters;
 window.clearFilters = clearFilters;
 
-// ================= PAYDAY WEEK WINDOW =================
+(function wireFilterKeys(){
+  const q = safeEl("q");
+  if(q){
+    q.addEventListener("keydown",(e)=>{
+      if(e.key === "Enter") applyFilters();
+    });
+  }
+})();
+
+function passesFilters(entry){
+  if(filters.status && filters.status !== "all"){
+    if((entry.status || "unpaid") !== filters.status) return false;
+  }
+  if(filters.location && filters.location !== "all"){
+    if((entry.location || "") !== filters.location) return false;
+  }
+  const d = parseLocalDate(entry.date);
+  if(!d) return false;
+
+  if(filters.from){
+    const from = parseLocalDate(filters.from);
+    if(from && d < from) return false;
+  }
+  if(filters.to){
+    const to = parseLocalDate(filters.to);
+    if(to && d > to) return false;
+  }
+
+  const q = normalize(filters.q).trim();
+  if(q){
+    const hay = [entry.client, entry.description, entry.location].map(normalize).join(" | ");
+    if(!hay.includes(q)) return false;
+  }
+
+  return true;
+}
+
+function getFilteredEntries(){
+  const list = entries.filter(passesFilters);
+  list.sort((a,b)=> filters.sort === "oldest" ? (a.id - b.id) : (b.id - a.id));
+  return list;
+}
+
+// ================= PAYDAY WINDOW + EXPORT MODAL =================
 function getWeekWindowFromDate(anchorDate){
   const now = new Date(anchorDate);
   const currentDay = now.getDay();
@@ -283,7 +399,6 @@ function getWeekWindowFromDate(anchorDate){
 }
 function getWeekWindow(now){ return getWeekWindowFromDate(now); }
 
-// ================= EXPORT MODAL =================
 function openExport(){
   if(!exportModal) return;
 
@@ -430,7 +545,7 @@ function saveBammer(){
   const total = Number(safeVal("bTotal") || 0);
   if(!date || !client){ alert("Date + Client required."); return; }
 
-  const entry = {
+  entries.push({
     id: Date.now(),
     date,
     client,
@@ -440,15 +555,14 @@ function saveBammer(){
     location: safeVal("bLocation") || "",
     notes: "",
     total,
-    payments: [], // bammer = no session payment tracking needed
+    payments: [],
     status: safeVal("bStatus") || "paid",
     image: null,
     createdAt: new Date().toISOString(),
     updatedAt: null,
     editHistory: []
-  };
+  });
 
-  entries.push(entry);
   save();
   closeBammerQuick();
 }
@@ -482,7 +596,7 @@ function saveDepositOnly(){
 
   const total = Number(safeVal("dTotal") || 0);
 
-  const entry = {
+  entries.push({
     id: Date.now(),
     date,
     client,
@@ -498,9 +612,8 @@ function saveDepositOnly(){
     createdAt: new Date().toISOString(),
     updatedAt: null,
     editHistory: []
-  };
+  });
 
-  entries.push(entry);
   save();
   closeDepositQuick();
 }
@@ -508,7 +621,7 @@ window.openDepositQuick = openDepositQuick;
 window.closeDepositQuick = closeDepositQuick;
 window.saveDepositOnly = saveDepositOnly;
 
-// ================= EDIT HISTORY =================
+// ================= EDIT HISTORY + EDIT FORM FILL =================
 function diffFields(oldEntry, newEntry){
   const fields = ["date","client","contact","social","description","location","notes","total","status"];
   const changes = [];
@@ -645,14 +758,13 @@ function saveEntry(){
       save();
       closeForm();
     } else {
-      const entry = Object.assign({}, base, {
+      entries.push(Object.assign({}, base, {
         id: Date.now(),
         image: newImageDataUrlOrNull || null,
         createdAt: new Date().toISOString(),
         updatedAt: null,
         editHistory: []
-      });
-      entries.push(entry);
+      }));
       save();
       closeForm();
     }
@@ -681,8 +793,8 @@ function viewEntry(id){
 
   const showPaymentsSection = hasAnyPayments(entry);
   const showDepositLine = dep > 0;
+  const showConvert = isDepositOnlyEntry(entry);
 
-  // NET for this entry (based on date split)
   const grossCounts = totalForTotalsGross(entry);
   const pct = getSplitPctForDate(entry.date);
   const netCounts = totalForTotalsNet(entry);
@@ -754,6 +866,7 @@ function viewEntry(id){
     </details>
 
     <div class="actions-row" style="margin-top:20px;">
+      ${showConvert ? `<button type="button" onclick="convertDepositToTattoo()">Convert Deposit → Full Tattoo</button>` : ``}
       <button type="button" onclick="editFromView()">Edit</button>
       <button type="button" class="dangerbtn" onclick="deleteFromView()">Delete</button>
       <button type="button" class="secondarybtn" onclick="closeView()">Close</button>
@@ -761,6 +874,20 @@ function viewEntry(id){
   `;
 
   if(viewModal) viewModal.style.display = "flex";
+}
+
+function convertDepositToTattoo(){
+  if(!viewingId) return;
+  const entry = entries.find(e=>e.id===viewingId);
+  if(!entry) return;
+
+  // Open the full form in EDIT mode, keeping the deposit already attached.
+  closeView();
+  fillFormForEdit(entry);
+
+  // nudge status to partial if it was something else
+  const statusEl = safeEl("status");
+  if(statusEl && (!statusEl.value || statusEl.value === "unpaid")) statusEl.value = "partial";
 }
 
 function closeView(){
@@ -787,10 +914,12 @@ function deleteFromView(){
   save();
   closeView();
 }
+
 window.viewEntry = viewEntry;
 window.closeView = closeView;
 window.editFromView = editFromView;
 window.deleteFromView = deleteFromView;
+window.convertDepositToTattoo = convertDepositToTattoo;
 
 // ================= STATS (NET) =================
 function updateStats(filteredList){
@@ -837,7 +966,7 @@ function updateStats(filteredList){
   if(yearEl) yearEl.innerText = money(year);
 }
 
-// ================= CSV EXPORT (adds NET columns) =================
+// ================= CSV EXPORT (NET columns) =================
 function csvEscape(v){
   const s = String(v ?? "");
   if (/[",\n]/.test(s)) return `"${s.replace(/"/g,'""')}"`;
@@ -1020,59 +1149,6 @@ function buildSummary(mode){
 }
 window.buildSummary = buildSummary;
 
-// ================= FILTERING =================
-function normalize(s){ return String(s||"").toLowerCase(); }
-
-function passesFilters(entry){
-  // status
-  if(filters.status && filters.status !== "all"){
-    if((entry.status || "unpaid") !== filters.status) return false;
-  }
-
-  // location
-  if(filters.location && filters.location !== "all"){
-    if((entry.location || "") !== filters.location) return false;
-  }
-
-  // date range
-  const d = parseLocalDate(entry.date);
-  if(!d) return false;
-
-  if(filters.from){
-    const from = parseLocalDate(filters.from);
-    if(from && d < from) return false;
-  }
-  if(filters.to){
-    const to = parseLocalDate(filters.to);
-    if(to && d > to) return false;
-  }
-
-  // query
-  const q = normalize(filters.q).trim();
-  if(q){
-    const hay = [
-      entry.client,
-      entry.description,
-      entry.location
-    ].map(normalize).join(" | ");
-    if(!hay.includes(q)) return false;
-  }
-
-  return true;
-}
-
-function getFilteredEntries(){
-  const list = entries.filter(passesFilters);
-
-  // sort
-  list.sort((a,b)=>{
-    if(filters.sort === "oldest") return (a.id - b.id);
-    return (b.id - a.id);
-  });
-
-  return list;
-}
-
 // ================= UI BUILDERS =================
 function createAccordion(title, badgeText){
   const wrap = document.createElement("div");
@@ -1121,10 +1197,8 @@ function createAccordion(title, badgeText){
 
 // ================= RENDER =================
 function render(){
-  // hydrate filters UI once per render (keeps it in sync)
   hydrateFilterUI();
 
-  // populate location filter options from ALL entries (not only filtered)
   const locationSelect = safeEl("locationFilter");
   if(locationSelect){
     const current = filters.location || "all";
@@ -1145,7 +1219,6 @@ function render(){
     return;
   }
 
-  // Group: year -> monthIndex -> dayNumber -> [entries]
   const grouped = {};
   list.forEach(e=>{
     const d = parseLocalDate(e.date);
@@ -1186,9 +1259,6 @@ function render(){
         monthAcc.content.appendChild(dayAcc.wrap);
 
         dayEntries.forEach(entry=>{
-          // Exactly 2 rows under name:
-          // Row1 Paid: $X
-          // Row2 Location • Description
           const paidLine = money(paidForPreview(entry));
           const loc = (entry.location || "").trim();
           const desc = (entry.description || "").trim();
@@ -1215,16 +1285,6 @@ function render(){
 
   updateStats(list);
 }
-
-// ================= INIT FILTER BUTTON ENTER KEY =================
-(function wireFilterKeys(){
-  const q = safeEl("q");
-  if(q){
-    q.addEventListener("keydown",(e)=>{
-      if(e.key === "Enter") applyFilters();
-    });
-  }
-})();
 
 // ================= INIT =================
 render();
