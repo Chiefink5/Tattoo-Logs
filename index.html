@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Globber’s Ink Log</title>
 
-  <!-- Fancy-ish artist font -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
@@ -15,11 +14,12 @@
 
 <body>
   <div class="page">
+
     <!-- HEADER -->
     <header class="topbar">
       <div class="brandRow">
         <div class="brandLeft">
-          <div class="logoWrap">
+          <div class="logoWrap" title="Click to change logo">
             <img id="logoImg" class="logoImg" alt="Logo" />
             <input id="logoInput" type="file" accept="image/png,image/*" hidden />
           </div>
@@ -30,7 +30,7 @@
         </div>
       </div>
 
-      <!-- Buttons moved UNDER the title/logo -->
+      <!-- Buttons on their own row -->
       <div class="brandActions">
         <button type="button" class="topBtn" onclick="openAppointments()">Appointments</button>
         <button type="button" class="topBtn" onclick="openStudio()">Studio</button>
@@ -103,7 +103,7 @@
 
     <div id="toasts" class="toasts"></div>
 
-    <!-- Modals (same IDs your app.js expects) -->
+    <!-- Modals (IDs must exist) -->
     <div id="formModal" class="modal"><div id="formBox" class="modalBox"></div></div>
     <div id="viewModal" class="modal"><div id="viewBox" class="modalBox"></div></div>
     <div id="exportModal" class="modal"><div id="exportBox" class="modalBox"></div></div>
