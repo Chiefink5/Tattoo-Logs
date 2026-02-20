@@ -20,25 +20,27 @@ let filters = JSON.parse(localStorage.getItem("filters") || "null") || {
   sort: "newest"
 };
 
-// Rewards (badge levels + discount tiers)
+// Filters UI state (open/closed)
+let filtersUI = JSON.parse(localStorage.getItem("filtersUI") || "null") || {
+  open: false
+};
+
+// Rewards
 let rewardsSettings = JSON.parse(localStorage.getItem("rewardsSettings") || "null") || {
   levels: [
-    // { id, name, minCount, pngDataUrl }
     { id: "lvl1", name: "Rookie", minCount: 1, pngDataUrl: "" },
     { id: "lvl2", name: "Regular", minCount: 5, pngDataUrl: "" },
     { id: "lvl3", name: "VIP", minCount: 10, pngDataUrl: "" }
   ],
   discounts: [
-    // { id, label, minCount, percent }
     { id: "d1", label: "5% off", minCount: 5, percent: 5 },
     { id: "d2", label: "10% off", minCount: 10, percent: 10 }
   ]
 };
 
-// Prefill targets (repeat client)
-let prefillClient = null; // { client, contact, social }
+let prefillClient = null;
 
-// Toast de-dupe
+// Toast queue
 let toastQueue = [];
 let toastTimer = null;
 
@@ -83,36 +85,29 @@ function depositAmount(entry){
 }
 function hasAnyPayments(entry){ return paymentsArray(entry).some(p => Number(p.amount||0) > 0); }
 function hasSessions(entry){ return paymentsArray(entry).some(p => p.kind === "session" && Number(p.amount||0) > 0); }
-function isDepositOnlyEntry(entry){
-  return depositAmount(entry) > 0 && !hasSessions(entry);
-}
-function isTattooEntry(entry){
-  // Counts toward badge/discount progression: anything that isn't deposit-only
-  // (Bammers, full tattoos, sessions, etc. all count)
-  return !isDepositOnlyEntry(entry);
-}
+function isDepositOnlyEntry(entry){ return depositAmount(entry) > 0 && !hasSessions(entry); }
+function isTattooEntry(entry){ return !isDepositOnlyEntry(entry); }
 
 function currentQuarterIndex(dateObj){ return Math.floor(dateObj.getMonth() / 3); }
 
-// ---- Totals logic (gross) ----
+// ---- Totals (gross) ----
 function totalForTotalsGross(entry){
   const status = (entry.status || "unpaid").toLowerCase();
   if(status === "paid") return Number(entry.total || 0);
   if(status === "partial") return paidAmount(entry);
-  // booked/unpaid/no_show -> 0
   return 0;
 }
 
-// Preview Paid line (what you see on the card)
+// Card preview “Paid:”
 function paidForPreview(entry){
   const status = (entry.status || "unpaid").toLowerCase();
   if(status === "paid") return Number(entry.total || 0);
   if(status === "partial") return paidAmount(entry);
-  if(status === "booked") return depositAmount(entry); // so you can see deposit at a glance
+  if(status === "booked") return depositAmount(entry);
   return 0;
 }
 
-// ---- Split math (net) ----
+// ---- Split math (net behind the scenes) ----
 function getSplitPctForDate(dateStr){
   const d = parseLocalDate(dateStr);
   if(!d) return clampPct(splitSettings.defaultPct || 100);
@@ -135,19 +130,14 @@ function save(){
   localStorage.setItem("entries", JSON.stringify(entries));
   render();
 }
-function saveFilters(){
-  localStorage.setItem("filters", JSON.stringify(filters));
-}
-function saveRewardsSettings(){
-  localStorage.setItem("rewardsSettings", JSON.stringify(rewardsSettings));
-}
+function saveFilters(){ localStorage.setItem("filters", JSON.stringify(filters)); }
+function saveFiltersUI(){ localStorage.setItem("filtersUI", JSON.stringify(filtersUI)); }
+function saveRewardsSettings(){ localStorage.setItem("rewardsSettings", JSON.stringify(rewardsSettings)); }
 
 // ================= TOASTS =================
 function pushToast(toast){
   toastQueue.push(toast);
-  if(!toastTimer) {
-    toastTimer = setInterval(flushToast, 250);
-  }
+  if(!toastTimer) toastTimer = setInterval(flushToast, 250);
 }
 function flushToast(){
   if(!toastQueue.length){
@@ -155,8 +145,7 @@ function flushToast(){
     toastTimer = null;
     return;
   }
-  const t = toastQueue.shift();
-  showToast(t);
+  showToast(toastQueue.shift());
 }
 function showToast({ title, sub, mini, imgDataUrl, actionLabel, actionFn }){
   const wrap = safeEl("toasts");
@@ -180,15 +169,13 @@ function showToast({ title, sub, mini, imgDataUrl, actionLabel, actionFn }){
   `;
 
   if(actionLabel && typeof actionFn === "function"){
-    const btn = el.querySelector("button");
-    btn.addEventListener("click", ()=>{
+    el.querySelector("button").addEventListener("click", ()=>{
       actionFn();
       el.remove();
     });
   }
 
   wrap.appendChild(el);
-
   setTimeout(()=>{ el.remove(); }, 5500);
 }
 
@@ -203,12 +190,14 @@ const bammerModal = safeEl("bammerModal");
 const bammerBox = safeEl("bammerBox");
 const depositModal = safeEl("depositModal");
 const depositBox = safeEl("depositBox");
-const settingsModal = safeEl("settingsModal");
-const settingsBox = safeEl("settingsBox");
 const clientModal = safeEl("clientModal");
 const clientBox = safeEl("clientBox");
 const rewardsModal = safeEl("rewardsModal");
 const rewardsBox = safeEl("rewardsBox");
+const appointmentsModal = safeEl("appointmentsModal");
+const appointmentsBox = safeEl("appointmentsBox");
+const studioModal = safeEl("studioModal");
+const studioBox = safeEl("studioBox");
 
 function wireModal(modal, box, closer){
   if(!modal || !box) return;
@@ -220,9 +209,10 @@ wireModal(viewModal, viewBox, closeView);
 wireModal(exportModal, exportBox, closeExport);
 wireModal(bammerModal, bammerBox, closeBammerQuick);
 wireModal(depositModal, depositBox, closeDepositQuick);
-wireModal(settingsModal, settingsBox, closeSettings);
 wireModal(clientModal, clientBox, closeClient);
 wireModal(rewardsModal, rewardsBox, closeRewards);
+wireModal(appointmentsModal, appointmentsBox, closeAppointments);
+wireModal(studioModal, studioBox, closeStudio);
 
 // ================= LOGO =================
 function initLogo(){
@@ -262,15 +252,38 @@ function removeLogo(){
 initLogo();
 window.removeLogo = removeLogo;
 
-// ================= SPLIT SETTINGS =================
-function updateSplitPill(){
-  const pillPct = safeEl("splitPillPct");
-  if(pillPct) pillPct.textContent = `${clampPct(splitSettings.defaultPct)}%`;
+// ================= FILTER TOGGLE UI =================
+function toggleFilters(){
+  filtersUI.open = !filtersUI.open;
+  saveFiltersUI();
+  applyFiltersUIState();
 }
-updateSplitPill();
+function applyFiltersUIState(){
+  const content = safeEl("filtersContent");
+  const chev = safeEl("filtersChev");
+  if(content) content.style.display = filtersUI.open ? "block" : "none";
+  if(chev) chev.textContent = filtersUI.open ? "▴" : "▾";
+}
+window.toggleFilters = toggleFilters;
 
-function openSettings(){
-  if(!settingsModal) return;
+// Build a tiny summary string for the Filters header
+function updateFiltersSummary(){
+  const parts = [];
+  if(filters.q) parts.push(`Search: "${filters.q}"`);
+  if(filters.status && filters.status !== "all") parts.push(`Status: ${filters.status.toUpperCase()}`);
+  if(filters.location && filters.location !== "all") parts.push(`Loc: ${filters.location}`);
+  if(filters.from) parts.push(`From: ${filters.from}`);
+  if(filters.to) parts.push(`To: ${filters.to}`);
+  if(filters.sort && filters.sort !== "newest") parts.push(`Sort: ${filters.sort}`);
+
+  const s = safeEl("filtersSummary");
+  if(!s) return;
+  s.textContent = parts.length ? `• ${parts.join(" • ")}` : "• none";
+}
+
+// ================= STUDIO (Split + Rewards in one window) =================
+function openStudio(){
+  if(!studioModal) return;
 
   const def = safeEl("defaultSplitPct");
   if(def) def.value = String(clampPct(splitSettings.defaultPct));
@@ -283,27 +296,26 @@ function openSettings(){
       : "No monthly overrides yet.";
   }
 
-  settingsModal.style.display = "flex";
+  studioModal.style.display = "flex";
 }
-function closeSettings(){
-  if(!settingsModal) return;
-  settingsModal.style.display = "none";
+function closeStudio(){
+  if(!studioModal) return;
+  studioModal.style.display = "none";
 }
 function saveSplitSettings(){
   splitSettings.defaultPct = clampPct(safeVal("defaultSplitPct"));
   localStorage.setItem("splitSettings", JSON.stringify(splitSettings));
-  updateSplitPill();
-  closeSettings();
+  closeStudio();
   render();
 }
 function saveMonthOverride(){
-  const m = safeVal("overrideMonth"); // YYYY-MM
+  const m = safeVal("overrideMonth");
   const pct = clampPct(safeVal("overridePct"));
   if(!m){ alert("Pick a month."); return; }
   splitSettings.monthOverrides = splitSettings.monthOverrides || {};
   splitSettings.monthOverrides[m] = pct;
   localStorage.setItem("splitSettings", JSON.stringify(splitSettings));
-  openSettings();
+  openStudio();
   render();
 }
 function removeMonthOverride(){
@@ -312,12 +324,12 @@ function removeMonthOverride(){
   if(splitSettings.monthOverrides && splitSettings.monthOverrides[m] !== undefined){
     delete splitSettings.monthOverrides[m];
     localStorage.setItem("splitSettings", JSON.stringify(splitSettings));
-    openSettings();
+    openStudio();
     render();
   }
 }
-window.openSettings = openSettings;
-window.closeSettings = closeSettings;
+window.openStudio = openStudio;
+window.closeStudio = closeStudio;
 window.saveSplitSettings = saveSplitSettings;
 window.saveMonthOverride = saveMonthOverride;
 window.removeMonthOverride = removeMonthOverride;
@@ -325,12 +337,13 @@ window.removeMonthOverride = removeMonthOverride;
 // ================= BACKUP / RESTORE =================
 function downloadBackup(){
   const payload = {
-    version: 2,
+    version: 4,
     exportedAt: new Date().toISOString(),
     entries,
     payday,
     splitSettings,
     filters,
+    filtersUI,
     rewardsSettings
   };
 
@@ -344,14 +357,11 @@ function downloadBackup(){
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
-
 function restoreBackup(){
   const input = safeEl("restoreFile");
   const file = input && input.files ? input.files[0] : null;
   if(!file){ alert("Pick a backup JSON file first."); return; }
-
-  const ok = confirm("Restore backup? This will overwrite your current data.");
-  if(!ok) return;
+  if(!confirm("Restore backup? This will overwrite your current data.")) return;
 
   const reader = new FileReader();
   reader.onload = (e)=>{
@@ -366,18 +376,18 @@ function restoreBackup(){
         payday = data.payday;
         localStorage.setItem("payday", String(payday));
       }
-
       if(data.splitSettings && typeof data.splitSettings === "object"){
         splitSettings = data.splitSettings;
         localStorage.setItem("splitSettings", JSON.stringify(splitSettings));
-        updateSplitPill();
       }
-
       if(data.filters && typeof data.filters === "object"){
         filters = data.filters;
         saveFilters();
       }
-
+      if(data.filtersUI && typeof data.filtersUI === "object"){
+        filtersUI = data.filtersUI;
+        saveFiltersUI();
+      }
       if(data.rewardsSettings && typeof data.rewardsSettings === "object"){
         rewardsSettings = data.rewardsSettings;
         saveRewardsSettings();
@@ -385,7 +395,7 @@ function restoreBackup(){
 
       localStorage.setItem("entries", JSON.stringify(entries));
       alert("Backup restored ✅");
-      closeSettings();
+      closeStudio();
       render();
     }catch(err){
       alert("Couldn’t restore that file. Make sure it’s a real backup JSON.");
@@ -395,7 +405,6 @@ function restoreBackup(){
   };
   reader.readAsText(file);
 }
-
 window.downloadBackup = downloadBackup;
 window.restoreBackup = restoreBackup;
 
@@ -414,6 +423,9 @@ function hydrateFilterUI(){
   if(to) to.value = filters.to || "";
   if(sort) sort.value = filters.sort || "newest";
   if(loc) loc.value = filters.location || "all";
+
+  updateFiltersSummary();
+  applyFiltersUIState();
 }
 function applyFilters(){
   filters.q = (safeVal("q") || "").trim();
@@ -423,6 +435,7 @@ function applyFilters(){
   filters.to = safeVal("toDate") || "";
   filters.sort = safeVal("sortFilter") || "newest";
   saveFilters();
+  updateFiltersSummary();
   render();
 }
 function clearFilters(){
@@ -437,9 +450,7 @@ window.clearFilters = clearFilters;
 (function wireFilterKeys(){
   const q = safeEl("q");
   if(q){
-    q.addEventListener("keydown",(e)=>{
-      if(e.key === "Enter") applyFilters();
-    });
+    q.addEventListener("keydown",(e)=>{ if(e.key === "Enter") applyFilters(); });
   }
 })();
 
@@ -478,6 +489,107 @@ function getFilteredEntries(){
   return list;
 }
 
+// ================= APPOINTMENTS SCREEN =================
+function openAppointments(){
+  const modal = safeEl("appointmentsModal");
+  if(!modal) return;
+
+  const q = safeEl("apptQ");
+  const mode = safeEl("apptMode");
+  if(q) q.value = "";
+  if(mode) mode.value = "upcoming";
+
+  buildAppointmentsList();
+  modal.style.display = "flex";
+}
+function closeAppointments(){
+  const modal = safeEl("appointmentsModal");
+  if(!modal) return;
+  modal.style.display = "none";
+}
+function buildAppointmentsList(){
+  const listEl = safeEl("appointmentsList");
+  if(!listEl) return;
+
+  const q = normalize(safeVal("apptQ")).trim();
+  const mode = safeVal("apptMode") || "upcoming";
+
+  const today = new Date();
+  today.setHours(0,0,0,0);
+
+  let booked = entries
+    .filter(e => (e.status || "").toLowerCase() === "booked")
+    .filter(e => {
+      const d = parseLocalDate(e.date);
+      if(!d) return false;
+      if(mode === "upcoming" && d < today) return false;
+      return true;
+    });
+
+  if(q){
+    booked = booked.filter(e=>{
+      const hay = [e.client, e.description, e.location].map(normalize).join(" | ");
+      return hay.includes(q);
+    });
+  }
+
+  booked.sort((a,b)=>{
+    const da = parseLocalDate(a.date) || new Date(0);
+    const db = parseLocalDate(b.date) || new Date(0);
+    if(da.getTime() !== db.getTime()) return da - db;
+    return (a.id||0) - (b.id||0);
+  });
+
+  if(!booked.length){
+    listEl.innerHTML = `<div class="summary-box"><div style="opacity:.75;">No booked appointments found.</div></div>`;
+    return;
+  }
+
+  listEl.innerHTML = booked.map(e=>{
+    const dep = depositAmount(e);
+    const depLine = dep > 0
+      ? `<span class="pill gold">Deposit: <b style="color:var(--gold)">${money(dep)}</b></span>`
+      : `<span class="pill blue">No deposit set</span>`;
+    const row2 = [e.location, e.description].filter(Boolean).join(" • ");
+    const badge = badgeHtmlForClient(e.client);
+
+    return `
+      <div class="appt-card" onclick="openBookedFromAppointments(${e.id})">
+        <div class="appt-top">
+          <div class="appt-name">
+            <span class="client-link" onclick="event.stopPropagation(); openClientProfile(${JSON.stringify(e.client)})">${e.client}</span>
+            ${badge || ``}
+            <span class="pill blue">BOOKED</span>
+          </div>
+          <div class="appt-date">${e.date}</div>
+        </div>
+        <div class="appt-sub">
+          <div>${depLine}</div>
+          ${row2 ? `<div style="opacity:.92;">${row2}</div>` : ``}
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+function openBookedFromAppointments(id){
+  closeAppointments();
+  viewEntry(id);
+}
+(function wireAppointmentsInputs(){
+  const q = safeEl("apptQ");
+  const mode = safeEl("apptMode");
+  if(q){
+    q.addEventListener("input", ()=> buildAppointmentsList());
+    q.addEventListener("keydown",(e)=>{ if(e.key==="Enter") buildAppointmentsList(); });
+  }
+  if(mode){
+    mode.addEventListener("change", ()=> buildAppointmentsList());
+  }
+})();
+window.openAppointments = openAppointments;
+window.closeAppointments = closeAppointments;
+window.openBookedFromAppointments = openBookedFromAppointments;
+
 // ================= PAYDAY WINDOW + EXPORT =================
 function getWeekWindowFromDate(anchorDate){
   const now = new Date(anchorDate);
@@ -494,7 +606,6 @@ function getWeekWindowFromDate(anchorDate){
 
   return { start, end };
 }
-function getWeekWindow(now){ return getWeekWindowFromDate(now); }
 
 function openExport(){
   if(!exportModal) return;
@@ -511,7 +622,7 @@ function openExport(){
   if(exportStart) exportStart.value = formatYYYYMMDD(start);
   if(exportEnd) exportEnd.value = formatYYYYMMDD(end);
 
-  const w = getWeekWindow(now);
+  const w = getWeekWindowFromDate(now);
   payPeriodAnchor = new Date(w.start);
   updatePayPeriodUI();
 
@@ -524,7 +635,6 @@ function closeExport(){
   if(!exportModal) return;
   exportModal.style.display = "none";
 }
-
 (function initPaydaySelect(){
   const paydaySelect = safeEl("paydaySelect");
   if(!paydaySelect) return;
@@ -542,7 +652,6 @@ function closeExport(){
     render();
   });
 })();
-
 function updatePayPeriodUI(){
   const ppStart = safeEl("ppStart");
   const ppEnd = safeEl("ppEnd");
@@ -587,7 +696,6 @@ function openForm(){
   const statusEl = safeEl("status");
   if(statusEl) statusEl.value = "unpaid";
 
-  // Apply prefill if set (repeat client)
   if(prefillClient){
     const c = safeEl("client"); if(c) c.value = prefillClient.client || "";
     const ct = safeEl("contact"); if(ct) ct.value = prefillClient.contact || "";
@@ -595,7 +703,6 @@ function openForm(){
     prefillClient = null;
   }
 }
-
 function resetForm(){
   const modal = safeEl("formModal");
   if(!modal) return;
@@ -707,7 +814,6 @@ function saveDepositOnly(){
   if(!date || !client){ alert("Date + Client required."); return; }
   if(!(dep > 0)){ alert("Deposit amount must be > 0."); return; }
 
-  // Deposit-only does NOT affect badge/discount count, so no progress toasts here.
   const total = Number(safeVal("dTotal") || 0);
 
   entries.push({
@@ -807,7 +913,7 @@ function fillFormForEdit(entry){
   });
 }
 
-// ================= CLIENT REWARDS (badge + discount) =================
+// ================= CLIENT REWARDS =================
 function clientKey(name){ return normalize(String(name||"")).trim(); }
 
 function getClientEntries(name){
@@ -817,12 +923,9 @@ function getClientEntries(name){
     .slice()
     .sort((a,b)=> b.id - a.id);
 }
-
 function getClientTattooCount(name){
-  const list = getClientEntries(name);
-  return list.filter(isTattooEntry).length;
+  return getClientEntries(name).filter(isTattooEntry).length;
 }
-
 function getBestLevelForCount(count){
   const levels = Array.isArray(rewardsSettings.levels) ? rewardsSettings.levels : [];
   const sorted = levels
@@ -835,7 +938,6 @@ function getBestLevelForCount(count){
   }
   return best;
 }
-
 function getBestDiscountForCount(count){
   const tiers = Array.isArray(rewardsSettings.discounts) ? rewardsSettings.discounts : [];
   const sorted = tiers
@@ -848,11 +950,9 @@ function getBestDiscountForCount(count){
   }
   return best;
 }
-
 function getClientNetTotal(name){
   return getClientEntries(name).reduce((sum,e)=> sum + totalForTotalsNet(e), 0);
 }
-
 function getClientProgressSnapshot(name){
   const cnt = getClientTattooCount(name);
   const level = getBestLevelForCount(cnt);
@@ -867,35 +967,39 @@ function getClientProgressSnapshot(name){
     discountPct: disc ? Number(disc.percent||0) : 0
   };
 }
-
 function maybeNotifyClientProgress(name, before, after){
   if(!before || !after) return;
 
-  const net = money(getClientNetTotal(name));
+  const total = money(getClientNetTotal(name));
 
-  // Badge upgrade
   if(before.levelId !== after.levelId && after.levelId){
     pushToast({
-      title: `New Badge Unlocked — ${after.levelName}`,
+      title: `New Badge — ${after.levelName}`,
       sub: `${name} hit ${after.tattooCount} tattoos.`,
-      mini: `Client NET total: ${net}`,
+      mini: `Total: ${total}`,
       imgDataUrl: after.levelPng || "",
       actionLabel: "View Client",
       actionFn: ()=> openClientProfile(name)
     });
   }
 
-  // Discount upgrade
   if(before.discountId !== after.discountId && after.discountId){
     pushToast({
-      title: `Discount Tier Unlocked`,
-      sub: `${name} is now eligible: ${after.discountLabel} (${after.discountPct}% off)`,
-      mini: `Client NET total: ${net}`,
+      title: `Discount Unlocked`,
+      sub: `${name}: ${after.discountLabel} (${after.discountPct}% off)`,
+      mini: `Total: ${total}`,
       imgDataUrl: after.levelPng || "",
       actionLabel: "View Client",
       actionFn: ()=> openClientProfile(name)
     });
   }
+}
+
+function badgeHtmlForClient(name){
+  const snap = getClientProgressSnapshot(name);
+  if(!snap.levelId) return "";
+  const img = snap.levelPng ? `<img src="${snap.levelPng}" alt="badge">` : "";
+  return `<span class="client-badge" title="Badge level">${img}${snap.levelName} (${snap.tattooCount})</span>`;
 }
 
 // ================= SAVE ENTRY (ADD/EDIT) =================
@@ -912,13 +1016,10 @@ function saveEntry(){
   const payments = [];
 
   const depositVal = Number(safeVal("deposit") || 0);
-  if(depositVal > 0){
-    payments.push({ amount: depositVal, kind: "deposit" });
-  }
+  if(depositVal > 0) payments.push({ amount: depositVal, kind: "deposit" });
 
   const sessionAmounts = document.querySelectorAll(".session-amount");
   const sessionNotes = document.querySelectorAll(".session-note");
-
   sessionAmounts.forEach((input, i)=>{
     const val = Number(input.value || 0);
     if(val > 0){
@@ -965,7 +1066,6 @@ function saveEntry(){
       save();
       closeForm();
 
-      // Progress notifications (only if tattoo count potentially changed)
       const after = getClientProgressSnapshot(clientVal);
       maybeNotifyClientProgress(clientVal, before, after);
     } else {
@@ -1003,28 +1103,17 @@ function guessLatestField(list, field){
   return "";
 }
 
-function badgeHtmlForClient(name){
-  const snap = getClientProgressSnapshot(name);
-  if(!snap.levelId) return "";
-  const img = snap.levelPng ? `<img src="${snap.levelPng}" alt="badge">` : "";
-  return `<span class="client-badge" title="Badge level">${img}${snap.levelName} (${snap.tattooCount})</span>`;
-}
-
 function openClientProfile(name){
   if(!clientModal || !clientBox) return;
   const list = getClientEntries(name);
-  if(!list.length){
-    alert("No entries found for that client.");
-    return;
-  }
+  if(!list.length){ alert("No entries found for that client."); return; }
 
   const displayName = list[0].client;
 
-  let net = 0, gross = 0;
-  const statusCounts = { paid:0, partial:0, unpaid:0, no_show:0, booked:0 };
+  let total = 0;
+  const statusCounts = { booked:0, paid:0, partial:0, unpaid:0, no_show:0 };
   list.forEach(e=>{
-    gross += totalForTotalsGross(e);
-    net += totalForTotalsNet(e);
+    total += totalForTotalsNet(e);
     const s = (e.status || "unpaid").toLowerCase();
     if(statusCounts[s] !== undefined) statusCounts[s]++;
   });
@@ -1038,26 +1127,23 @@ function openClientProfile(name){
     ? `<div>Discount: <strong>${snap.discountLabel}</strong> (${snap.discountPct}% off)</div>`
     : `<div style="opacity:.75;">Discount: —</div>`;
 
+  const badge = badgeHtmlForClient(displayName);
+
   clientBox.innerHTML = `
     <div class="modal-title">Client — ${displayName}</div>
 
     <div class="summary-box" style="margin-top:0;">
       <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between;">
-        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-          ${badgeHtmlForClient(displayName) || `<span class="hint">No badge yet</span>`}
-        </div>
+        <div>${badge || `<span class="hint">No badge yet</span>`}</div>
         <div class="hint">Tattoo count: <b style="color:var(--gold)">${snap.tattooCount}</b></div>
       </div>
-      <div style="margin-top:10px;">
-        ${discountLine}
-      </div>
+      <div style="margin-top:10px;">${discountLine}</div>
     </div>
 
     <div class="summary-grid">
       <div class="summary-box">
         <div style="font-weight:900;color:var(--gold);">Totals</div>
-        <div>NET: <strong>${money(net)}</strong></div>
-        <div>Gross: <strong>${money(gross)}</strong></div>
+        <div>Total: <strong>${money(total)}</strong></div>
         <div>Entries: <strong>${list.length}</strong></div>
         <div>Last: <strong>${lastDate}</strong></div>
       </div>
@@ -1105,36 +1191,14 @@ function openClientProfile(name){
     </div>
   `;
 
-  // stash prefill target so buttons can use it
   prefillClient = { client: displayName, contact, social };
-
   clientModal.style.display = "flex";
 }
-
-function closeClient(){
-  if(!clientModal) return;
-  clientModal.style.display = "none";
-}
-function openEntryFromClient(id){
-  closeClient();
-  viewEntry(id);
-}
-
-function repeatClientFull(){
-  if(!prefillClient) return;
-  closeClient();
-  openForm();
-}
-function repeatClientBammer(){
-  if(!prefillClient) return;
-  closeClient();
-  openBammerQuick();
-}
-function repeatClientDeposit(){
-  if(!prefillClient) return;
-  closeClient();
-  openDepositQuick();
-}
+function closeClient(){ if(!clientModal) return; clientModal.style.display = "none"; }
+function openEntryFromClient(id){ closeClient(); viewEntry(id); }
+function repeatClientFull(){ if(!prefillClient) return; closeClient(); openForm(); }
+function repeatClientBammer(){ if(!prefillClient) return; closeClient(); openBammerQuick(); }
+function repeatClientDeposit(){ if(!prefillClient) return; closeClient(); openDepositQuick(); }
 
 window.openClientProfile = openClientProfile;
 window.closeClient = closeClient;
@@ -1157,10 +1221,6 @@ function viewEntry(id){
   const showPaymentsSection = hasAnyPayments(entry);
   const showDepositLine = dep > 0;
   const showConvert = isDepositOnlyEntry(entry);
-
-  const grossCounts = totalForTotalsGross(entry);
-  const pct = getSplitPctForDate(entry.date);
-  const netCounts = totalForTotalsNet(entry);
 
   let historyHtml = "<p style='opacity:.7;'>No edits yet.</p>";
   if(Array.isArray(entry.editHistory) && entry.editHistory.length){
@@ -1220,9 +1280,6 @@ function viewEntry(id){
         <div style="margin-top:10px;">
           <p><strong>Paid So Far:</strong> ${money(paidSoFar)}</p>
           ${Number(entry.total||0) > 0 ? `<p><strong>Remaining:</strong> ${money(remaining)}</p>` : ``}
-          <p><strong>Gross counted:</strong> ${money(grossCounts)}</p>
-          <p><strong>Split for month:</strong> ${pct}%</p>
-          <p><strong>Net counted:</strong> ${money(netCounts)}</p>
         </div>
       </details>
     ` : ``}
@@ -1244,7 +1301,6 @@ function viewEntry(id){
 
   if(viewModal) viewModal.style.display = "flex";
 }
-
 function convertDepositToTattoo(){
   if(!viewingId) return;
   const entry = entries.find(e=>e.id===viewingId);
@@ -1256,12 +1312,7 @@ function convertDepositToTattoo(){
   const statusEl = safeEl("status");
   if(statusEl && (!statusEl.value || statusEl.value === "unpaid" || statusEl.value === "booked")) statusEl.value = "partial";
 }
-
-function closeView(){
-  if(!viewModal) return;
-  viewModal.style.display="none";
-  viewingId = null;
-}
+function closeView(){ if(!viewModal) return; viewModal.style.display="none"; viewingId = null; }
 function editFromView(){
   if(!viewingId) return;
   const entry = entries.find(e=>e.id===viewingId);
@@ -1274,21 +1325,19 @@ function deleteFromView(){
   const entry = entries.find(e=>e.id===viewingId);
   if(!entry) return;
 
-  const ok = confirm(`Delete entry for ${entry.client} on ${entry.date}?`);
-  if(!ok) return;
+  if(!confirm(`Delete entry for ${entry.client} on ${entry.date}?`)) return;
 
   entries = entries.filter(e=>e.id!==viewingId);
   save();
   closeView();
 }
-
 window.viewEntry = viewEntry;
 window.closeView = closeView;
 window.editFromView = editFromView;
 window.deleteFromView = deleteFromView;
 window.convertDepositToTattoo = convertDepositToTattoo;
 
-// ================= STATS (NET) =================
+// ================= STATS (labels no (NET)) =================
 function updateStats(filteredList){
   const todayEl = safeEl("todayTotal");
   const weekEl = safeEl("weekTotal");
@@ -1299,7 +1348,7 @@ function updateStats(filteredList){
 
   const now = new Date();
   const todayStr = now.toISOString().split("T")[0];
-  const weekWin = getWeekWindow(now);
+  const weekWin = getWeekWindowFromDate(now);
   const qNow = currentQuarterIndex(now);
 
   let today=0, week=0, month=0, quarter=0, year=0;
@@ -1308,21 +1357,21 @@ function updateStats(filteredList){
     const d = parseLocalDate(entry.date);
     if(!d) return;
 
-    const amtNet = totalForTotalsNet(entry);
+    const amt = totalForTotalsNet(entry);
 
-    if(entry.date === todayStr) today += amtNet;
+    if(entry.date === todayStr) today += amt;
 
     if(d.getFullYear() === now.getFullYear()){
-      year += amtNet;
-      if(currentQuarterIndex(d) === qNow) quarter += amtNet;
+      year += amt;
+      if(currentQuarterIndex(d) === qNow) quarter += amt;
     }
 
     if(d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()){
-      month += amtNet;
+      month += amt;
     }
 
     if(d >= weekWin.start && d <= weekWin.end){
-      week += amtNet;
+      week += amt;
     }
   });
 
@@ -1333,7 +1382,7 @@ function updateStats(filteredList){
   if(yearEl) yearEl.innerText = money(year);
 }
 
-// ================= CSV EXPORT (NET columns) =================
+// ================= CSV EXPORT + SUMMARY + REWARDS UI =================
 function csvEscape(v){
   const s = String(v ?? "");
   if (/[",\n]/.test(s)) return `"${s.replace(/"/g,'""')}"`;
@@ -1352,7 +1401,6 @@ function downloadCSV(rows, filename){
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
-
 function exportCSV(){
   const startStr = safeVal("exportStart");
   const endStr = safeVal("exportEnd");
@@ -1378,7 +1426,7 @@ function exportRangeCSV(start, end, filename){
   rows.push([
     "date","client","contact","social","description","location",
     "total_price","paid_so_far","deposit",
-    "gross_counted","split_pct","net_counted",
+    "split_pct","counted",
     "remaining","status","notes"
   ]);
 
@@ -1392,9 +1440,8 @@ function exportRangeCSV(start, end, filename){
     const total = Number(e.total || 0);
     const remaining = total - paidSoFar;
 
-    const gross = totalForTotalsGross(e);
     const pct = getSplitPctForDate(e.date);
-    const net = totalForTotalsNet(e);
+    const counted = totalForTotalsNet(e);
 
     rows.push([
       e.date,
@@ -1406,9 +1453,8 @@ function exportRangeCSV(start, end, filename){
       total,
       paidSoFar,
       dep,
-      gross,
       pct,
-      net,
+      counted,
       remaining,
       e.status || "",
       e.notes || ""
@@ -1420,7 +1466,6 @@ function exportRangeCSV(start, end, filename){
 window.exportCSV = exportCSV;
 window.exportPayPeriodCSV = exportPayPeriodCSV;
 
-// ================= EXPORT SUMMARY (NET) =================
 function buildSummary(mode){
   let start = null;
   let end = null;
@@ -1448,8 +1493,7 @@ function buildSummary(mode){
   });
 
   const totalCount = filtered.length;
-  let netTotal = 0;
-  let grossTotal = 0;
+  let totalCounted = 0;
 
   const statusCounts = { booked:0, paid:0, partial:0, unpaid:0, no_show:0 };
   const clientTotals = {};
@@ -1459,16 +1503,14 @@ function buildSummary(mode){
     const s = (e.status || "unpaid").toLowerCase();
     if(statusCounts[s] !== undefined) statusCounts[s]++;
 
-    const gross = totalForTotalsGross(e);
-    const net = totalForTotalsNet(e);
-    grossTotal += gross;
-    netTotal += net;
+    const counted = totalForTotalsNet(e);
+    totalCounted += counted;
 
     const c = (e.client || "Unknown").trim() || "Unknown";
-    clientTotals[c] = (clientTotals[c] || 0) + net;
+    clientTotals[c] = (clientTotals[c] || 0) + counted;
 
     const loc = (e.location || "Unknown").trim() || "Unknown";
-    locationTotals[loc] = (locationTotals[loc] || 0) + net;
+    locationTotals[loc] = (locationTotals[loc] || 0) + counted;
   });
 
   function topN(obj, n){
@@ -1488,8 +1530,7 @@ function buildSummary(mode){
       <div class="summary-box">
         <div style="font-weight:900;">Totals</div>
         <div>Entries: <strong>${totalCount}</strong></div>
-        <div>Gross: <strong>${money(grossTotal)}</strong></div>
-        <div>Net (after split): <strong>${money(netTotal)}</strong></div>
+        <div>Total: <strong>${money(totalCounted)}</strong></div>
       </div>
 
       <div class="summary-box">
@@ -1504,12 +1545,12 @@ function buildSummary(mode){
 
     <div class="summary-grid" style="margin-top:10px;">
       <div class="summary-box">
-        <div style="font-weight:900;">Top Clients (NET)</div>
+        <div style="font-weight:900;">Top Clients</div>
         ${topClients.length ? `<ol style="margin:8px 0 0 18px;">${topClients.map(([k,v])=>`<li>${k}: <strong>${money(v)}</strong></li>`).join("")}</ol>` : "<div style='opacity:.75;'>None</div>"}
       </div>
 
       <div class="summary-box">
-        <div style="font-weight:900;">Top Locations (NET)</div>
+        <div style="font-weight:900;">Top Locations</div>
         ${topLocs.length ? `<ol style="margin:8px 0 0 18px;">${topLocs.map(([k,v])=>`<li>${k}: <strong>${money(v)}</strong></li>`).join("")}</ol>` : "<div style='opacity:.75;'>None</div>"}
       </div>
     </div>
@@ -1517,16 +1558,9 @@ function buildSummary(mode){
 }
 window.buildSummary = buildSummary;
 
-// ================= REWARDS UI =================
-function openRewards(){
-  if(!rewardsModal) return;
-  buildRewardsUI();
-  rewardsModal.style.display = "flex";
-}
-function closeRewards(){
-  if(!rewardsModal) return;
-  rewardsModal.style.display = "none";
-}
+// Rewards modal (same behavior)
+function openRewards(){ if(!rewardsModal) return; buildRewardsUI(); rewardsModal.style.display="flex"; }
+function closeRewards(){ if(!rewardsModal) return; rewardsModal.style.display="none"; }
 window.openRewards = openRewards;
 window.closeRewards = closeRewards;
 
@@ -1590,7 +1624,7 @@ function removeBadgeLevel(id){
 }
 function clearBadgePNG(id){
   const lvl = (rewardsSettings.levels || []).find(l=>l.id===id);
-  if(lvl){ lvl.pngDataUrl = ""; }
+  if(lvl) lvl.pngDataUrl = "";
   buildRewardsUI();
 }
 window.addBadgeLevel = addBadgeLevel;
@@ -1610,11 +1644,9 @@ window.addDiscountTier = addDiscountTier;
 window.removeDiscountTier = removeDiscountTier;
 
 function saveRewards(){
-  // Pull edits from inputs + read any badge PNG files
   const levels = Array.isArray(rewardsSettings.levels) ? rewardsSettings.levels : [];
   const discounts = Array.isArray(rewardsSettings.discounts) ? rewardsSettings.discounts : [];
 
-  // Update text/number fields first
   levels.forEach(l=>{
     const nameEl = safeEl(`lvlName_${l.id}`);
     const minEl = safeEl(`lvlMin_${l.id}`);
@@ -1631,7 +1663,6 @@ function saveRewards(){
     if(pctEl) d.percent = Math.max(0, Math.min(100, Number(pctEl.value || 0)));
   });
 
-  // Now load PNG files (async) then save
   const fileReads = levels.map(l=>{
     const fileEl = safeEl(`lvlFile_${l.id}`);
     const file = fileEl && fileEl.files ? fileEl.files[0] : null;
@@ -1644,11 +1675,10 @@ function saveRewards(){
   });
 
   Promise.all(fileReads).then(()=>{
-    // Clean ordering: sort by minCount ascending
     rewardsSettings.levels = (rewardsSettings.levels || []).slice().sort((a,b)=> Number(a.minCount||0) - Number(b.minCount||0));
     rewardsSettings.discounts = (rewardsSettings.discounts || []).slice().sort((a,b)=> Number(a.minCount||0) - Number(b.minCount||0));
     saveRewardsSettings();
-    pushToast({ title:"Rewards saved", sub:"Badges + discounts will auto-update as you log entries." });
+    pushToast({ title:"Rewards saved", sub:"Badges + discounts auto-update as you log entries." });
     closeRewards();
     render();
   });
@@ -1743,27 +1773,27 @@ function render(){
   });
 
   Object.keys(grouped).sort((a,b)=>Number(b)-Number(a)).forEach(year=>{
-    const yearAmtNet = Object.values(grouped[year])
+    const yearAmt = Object.values(grouped[year])
       .flatMap(mo=>Object.values(mo).flat())
       .reduce((sum,e)=>sum + totalForTotalsNet(e), 0);
 
-    const yearAcc = createAccordion(String(year), money(yearAmtNet));
+    const yearAcc = createAccordion(String(year), money(yearAmt));
     container.appendChild(yearAcc.wrap);
 
     Object.keys(grouped[year]).sort((a,b)=>Number(b)-Number(a)).forEach(monthIdx=>{
-      const monthAmtNet = Object.values(grouped[year][monthIdx])
+      const monthAmt = Object.values(grouped[year][monthIdx])
         .flat()
         .reduce((sum,e)=>sum + totalForTotalsNet(e), 0);
 
-      const monthAcc = createAccordion(monthName(Number(year), Number(monthIdx)), money(monthAmtNet));
+      const monthAcc = createAccordion(monthName(Number(year), Number(monthIdx)), money(monthAmt));
       yearAcc.content.appendChild(monthAcc.wrap);
 
       Object.keys(grouped[year][monthIdx]).sort((a,b)=>Number(b)-Number(a)).forEach(dayNum=>{
         const dayEntries = grouped[year][monthIdx][dayNum];
-        const dayAmtNet = dayEntries.reduce((sum,e)=>sum + totalForTotalsNet(e), 0);
+        const dayAmt = dayEntries.reduce((sum,e)=>sum + totalForTotalsNet(e), 0);
 
         const dateLabel = `${year}-${pad2(Number(monthIdx)+1)}-${pad2(dayNum)}`;
-        const dayAcc = createAccordion(dateLabel, money(dayAmtNet));
+        const dayAcc = createAccordion(dateLabel, money(dayAmt));
         monthAcc.content.appendChild(dayAcc.wrap);
 
         dayEntries.forEach(entry=>{
@@ -1790,13 +1820,11 @@ function render(){
             <div class="status ${entry.status}">${entry.status}</div>
           `;
 
-          // Click client name -> profile
           row.querySelector(".client-link").addEventListener("click",(ev)=>{
             ev.stopPropagation();
             openClientProfile(entry.client);
           });
 
-          // Click card -> entry view
           row.addEventListener("click", ()=>viewEntry(entry.id));
 
           dayAcc.content.appendChild(row);
@@ -1806,6 +1834,10 @@ function render(){
   });
 
   updateStats(list);
+
+  if(appointmentsModal && appointmentsModal.style.display === "flex"){
+    buildAppointmentsList();
+  }
 }
 
 // ================= INIT =================
