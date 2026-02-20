@@ -1,19 +1,11 @@
 /* =========================================================
    Globber’s Ink Log — app.js
-   VERSION: 2026-02-20-3
-   FIXED:
-   - FABs fire ONCE per tap (pointerdown + debounce)
-   - Blocks the HTML onclick/click so it can’t double-trigger
-   - FAB actions open REAL modals again (Add / Deposit / Bammer)
-   Includes:
-   - Grouped render (Year > Month > Day)
-   - Filters toggle dropdown
-   - Add/Edit/View/Delete
-   - Deposit-only quick add
-   - Bammer quick add
-   - Appointments modal (BOOKED upcoming)
-   - Studio modal (Split % + Discount Builder)
-   - Toast cards (10s) that never block taps
+   VERSION: 2026-02-20-4
+   FIX:
+   - "+" (FAB) guaranteed to open Add modal
+   - No global click-blocking. Only FAB events are stopped.
+   - Direct button listeners + mobile fallback (pointerdown + touchstart)
+   - Debounce guard to prevent ghost double fires
    ========================================================= */
 
 const LS = {
@@ -1109,11 +1101,10 @@ function openExport() {
 }
 function closeExport(){ hideModal("exportModal"); }
 
-/* ===================== FAB: SINGLE-TAP + BLOCK ONCLICK ===================== */
+/* ===================== FAB FIX (DIRECT, NO BS) ===================== */
 function hardenFabClickability() {
-  ["fabAdd","fabDeposit","fabBammer"].forEach(id => {
-    const el = $(id);
-    if (!el) return;
+  const btns = Array.from(document.querySelectorAll("#fabAdd,#fabDeposit,#fabBammer,.fab.main,.fab.small"));
+  btns.forEach(el => {
     el.style.zIndex = "999999";
     el.style.pointerEvents = "auto";
     el.querySelectorAll("*").forEach(ch => (ch.style.pointerEvents = "none"));
@@ -1121,64 +1112,57 @@ function hardenFabClickability() {
   ensureToastPointerEvents();
 }
 
-function detectFabAction(target) {
-  const el =
-    target?.closest?.("#fabAdd, #fabDeposit, #fabBammer") ||
-    target?.closest?.(".fab.main, .fab.small");
-
-  if (!el) return null;
-
-  if (el.id === "fabDeposit") return "deposit";
-  if (el.id === "fabBammer") return "bammer";
-  if (el.id === "fabAdd" || el.classList.contains("main")) return "add";
-
-  if (el.classList.contains("small")) {
-    const smalls = Array.from(document.querySelectorAll(".fab.small"));
-    const idx = smalls.indexOf(el);
-    return idx === 0 ? "deposit" : "bammer";
-  }
-  return null;
-}
-
-function runFabAction(action) {
-  if (action === "add") openForm(null);
-  if (action === "deposit") openDepositQuick();
-  if (action === "bammer") openBammerQuick();
-}
-
+// single-fire guard
 let lastFabAt = 0;
+function guardFabFire() {
+  const now = Date.now();
+  if (now - lastFabAt < 350) return false;
+  lastFabAt = now;
+  return true;
+}
+
+function bindFab(el, actionFn) {
+  if (!el) return;
+
+  const fire = (e) => {
+    if (!guardFabFire()) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+    actionFn();
+  };
+
+  // pointerdown first (best)
+  el.addEventListener("pointerdown", fire, { capture: true });
+
+  // mobile safari fallback (some builds still act weird)
+  el.addEventListener("touchstart", fire, { capture: true, passive: false });
+
+  // kill click so inline onclick can’t do weird extra stuff
+  el.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+  }, { capture: true });
+}
 
 function installFabFix() {
-  // 1) REAL action on pointerdown (single fire)
-  document.addEventListener("pointerdown", (e) => {
-    const action = detectFabAction(e.target);
-    if (!action) return;
+  // Primary (IDs)
+  bindFab($("fabAdd"), () => openForm(null));
+  bindFab($("fabDeposit"), openDepositQuick);
+  bindFab($("fabBammer"), openBammerQuick);
 
-    const now = Date.now();
-    if (now - lastFabAt < 350) return; // duplicate/ghost guard
-    lastFabAt = now;
+  // Fallback (if a different build is live)
+  const main = document.querySelector(".fab.main");
+  const smalls = Array.from(document.querySelectorAll(".fab.small"));
 
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-
-    runFabAction(action);
-  }, true);
-
-  // 2) BLOCK the click phase so the HTML onclick doesn’t also fire
-  document.addEventListener("click", (e) => {
-    const action = detectFabAction(e.target);
-    if (!action) return;
-
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-  }, true);
+  if (main && main.id !== "fabAdd") bindFab(main, () => openForm(null));
+  if (smalls[0] && smalls[0].id !== "fabDeposit") bindFab(smalls[0], openDepositQuick);
+  if (smalls[1] && smalls[1].id !== "fabBammer") bindFab(smalls[1], openBammerQuick);
 }
 
 /* ===================== INIT ===================== */
 function init() {
-  // modal click-off close
   wireModalClickOff("formModal","formBox",closeForm);
   wireModalClickOff("viewModal","viewBox",closeView);
   wireModalClickOff("exportModal","exportBox",closeExport);
