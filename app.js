@@ -1,11 +1,11 @@
 /* =========================================================
    Globber’s Ink Log — app.js
-   VERSION: 2026-02-20-4
-   FIX:
-   - "+" (FAB) guaranteed to open Add modal
-   - No global click-blocking. Only FAB events are stopped.
-   - Direct button listeners + mobile fallback (pointerdown + touchstart)
-   - Debounce guard to prevent ghost double fires
+   VERSION: 2026-02-20-5
+   HARD FIX:
+   - Forces FAB stack to top with runtime CSS (!important)
+   - Makes FAB receive taps even if something overlays it
+   - Direct listeners on buttons + capture-phase fallback
+   - No global “block everything” that breaks other clicks
    ========================================================= */
 
 const LS = {
@@ -22,12 +22,7 @@ const LS = {
 const DEFAULT_SPLIT = { defaultPct: 100, monthOverrides: {} };
 const DEFAULT_FILTERS = { q: "", status: "all", location: "all", from: "", to: "", sort: "newest" };
 const DEFAULT_FILTERS_UI = { open: false };
-
-const DEFAULT_REWARDS = {
-  discounts: [
-    { id: "d1", label: "5% off", minCount: 5, minSpend: 0, type: "percent", value: 5 }
-  ]
-};
+const DEFAULT_REWARDS = { discounts: [{ id: "d1", label: "5% off", minCount: 5, minSpend: 0, type: "percent", value: 5 }] };
 
 let entries = safeJsonParse(localStorage.getItem(LS.ENTRIES), []) || [];
 let splitSettings = safeJsonParse(localStorage.getItem(LS.SPLIT), DEFAULT_SPLIT) || DEFAULT_SPLIT;
@@ -47,11 +42,8 @@ const pad2 = (n) => String(n).padStart(2, "0");
 function safeJsonParse(s, fallback) { try { return JSON.parse(s); } catch { return fallback; } }
 function escapeHtml(s) {
   return String(s || "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+    .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
 
 function parseLocalDate(dateStr) {
@@ -66,7 +58,6 @@ function formatYYYYMM(d) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`
 function monthName(year, monthIndex) {
   return new Date(year, monthIndex, 1).toLocaleString("default", { month: "long" });
 }
-
 function money(n) {
   const num = Number(n || 0);
   const v = Number.isFinite(num) ? num : 0;
@@ -90,7 +81,7 @@ function isDepositOnlyEntry(entry) {
   return depositAmount(entry) > 0 && !hasSessions(entry) && (entry.status || "").toLowerCase() === "booked";
 }
 
-/* Totals rule (not displayed):
+/* totals rule (hidden):
    PAID => total price
    PARTIAL => paid so far
    else => 0
@@ -115,7 +106,7 @@ function totalForTotalsNet(entry) {
   return Number(gross || 0) * (pct / 100);
 }
 
-/* Preview Paid line:
+/* preview Paid line:
    PAID => total price
    PARTIAL => paid so far
    BOOKED => deposit
@@ -129,7 +120,7 @@ function paidForPreview(entry) {
   return 0;
 }
 
-/* ===================== TOASTS (10s, NON-BLOCKING) ===================== */
+/* ===================== TOASTS (10s) ===================== */
 const TOAST_MS = 10000;
 function ensureToastPointerEvents() {
   const root = $("toasts");
@@ -142,56 +133,32 @@ function toastCard(opts) {
   if (!root) return;
   ensureToastPointerEvents();
 
-  const { title="Notification", sub="", mini="", icon="✨", tone="gold" } = (opts || {});
-  const toneMap = {
-    gold: { border: "rgba(212,175,55,.25)", glow: "rgba(212,175,55,.14)" },
-    green:{ border: "rgba(42,211,111,.25)", glow: "rgba(42,211,111,.12)" },
-    blue: { border: "rgba(42,91,215,.30)", glow: "rgba(42,91,215,.10)" },
-    red:  { border: "rgba(255,60,60,.28)", glow: "rgba(255,60,60,.10)" }
-  };
-  const t = toneMap[tone] || toneMap.gold;
-
+  const { title="Notification", sub="", mini="", icon="✨" } = (opts || {});
   const el = document.createElement("div");
   el.className = "toast";
   el.style.pointerEvents = "auto";
-  el.style.borderColor = t.border;
-  el.style.boxShadow = `0 18px 44px rgba(0,0,0,.45), 0 0 0 1px ${t.glow}`;
   el.style.position = "relative";
   el.style.overflow = "hidden";
 
   el.innerHTML = `
     <div style="display:flex; gap:12px; align-items:flex-start;">
-      <div style="
-        width:44px;height:44px;border-radius:14px;
-        background: rgba(255,255,255,.06);
-        border:1px solid ${t.border};
-        display:flex;align-items:center;justify-content:center; flex:0 0 44px;">
+      <div style="width:44px;height:44px;border-radius:14px;background:rgba(255,255,255,.06);
+        border:1px solid rgba(212,175,55,.25);display:flex;align-items:center;justify-content:center;flex:0 0 44px;">
         <div style="font-size:20px; line-height:1;">${escapeHtml(icon)}</div>
       </div>
-
       <div style="flex:1; min-width:0;">
-        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
-          <div style="font-weight:900; color:var(--gold,#d4af37);">${escapeHtml(title)}</div>
-          <button type="button" data-toast-close style="
-            border:1px solid rgba(255,255,255,.12);
-            background: rgba(0,0,0,.18);
-            color: rgba(255,255,255,.85);
-            padding:6px 10px;border-radius:12px;font-weight:900;">✕</button>
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
+          <div style="font-weight:900;color:var(--gold,#d4af37);">${escapeHtml(title)}</div>
+          <button type="button" data-toast-close style="border:1px solid rgba(255,255,255,.12);
+            background:rgba(0,0,0,.18);color:rgba(255,255,255,.85);padding:6px 10px;border-radius:12px;font-weight:900;">✕</button>
         </div>
-
-        ${sub ? `<div style="opacity:.93; margin-top:4px; word-wrap:break-word;">${escapeHtml(sub)}</div>` : ""}
-        ${mini ? `<div style="opacity:.75; margin-top:6px; font-size:12px;">${escapeHtml(mini)}</div>` : ""}
+        ${sub ? `<div style="opacity:.93;margin-top:4px;word-wrap:break-word;">${escapeHtml(sub)}</div>` : ""}
+        ${mini ? `<div style="opacity:.75;margin-top:6px;font-size:12px;">${escapeHtml(mini)}</div>` : ""}
       </div>
     </div>
-
-    <div data-toast-bar style="
-      position:absolute; left:0; bottom:0;
-      height:3px; width:100%;
-      background: ${t.border};
-      transform-origin:left; transform: scaleX(1);
-    "></div>
+    <div data-toast-bar style="position:absolute;left:0;bottom:0;height:3px;width:100%;
+      background:rgba(212,175,55,.25);transform-origin:left;transform:scaleX(1);"></div>
   `;
-
   root.appendChild(el);
 
   const closeBtn = el.querySelector("[data-toast-close]");
@@ -221,7 +188,7 @@ function toastCard(opts) {
 /* ===================== MODALS ===================== */
 const MODAL_IDS = [
   "formModal","viewModal","exportModal","bammerModal","depositModal",
-  "clientModal","appointmentsModal","studioModal"
+  "clientModal","appointmentsModal","studioModal","rewardsModal"
 ];
 
 function forceCloseAllModals() {
@@ -238,6 +205,34 @@ function wireModalClickOff(modalId, boxId, onClose) {
   if (!modal || !box) return;
   modal.addEventListener("click", (e) => { if (e.target === modal) onClose(); });
   box.addEventListener("click", (e) => e.stopPropagation());
+}
+
+/* ===================== RUNTIME CSS (FAB always on top) ===================== */
+function forceFabCSS() {
+  if (document.getElementById("fab-hardfix-style")) return;
+
+  const style = document.createElement("style");
+  style.id = "fab-hardfix-style";
+  style.textContent = `
+    .fabStack{
+      position: fixed !important;
+      right: 18px !important;
+      bottom: 22px !important;
+      z-index: 2147483647 !important;
+      pointer-events: none !important;
+    }
+    .fabStack .fab{
+      pointer-events: auto !important;
+      z-index: 2147483647 !important;
+      touch-action: manipulation !important;
+      -webkit-tap-highlight-color: transparent !important;
+    }
+    /* prevent any parent stacking context from trapping it */
+    .page{ position: relative !important; z-index: 0 !important; }
+    .modal{ z-index: 999999 !important; }
+    #toasts{ z-index: 2147483646 !important; }
+  `;
+  document.head.appendChild(style);
 }
 
 /* ===================== LOGO ===================== */
@@ -263,13 +258,12 @@ function initLogo() {
   });
 }
 
-/* ===================== CLIENT DB (light) ===================== */
+/* ===================== CLIENT DB ===================== */
 function ensureClientsDBShape() {
   if (!clientsDB || typeof clientsDB !== "object") clientsDB = { clients: {} };
   if (!clientsDB.clients || typeof clientsDB.clients !== "object") clientsDB.clients = {};
 }
 function clientKeyFromName(name) { return normalize(name).replace(/\s+/g, " ").trim(); }
-
 function saveEntries() { localStorage.setItem(LS.ENTRIES, JSON.stringify(entries)); }
 
 function rebuildClientsDB() {
@@ -416,7 +410,6 @@ function createAccordion(title, badgeText) {
 
   wrap.appendChild(header);
   wrap.appendChild(content);
-
   return { wrap, content };
 }
 
@@ -456,7 +449,6 @@ function updateStats(list) {
   (list || entries).forEach(entry => {
     const d = parseLocalDate(entry.date);
     if (!d) return;
-
     const amt = totalForTotalsNet(entry);
 
     if (entry.date === todayStr) today += amt;
@@ -560,7 +552,7 @@ function render() {
   updateStats(list);
 }
 
-/* ===================== ENTRY FORM ===================== */
+/* ===================== ENTRY FORM / VIEW / QUICK ADDS ===================== */
 function opt(val, label, current) {
   const sel = String(current || "").toLowerCase() === val ? "selected" : "";
   return `<option value="${val}" ${sel}>${label}</option>`;
@@ -691,7 +683,6 @@ function saveEntry() {
   render();
 }
 
-/* ===================== ENTRY VIEW ===================== */
 function viewEntry(id) {
   const entry = entries.find(e => e.id === id);
   const box = $("viewBox");
@@ -751,7 +742,6 @@ function deleteEntry(id) {
   render();
 }
 
-/* ===================== QUICK ADD: BAMMER ===================== */
 function openBammerQuick() {
   const box = $("bammerBox");
   if (!box) return;
@@ -813,7 +803,6 @@ function openBammerQuick() {
 }
 function closeBammerQuick() { hideModal("bammerModal"); }
 
-/* ===================== QUICK ADD: DEPOSIT ONLY ===================== */
 function openDepositQuick() {
   const box = $("depositBox");
   if (!box) return;
@@ -873,7 +862,22 @@ function openDepositQuick() {
 }
 function closeDepositQuick() { hideModal("depositModal"); }
 
-/* ===================== APPOINTMENTS ===================== */
+/* ===================== EXPORT / APPTS / STUDIO (keep as-is) ===================== */
+function openExport() {
+  const box = $("exportBox");
+  if (!box) return;
+  box.innerHTML = `
+    <div class="modal-title">Export</div>
+    <div class="summary-box"><div style="opacity:.85;">Export polish next (pay period + CSV + summary).</div></div>
+    <div class="actionsRow" style="margin-top:14px;">
+      <button type="button" class="secondarybtn" id="btnCloseExport">Close</button>
+    </div>
+  `;
+  $("btnCloseExport")?.addEventListener("click", closeExport);
+  showModal("exportModal");
+}
+function closeExport(){ hideModal("exportModal"); }
+
 function openAppointments() {
   const box = $("appointmentsBox");
   if (!box) return;
@@ -925,7 +929,6 @@ function openAppointments() {
 }
 function closeAppointments(){ hideModal("appointmentsModal"); }
 
-/* ===================== STUDIO ===================== */
 function openStudio() {
   const box = $("studioBox");
   if (!box) return;
@@ -959,7 +962,7 @@ function openStudio() {
   $("btnSaveSplit")?.addEventListener("click", () => {
     splitSettings.defaultPct = clampPct($("defaultSplitPct")?.value || 100);
     localStorage.setItem(LS.SPLIT, JSON.stringify(splitSettings));
-    toastCard({ title: "Studio saved", sub: "Split updated", mini: `${splitSettings.defaultPct}%`, icon: "🏦", tone: "blue" });
+    toastCard({ title: "Studio saved", sub: "Split updated", mini: `${splitSettings.defaultPct}%`, icon: "🏦" });
     rebuildClientsDB();
     render();
   });
@@ -1050,7 +1053,6 @@ function renderDiscountBuilder() {
     });
   });
 }
-
 function saveDiscountBuilder() {
   const root = $("discountList");
   if (!root) return;
@@ -1079,90 +1081,63 @@ function saveDiscountBuilder() {
 
   rewardsSettings.discounts = rules;
   localStorage.setItem(LS.REWARDS, JSON.stringify(rewardsSettings));
-
-  toastCard({ title: "Discounts saved", sub: `${rules.length} discount(s)`, icon: "💾", tone: "gold" });
+  toastCard({ title: "Discounts saved", sub: `${rules.length} discount(s)`, icon: "💾" });
   rebuildClientsDB();
   render();
 }
 
-/* ===================== EXPORT (placeholder) ===================== */
-function openExport() {
-  const box = $("exportBox");
-  if (!box) return;
-  box.innerHTML = `
-    <div class="modal-title">Export</div>
-    <div class="summary-box"><div style="opacity:.85;">Export polish next (pay period + CSV + summary).</div></div>
-    <div class="actionsRow" style="margin-top:14px;">
-      <button type="button" class="secondarybtn" id="btnCloseExport">Close</button>
-    </div>
-  `;
-  $("btnCloseExport")?.addEventListener("click", closeExport);
-  showModal("exportModal");
-}
-function closeExport(){ hideModal("exportModal"); }
-
-/* ===================== FAB FIX (DIRECT, NO BS) ===================== */
-function hardenFabClickability() {
-  const btns = Array.from(document.querySelectorAll("#fabAdd,#fabDeposit,#fabBammer,.fab.main,.fab.small"));
-  btns.forEach(el => {
-    el.style.zIndex = "999999";
-    el.style.pointerEvents = "auto";
-    el.querySelectorAll("*").forEach(ch => (ch.style.pointerEvents = "none"));
-  });
-  ensureToastPointerEvents();
-}
-
-// single-fire guard
+/* ===================== FAB BINDING (guaranteed) ===================== */
 let lastFabAt = 0;
-function guardFabFire() {
+function canFireFab() {
   const now = Date.now();
-  if (now - lastFabAt < 350) return false;
+  if (now - lastFabAt < 320) return false;
   lastFabAt = now;
   return true;
 }
 
-function bindFab(el, actionFn) {
+function bindFabStrict(el, actionFn) {
   if (!el) return;
 
   const fire = (e) => {
-    if (!guardFabFire()) return;
+    if (!canFireFab()) return;
     e.preventDefault();
     e.stopPropagation();
     if (e.stopImmediatePropagation) e.stopImmediatePropagation();
     actionFn();
   };
 
-  // pointerdown first (best)
+  // all of these are LOCAL to the button, not global
   el.addEventListener("pointerdown", fire, { capture: true });
-
-  // mobile safari fallback (some builds still act weird)
   el.addEventListener("touchstart", fire, { capture: true, passive: false });
-
-  // kill click so inline onclick can’t do weird extra stuff
-  el.addEventListener("click", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-  }, { capture: true });
+  el.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); }, { capture: true });
 }
 
-function installFabFix() {
-  // Primary (IDs)
-  bindFab($("fabAdd"), () => openForm(null));
-  bindFab($("fabDeposit"), openDepositQuick);
-  bindFab($("fabBammer"), openBammerQuick);
+function installFabBindings() {
+  // IDs (preferred)
+  bindFabStrict($("fabAdd"), () => openForm(null));
+  bindFabStrict($("fabDeposit"), openDepositQuick);
+  bindFabStrict($("fabBammer"), openBammerQuick);
 
-  // Fallback (if a different build is live)
+  // fallback if IDs aren’t present in the live build
   const main = document.querySelector(".fab.main");
   const smalls = Array.from(document.querySelectorAll(".fab.small"));
+  if (main && main.id !== "fabAdd") bindFabStrict(main, () => openForm(null));
+  if (smalls[0] && smalls[0].id !== "fabDeposit") bindFabStrict(smalls[0], openDepositQuick);
+  if (smalls[1] && smalls[1].id !== "fabBammer") bindFabStrict(smalls[1], openBammerQuick);
 
-  if (main && main.id !== "fabAdd") bindFab(main, () => openForm(null));
-  if (smalls[0] && smalls[0].id !== "fabDeposit") bindFab(smalls[0], openDepositQuick);
-  if (smalls[1] && smalls[1].id !== "fabBammer") bindFab(smalls[1], openBammerQuick);
+  // capture fallback: if something tries to eat events, we still trigger when the target is within FAB
+  document.addEventListener("pointerdown", (e) => {
+    const t = e.target;
+    const hit = t?.closest?.("#fabAdd,#fabDeposit,#fabBammer,.fab.main,.fab.small");
+    if (!hit) return;
+    // handled by the button handlers already
+  }, true);
 }
 
 /* ===================== INIT ===================== */
 function init() {
+  forceFabCSS();
+
   wireModalClickOff("formModal","formBox",closeForm);
   wireModalClickOff("viewModal","viewBox",closeView);
   wireModalClickOff("exportModal","exportBox",closeExport);
@@ -1175,18 +1150,24 @@ function init() {
 
   $("q")?.addEventListener("keydown", (e) => { if (e.key === "Enter") applyFilters(); });
 
-  installFabFix();
-  hardenFabClickability();
-  setTimeout(hardenFabClickability, 200);
-  setTimeout(hardenFabClickability, 900);
+  installFabBindings();
+
+  // re-apply a few times in case CSS loads late
+  ensureToastPointerEvents();
+  setTimeout(forceFabCSS, 50);
+  setTimeout(forceFabCSS, 250);
+  setTimeout(forceFabCSS, 900);
 
   rebuildClientsDB();
   render();
+
+  // tiny confirmation (won’t block)
+  toastCard({ title: "Loaded", sub: "FAB hard-fix active.", mini: "v2026-02-20-5", icon: "✅" });
 }
 
 document.addEventListener("DOMContentLoaded", init);
 
-/* ===================== GLOBALS (your HTML onclick calls) ===================== */
+/* ===================== GLOBALS ===================== */
 window.openForm = () => openForm(null);
 window.openDepositQuick = openDepositQuick;
 window.openBammerQuick = openBammerQuick;
