@@ -1,9 +1,8 @@
 /* =========================================================
-   Globber’s Ink Log — app.js (Automation Phase FULL REWRITE)
-   Focus:
-   - Auto client stats + level/badge + discount eligibility
-   - Appointment reminders + apply-discount shortcuts
-   - Keeps: working FABs + modals + core entry flows
+   Globber’s Ink Log — app.js (Automation + Toast Cards + Discount Builder)
+   - Toasts: 10s, card style, close button, timer bar
+   - Studio: Split + Discount Builder UI
+   - Automation: client stats + badges + discount eligibility + reminders
    ========================================================= */
 
 /* ===================== STORAGE KEYS ===================== */
@@ -15,7 +14,7 @@ const LS = {
   PAYDAY: "payday",
   SPLIT: "splitSettings",
   REWARDS: "rewardsSettings",
-  CLIENTS: "clientsDB" // computed + overrides live here
+  CLIENTS: "clientsDB"
 };
 
 /* ===================== DEFAULTS ===================== */
@@ -32,11 +31,6 @@ const DEFAULT_FILTERS = {
 
 const DEFAULT_FILTERS_UI = { open: false };
 
-/**
- * rewardsSettings
- * - levels: badge ladder by tattoo count
- * - discounts: eligibility rules
- */
 const DEFAULT_REWARDS = {
   levels: [
     { id: "lvl1", name: "Rookie", minCount: 1, pngDataUrl: "" },
@@ -60,11 +54,8 @@ let filters = safeJsonParse(localStorage.getItem(LS.FILTERS), DEFAULT_FILTERS) |
 let filtersUI = safeJsonParse(localStorage.getItem(LS.FILTERS_UI), DEFAULT_FILTERS_UI) || DEFAULT_FILTERS_UI;
 
 let payday = Number(localStorage.getItem(LS.PAYDAY) || 0); // 0=Sun..6=Sat
-
-// Computed client DB (plus overrides)
 let clientsDB = safeJsonParse(localStorage.getItem(LS.CLIENTS), { clients: {} }) || { clients: {} };
 
-// UI pointers
 let editingId = null;
 let viewingId = null;
 let prefillClient = null;
@@ -73,10 +64,17 @@ let prefillClient = null;
 const $ = (id) => document.getElementById(id);
 const normalize = (s) => String(s || "").trim().toLowerCase();
 const pad2 = (n) => String(n).padStart(2, "0");
-const uid = (p = "id") => `${p}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 
 function safeJsonParse(s, fallback) {
   try { return JSON.parse(s); } catch { return fallback; }
+}
+function escapeHtml(s) {
+  return String(s || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 /* ===================== DATE HELPERS ===================== */
@@ -88,7 +86,6 @@ function parseLocalDate(dateStr) {
   dt.setHours(0, 0, 0, 0);
   return dt;
 }
-function formatYYYYMMDD(d) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
 function formatYYYYMM(d) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`; }
 function monthName(year, monthIndex) {
   return new Date(year, monthIndex, 1).toLocaleString("default", { month: "long" });
@@ -105,6 +102,7 @@ function clampPct(p) {
   if (!Number.isFinite(p)) return 100;
   return Math.max(0, Math.min(100, p));
 }
+function round2(n) { return Math.round(Number(n || 0) * 100) / 100; }
 
 /* ===================== ENTRY PAYMENT HELPERS ===================== */
 function paymentsArray(entry) { return Array.isArray(entry.payments) ? entry.payments : []; }
@@ -116,7 +114,7 @@ function hasSessions(entry) { return paymentsArray(entry).some(p => p.kind === "
 function isDepositOnlyEntry(entry) { return depositAmount(entry) > 0 && !hasSessions(entry) && (entry.status || "").toLowerCase() === "booked"; }
 
 /**
- * Totals logic (your rule, but NOT shown in UI):
+ * Totals rule (NOT displayed in UI):
  * - PAID    => Total Price
  * - PARTIAL => Paid so far
  * - else    => 0
@@ -159,35 +157,106 @@ function paidForPreview(entry) {
   return 0;
 }
 
-/* ===================== TOASTS ===================== */
-function toast(title, sub = "", mini = "", imgDataUrl = "") {
+/* ===================== TOASTS (10s + CARD) ===================== */
+const TOAST_MS = 10000;
+
+function toastCard(opts) {
   const root = $("toasts");
   if (!root) return;
 
+  const {
+    title = "Notification",
+    sub = "",
+    mini = "",
+    imgDataUrl = "",
+    icon = "✨",
+    tone = "gold" // gold | green | blue | red
+  } = (opts || {});
+
+  const toneMap = {
+    gold: { border: "rgba(212,175,55,.25)", glow: "rgba(212,175,55,.14)", iconBg: "rgba(212,175,55,.14)", iconRing: "rgba(212,175,55,.35)" },
+    green:{ border: "rgba(42,211,111,.25)", glow: "rgba(42,211,111,.12)", iconBg: "rgba(42,211,111,.14)", iconRing: "rgba(42,211,111,.35)" },
+    blue: { border: "rgba(42,91,215,.30)", glow: "rgba(42,91,215,.10)", iconBg: "rgba(42,91,215,.14)", iconRing: "rgba(42,91,215,.40)" },
+    red:  { border: "rgba(255,60,60,.28)", glow: "rgba(255,60,60,.10)", iconBg: "rgba(255,60,60,.14)", iconRing: "rgba(255,60,60,.38)" }
+  };
+  const t = toneMap[tone] || toneMap.gold;
+
   const el = document.createElement("div");
   el.className = "toast";
+  el.style.borderColor = t.border;
+  el.style.boxShadow = `0 18px 44px rgba(0,0,0,.45), 0 0 0 1px ${t.glow}`;
+  el.style.position = "relative";
+  el.style.overflow = "hidden";
+
   el.innerHTML = `
-    <div class="t-row">
-      ${imgDataUrl ? `<img src="${imgDataUrl}" alt="">` : ""}
-      <div>
-        <div class="t-title">${escapeHtml(title)}</div>
-        ${sub ? `<div class="t-sub">${escapeHtml(sub)}</div>` : ""}
-        ${mini ? `<div class="t-mini">${escapeHtml(mini)}</div>` : ""}
+    <div style="display:flex; gap:12px; align-items:flex-start;">
+      <div style="
+        width:44px;height:44px;border-radius:14px;
+        background:${t.iconBg};
+        border:1px solid ${t.iconRing};
+        box-shadow: 0 12px 26px rgba(0,0,0,.28);
+        display:flex;align-items:center;justify-content:center;
+        flex:0 0 44px;
+      ">
+        ${imgDataUrl
+          ? `<img src="${imgDataUrl}" alt="" style="width:34px;height:34px;border-radius:10px;object-fit:cover;">`
+          : `<div style="font-size:20px; line-height:1;">${escapeHtml(icon)}</div>`
+        }
+      </div>
+
+      <div style="flex:1; min-width:0;">
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
+          <div style="font-weight:900; color:var(--gold,#d4af37);">${escapeHtml(title)}</div>
+          <button type="button" data-toast-close
+            style="
+              border:1px solid rgba(255,255,255,.12);
+              background: rgba(0,0,0,.18);
+              color: rgba(255,255,255,.85);
+              padding:6px 10px;border-radius:12px;font-weight:900;
+            ">✕</button>
+        </div>
+
+        ${sub ? `<div style="opacity:.93; margin-top:4px; word-wrap:break-word;">${escapeHtml(sub)}</div>` : ""}
+        ${mini ? `<div style="opacity:.75; margin-top:6px; font-size:12px;">${escapeHtml(mini)}</div>` : ""}
       </div>
     </div>
+
+    <div data-toast-bar style="
+      position:absolute; left:0; bottom:0;
+      height:3px; width:100%;
+      background: ${t.border};
+      transform-origin:left;
+      transform: scaleX(1);
+    "></div>
   `;
 
   root.appendChild(el);
-  setTimeout(() => el.remove(), 3200);
-}
 
-function escapeHtml(s) {
-  return String(s || "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+  const closeBtn = el.querySelector("[data-toast-close]");
+  const bar = el.querySelector("[data-toast-bar]");
+
+  let removed = false;
+  const remove = () => {
+    if (removed) return;
+    removed = true;
+    el.style.transition = "opacity 180ms ease, transform 180ms ease";
+    el.style.opacity = "0";
+    el.style.transform = "translateY(6px)";
+    setTimeout(() => el.remove(), 200);
+  };
+
+  if (closeBtn) closeBtn.addEventListener("click", (e) => { e.stopPropagation(); remove(); });
+
+  // animate timer bar
+  if (bar) {
+    // kick to next frame so transition works
+    requestAnimationFrame(() => {
+      bar.style.transition = `transform ${TOAST_MS}ms linear`;
+      bar.style.transform = "scaleX(0)";
+    });
+  }
+
+  setTimeout(remove, TOAST_MS);
 }
 
 /* ===================== MODALS (SAFE) ===================== */
@@ -197,10 +266,7 @@ const MODAL_IDS = [
 ];
 
 function forceCloseAllModals() {
-  MODAL_IDS.forEach(id => {
-    const m = $(id);
-    if (m) m.style.display = "none";
-  });
+  MODAL_IDS.forEach(id => { const m = $(id); if (m) m.style.display = "none"; });
   editingId = null;
   viewingId = null;
 }
@@ -209,10 +275,7 @@ function showModal(id) {
   const m = $(id);
   if (m) m.style.display = "flex";
 }
-function hideModal(id) {
-  const m = $(id);
-  if (m) m.style.display = "none";
-}
+function hideModal(id) { const m = $(id); if (m) m.style.display = "none"; }
 
 function wireModalClickOff(modalId, boxId, onClose) {
   const modal = $(modalId);
@@ -255,23 +318,10 @@ function initLogo() {
 }
 
 /* ===================== AUTOMATION CORE ===================== */
-/**
- * Client model stored in clientsDB.clients[clientKey]:
- * {
- *   key, name,
- *   contact, social,
- *   tattooCount,
- *   spendGross, spendNet,
- *   levelId,
- *   levelName,
- *   levelPng,
- *   eligibleDiscountIds: [],
- *   selectedDiscountId: null,
- *   selectedDiscount: {type,value,label} | null,
- *   lastNotifiedLevelId: null,
- *   lastNotifiedDiscountIds: []
- * }
- */
+function ensureClientsDBShape() {
+  if (!clientsDB || typeof clientsDB !== "object") clientsDB = { clients: {} };
+  if (!clientsDB.clients || typeof clientsDB.clients !== "object") clientsDB.clients = {};
+}
 
 function clientKeyFromName(name) {
   return normalize(name).replace(/\s+/g, " ").trim();
@@ -284,25 +334,13 @@ function getLevelForCount(count) {
   for (const lvl of sorted) {
     if (Number(count) >= Number(lvl.minCount || 0)) chosen = lvl;
   }
-  return chosen; // may be null
+  return chosen;
 }
 
 function isDiscountEligible(rule, stats) {
   const minCount = Number(rule.minCount || 0);
   const minSpend = Number(rule.minSpend || 0);
   return (Number(stats.tattooCount || 0) >= minCount) && (Number(stats.spendGross || 0) >= minSpend);
-}
-
-function computeEligibleDiscounts(stats) {
-  const rules = Array.isArray(rewardsSettings.discounts) ? rewardsSettings.discounts : [];
-  const eligible = rules.filter(r => isDiscountEligible(r, stats));
-  // Sort by "value impact" descending (rough heuristic)
-  eligible.sort((a, b) => {
-    const av = discountSortValue(a);
-    const bv = discountSortValue(b);
-    return bv - av;
-  });
-  return eligible;
 }
 
 function discountSortValue(rule) {
@@ -316,10 +354,13 @@ function discountSortValue(rule) {
 
 function discountLabel(rule) {
   if (!rule) return "";
+  const label = String(rule.label || "").trim();
+  if (label) return label;
+
   if (rule.type === "percent") return `${rule.value}% off`;
   if (rule.type === "static") return `$${Number(rule.value || 0)} off`;
   if (rule.type === "free") return `Free`;
-  return rule.label || "Discount";
+  return "Discount";
 }
 
 function getDiscountRuleById(id) {
@@ -327,24 +368,24 @@ function getDiscountRuleById(id) {
   return rules.find(r => r.id === id) || null;
 }
 
-function ensureClientsDBShape() {
-  if (!clientsDB || typeof clientsDB !== "object") clientsDB = { clients: {} };
-  if (!clientsDB.clients || typeof clientsDB.clients !== "object") clientsDB.clients = {};
+function computeEligibleDiscounts(stats) {
+  const rules = Array.isArray(rewardsSettings.discounts) ? rewardsSettings.discounts : [];
+  const eligible = rules.filter(r => isDiscountEligible(r, stats));
+  eligible.sort((a, b) => discountSortValue(b) - discountSortValue(a));
+  return eligible;
 }
 
 function rebuildClientsDBAndNotify() {
   ensureClientsDBShape();
-
-  // snapshot before
   const before = JSON.parse(JSON.stringify(clientsDB.clients || {}));
 
-  // recompute from entries
   const map = {};
 
   for (const e of entries) {
     const name = String(e.client || "").trim();
     if (!name) continue;
     const key = clientKeyFromName(name);
+
     map[key] ||= {
       key,
       name,
@@ -355,38 +396,27 @@ function rebuildClientsDBAndNotify() {
       spendNet: 0
     };
 
-    // prefer latest non-empty contact/social
     if (e.contact) map[key].contact = e.contact;
     if (e.social) map[key].social = e.social;
 
-    // Count tattoos: count entries that are not deposit-only
-    if (!isDepositOnlyEntry(e)) {
-      map[key].tattooCount += 1;
-    }
+    if (!isDepositOnlyEntry(e)) map[key].tattooCount += 1;
 
-    // Spend: sum totals-gross rule (PAID total, PARTIAL paid, else 0)
     map[key].spendGross += totalForTotalsGross(e);
     map[key].spendNet += totalForTotalsNet(e);
   }
 
-  // merge overrides + compute levels/discounts
   for (const key of Object.keys(map)) {
     const base = map[key];
 
     const prev = clientsDB.clients[key] || {};
     const selectedDiscountId = prev.selectedDiscountId || null;
-    const lastNotifiedLevelId = prev.lastNotifiedLevelId || null;
-    const lastNotifiedDiscountIds = Array.isArray(prev.lastNotifiedDiscountIds) ? prev.lastNotifiedDiscountIds : [];
 
     const level = getLevelForCount(base.tattooCount);
     const eligibleRules = computeEligibleDiscounts(base);
     const eligibleDiscountIds = eligibleRules.map(r => r.id);
 
-    // If user never selected a discount, auto-suggest "best eligible" (but don’t auto-apply to totals)
     let finalSelectedId = selectedDiscountId;
-    if (!finalSelectedId && eligibleRules.length) {
-      finalSelectedId = eligibleRules[0].id;
-    }
+    if (!finalSelectedId && eligibleRules.length) finalSelectedId = eligibleRules[0].id;
 
     const finalSelectedRule = finalSelectedId ? getDiscountRuleById(finalSelectedId) : null;
 
@@ -405,17 +435,13 @@ function rebuildClientsDBAndNotify() {
       selectedDiscountId: finalSelectedId,
       selectedDiscount: finalSelectedRule
         ? { id: finalSelectedRule.id, type: finalSelectedRule.type, value: finalSelectedRule.value, label: discountLabel(finalSelectedRule) }
-        : null,
-      lastNotifiedLevelId,
-      lastNotifiedDiscountIds
+        : null
     };
   }
 
-  // keep clients that have no entries? (optional) -> keep if they existed already
+  // keep any old manual clients around (don’t delete)
   for (const key of Object.keys(clientsDB.clients)) {
     if (!map[key]) {
-      // keep old but mark as inactive-ish
-      // leave it as-is so you don’t lose manual settings
       clientsDB.clients[key].tattooCount ||= 0;
       clientsDB.clients[key].spendGross ||= 0;
       clientsDB.clients[key].spendNet ||= 0;
@@ -423,78 +449,50 @@ function rebuildClientsDBAndNotify() {
     }
   }
 
-  // notifications: level unlock + discount unlock
+  // notifications: badge unlock + newly eligible discounts
   for (const key of Object.keys(clientsDB.clients)) {
     const c = clientsDB.clients[key];
     const prev = before[key] || {};
 
-    // Level up notification
-    const newLevelId = c.levelId || null;
-    const oldLevelId = prev.levelId || null;
-
-    if (newLevelId && newLevelId !== oldLevelId) {
-      // toast once
-      toast(
-        "New badge unlocked",
-        `${c.name} → ${c.levelName}`,
-        `Tattoos: ${c.tattooCount}`,
-        c.levelPng || ""
-      );
-      c.lastNotifiedLevelId = newLevelId;
+    if (c.levelId && c.levelId !== (prev.levelId || null)) {
+      toastCard({
+        title: "New badge unlocked",
+        sub: `${c.name} → ${c.levelName}`,
+        mini: `Tattoos: ${c.tattooCount}`,
+        imgDataUrl: c.levelPng || "",
+        icon: "🏅",
+        tone: "gold"
+      });
     }
 
-    // Discount unlock notification (new eligible ids)
-    const oldElig = new Set((prev.eligibleDiscountIds || []));
+    const oldElig = new Set(prev.eligibleDiscountIds || []);
     const newly = (c.eligibleDiscountIds || []).filter(id => !oldElig.has(id));
     if (newly.length) {
       const labels = newly.map(id => {
         const r = getDiscountRuleById(id);
         return r ? discountLabel(r) : id;
       }).join(", ");
-      toast("Discount unlocked", c.name, labels);
-      c.lastNotifiedDiscountIds = Array.from(new Set([...(c.lastNotifiedDiscountIds || []), ...newly]));
+      toastCard({
+        title: "Discount unlocked",
+        sub: c.name,
+        mini: labels,
+        icon: "💸",
+        tone: "green"
+      });
     }
   }
 
   localStorage.setItem(LS.CLIENTS, JSON.stringify(clientsDB));
 }
 
-function round2(n) { return Math.round(Number(n || 0) * 100) / 100; }
-
-/* ===================== DISCOUNT APPLICATION (REMINDER + OPTIONAL APPLY) ===================== */
-/**
- * We do NOT silently change your totals.
- * We provide a per-entry appliedDiscount object if you choose to apply it.
- *
- * entry.appliedDiscount = { id, type, value, label } OR null
- */
-function computeDiscountedTotal(entry) {
-  // Only applies to PAID/PARTIAL logic when you want the reminder for booked.
-  const baseTotal = Number(entry.total || 0);
-  const disc = entry.appliedDiscount || null;
-  if (!disc) return baseTotal;
-
-  if (disc.type === "free") return 0;
-
-  if (disc.type === "percent") {
-    const pct = clampPct(disc.value || 0);
-    return Math.max(0, baseTotal * (1 - pct / 100));
-  }
-
-  if (disc.type === "static") {
-    return Math.max(0, baseTotal - Number(disc.value || 0));
-  }
-
-  return baseTotal;
-}
-
+/* ===================== DISCOUNT APPLY (REMIND + APPLY) ===================== */
 function applyClientDiscountToEntry(entryId, clientKey) {
   const idx = entries.findIndex(e => e.id === entryId);
   if (idx < 0) return;
 
   const c = clientsDB.clients[clientKey];
   if (!c || !c.selectedDiscount) {
-    toast("No discount selected", c ? c.name : "Client");
+    toastCard({ title: "No discount selected", sub: c ? c.name : "Client", icon: "⚠️", tone: "red" });
     return;
   }
 
@@ -510,10 +508,17 @@ function applyClientDiscountToEntry(entryId, clientKey) {
   saveEntries();
   rebuildClientsDBAndNotify();
   render();
-  toast("Discount applied", entries[idx].client, c.selectedDiscount.label);
+
+  toastCard({
+    title: "Discount applied",
+    sub: entries[idx].client,
+    mini: c.selectedDiscount.label,
+    icon: "✅",
+    tone: "green"
+  });
 }
 
-/* ===================== SAVE HELPERS ===================== */
+/* ===================== SAVE ===================== */
 function saveEntries() {
   localStorage.setItem(LS.ENTRIES, JSON.stringify(entries));
 }
@@ -538,7 +543,6 @@ function updateFiltersSummary() {
   if (filters.from) parts.push(`From: ${filters.from}`);
   if (filters.to) parts.push(`To: ${filters.to}`);
   if (filters.sort !== "newest") parts.push(`Sort: ${filters.sort}`);
-
   const s = $("filtersSummary");
   if (s) s.textContent = parts.length ? `• ${parts.join(" • ")}` : "• none";
 }
@@ -709,10 +713,39 @@ function updateStats(list) {
 }
 
 /* ===================== RENDER ===================== */
+function renderClientMiniBadges(clientName) {
+  const key = clientKeyFromName(clientName);
+  const c = clientsDB.clients[key];
+  if (!c) return "";
+  if (!c.levelName) return "";
+  return `<span class="client-badge">${c.levelPng ? `<img src="${c.levelPng}" alt="">` : ""}${escapeHtml(c.levelName)}</span>`;
+}
+
+function renderBookedDiscountHint(entry) {
+  const status = (entry.status || "").toLowerCase();
+  if (status !== "booked") return "";
+
+  const key = clientKeyFromName(entry.client);
+  const c = clientsDB.clients[key];
+  if (!c) return "";
+
+  if ((c.eligibleDiscountIds || []).length && c.selectedDiscount && !entry.appliedDiscount) {
+    return `
+      <div class="sub-row" style="margin-top:8px;">
+        <span class="pill gold">Eligible: ${escapeHtml(c.selectedDiscount.label)}</span>
+        <button type="button" class="topBtn" style="padding:6px 10px; border-radius:12px; margin-left:8px;"
+          data-applydisc="${entry.id}">
+          Apply
+        </button>
+      </div>
+    `;
+  }
+  return "";
+}
+
 function render() {
   hydrateFilterUI();
 
-  // rebuild location dropdown options
   const locationSelect = $("locationFilter");
   if (locationSelect) {
     const current = filters.location || "all";
@@ -735,7 +768,6 @@ function render() {
     return;
   }
 
-  // group by y/m/d
   const grouped = {};
   list.forEach(e => {
     const d = parseLocalDate(e.date);
@@ -778,7 +810,6 @@ function render() {
 
           const row = document.createElement("div");
           row.className = "entry";
-
           row.innerHTML = `
             <div class="entry-left">
               <div class="entry-name">
@@ -809,41 +840,7 @@ function render() {
   updateStats(list);
 }
 
-function renderClientMiniBadges(clientName) {
-  const key = clientKeyFromName(clientName);
-  const c = clientsDB.clients[key];
-  if (!c) return "";
-  const badge = c.levelName ? `<span class="client-badge">${c.levelPng ? `<img src="${c.levelPng}" alt="">` : ""}${escapeHtml(c.levelName)}</span>` : "";
-  return badge;
-}
-
-function renderBookedDiscountHint(entry) {
-  const status = (entry.status || "").toLowerCase();
-  if (status !== "booked") return "";
-
-  const key = clientKeyFromName(entry.client);
-  const c = clientsDB.clients[key];
-  if (!c) return "";
-
-  const eligible = Array.isArray(c.eligibleDiscountIds) && c.eligibleDiscountIds.length;
-  const selected = c.selectedDiscount;
-
-  // Reminder only if eligible and entry doesn't already have appliedDiscount
-  if (eligible && selected && !entry.appliedDiscount) {
-    return `
-      <div class="sub-row" style="margin-top:8px;">
-        <span class="pill gold">Eligible: ${escapeHtml(selected.label)}</span>
-        <button type="button" class="topBtn" style="padding:6px 10px; border-radius:12px; margin-left:8px;"
-          data-applydisc="${entry.id}">
-          Apply
-        </button>
-      </div>
-    `;
-  }
-  return "";
-}
-
-/* ===================== ENTRY VIEW / FORM ===================== */
+/* ===================== ENTRY FORM / VIEW ===================== */
 function openForm(existingEntry = null) {
   const box = $("formBox");
   if (!box) return;
@@ -861,7 +858,8 @@ function openForm(existingEntry = null) {
     social: "",
     description: "",
     notes: "",
-    payments: []
+    payments: [],
+    appliedDiscount: null
   };
 
   const dep = depositAmount(entry);
@@ -917,7 +915,6 @@ function openForm(existingEntry = null) {
     </div>
   `;
 
-  // prefill if requested (only when adding new)
   if (!existingEntry && prefillClient) {
     if ($("client")) $("client").value = prefillClient.client || "";
     if ($("contact")) $("contact").value = prefillClient.contact || "";
@@ -925,7 +922,6 @@ function openForm(existingEntry = null) {
     prefillClient = null;
   }
 
-  // render existing sessions
   sessions.forEach(s => addSessionRow(s.amount, s.note || ""));
 
   $("btnAddSession").addEventListener("click", () => addSessionRow());
@@ -954,6 +950,25 @@ function addSessionRow(amount = "", note = "") {
   container.appendChild(row);
 }
 
+function diffEntry(before, after) {
+  const fields = ["date","client","status","total","location","contact","social","description","notes"];
+  const out = [];
+  for (const f of fields) {
+    const b = String(before[f] ?? "");
+    const a = String(after[f] ?? "");
+    if (b !== a) out.push(`${f}: "${trimForHistory(b)}" → "${trimForHistory(a)}"`);
+  }
+  const bPay = JSON.stringify(paymentsArray(before));
+  const aPay = JSON.stringify(after.payments || []);
+  if (bPay !== aPay) out.push(`payments updated`);
+  return out;
+}
+function trimForHistory(s) {
+  const t = String(s || "").trim();
+  if (t.length <= 24) return t;
+  return t.slice(0, 21) + "…";
+}
+
 function saveEntry() {
   const dateVal = $("date")?.value || "";
   const clientVal = String($("client")?.value || "").trim();
@@ -964,7 +979,6 @@ function saveEntry() {
 
   const depositVal = Number($("deposit")?.value || 0);
   const payments = [];
-
   if (depositVal > 0) payments.push({ amount: depositVal, kind: "deposit", note: "" });
 
   const amounts = Array.from(document.querySelectorAll(".session-amount"));
@@ -1004,11 +1018,7 @@ function saveEntry() {
     };
 
     if (changes.length) {
-      entries[idx].editHistory.push({
-        at: nowIso,
-        kind: "edit",
-        summary: changes.join(" • ")
-      });
+      entries[idx].editHistory.push({ at: nowIso, kind: "edit", summary: changes.join(" • ") });
     }
 
   } else {
@@ -1025,31 +1035,24 @@ function saveEntry() {
 
   saveEntries();
   closeForm();
-
-  // automation reflow
   rebuildClientsDBAndNotify();
   render();
 }
 
-function diffEntry(before, after) {
-  const fields = ["date","client","status","total","location","contact","social","description","notes"];
-  const out = [];
-  for (const f of fields) {
-    const b = String(before[f] ?? "");
-    const a = String(after[f] ?? "");
-    if (b !== a) out.push(`${f}: "${trimForHistory(b)}" → "${trimForHistory(a)}"`);
-  }
-
-  const bPay = JSON.stringify(paymentsArray(before));
-  const aPay = JSON.stringify(after.payments || []);
-  if (bPay !== aPay) out.push(`payments updated`);
-  return out;
-}
-
-function trimForHistory(s) {
-  const t = String(s || "").trim();
-  if (t.length <= 24) return t;
-  return t.slice(0, 21) + "…";
+function renderEditHistory(entry) {
+  const hist = Array.isArray(entry.editHistory) ? entry.editHistory : [];
+  if (!hist.length) return "";
+  const rows = hist.slice().reverse().slice(0, 8).map(h => {
+    return `<div style="margin-top:8px; opacity:.9;">
+      <div style="font-weight:900;">${escapeHtml(h.kind || "update")}</div>
+      <div style="opacity:.85; font-size:13px;">${escapeHtml(h.at || "")}</div>
+      <div style="opacity:.9;">${escapeHtml(h.summary || "")}</div>
+    </div>`;
+  }).join("");
+  return `<div style="margin-top:12px;">
+    <div style="font-weight:900;color:var(--gold,#d4af37);">Edit History</div>
+    ${rows}
+  </div>`;
 }
 
 function viewEntry(id) {
@@ -1122,11 +1125,7 @@ function viewEntry(id) {
     </div>
   `;
 
-  $("btnEditEntry").addEventListener("click", () => {
-    closeView();
-    openForm(entry);
-  });
-
+  $("btnEditEntry").addEventListener("click", () => { closeView(); openForm(entry); });
   $("btnDeleteEntry").addEventListener("click", () => deleteEntry(id));
   $("btnCloseView").addEventListener("click", closeView);
 
@@ -1138,22 +1137,6 @@ function viewEntry(id) {
   showModal("viewModal");
 }
 
-function renderEditHistory(entry) {
-  const hist = Array.isArray(entry.editHistory) ? entry.editHistory : [];
-  if (!hist.length) return "";
-  const rows = hist.slice().reverse().slice(0, 8).map(h => {
-    return `<div style="margin-top:8px; opacity:.9;">
-      <div style="font-weight:900;">${escapeHtml(h.kind || "update")}</div>
-      <div style="opacity:.85; font-size:13px;">${escapeHtml(h.at || "")}</div>
-      <div style="opacity:.9;">${escapeHtml(h.summary || "")}</div>
-    </div>`;
-  }).join("");
-  return `<div style="margin-top:12px;">
-    <div style="font-weight:900;color:var(--gold,#d4af37);">Edit History</div>
-    ${rows}
-  </div>`;
-}
-
 function closeView() { hideModal("viewModal"); viewingId = null; }
 
 function deleteEntry(id) {
@@ -1163,7 +1146,6 @@ function deleteEntry(id) {
 
   entries = entries.filter(e => e.id !== id);
   saveEntries();
-
   closeView();
   rebuildClientsDBAndNotify();
   render();
@@ -1332,7 +1314,7 @@ function saveDepositOnly() {
   render();
 }
 
-/* ===================== CLIENT PROFILE (AUTOMATION VIEW) ===================== */
+/* ===================== CLIENT PROFILE ===================== */
 function openClientProfile(clientName) {
   const key = clientKeyFromName(clientName);
   const c = clientsDB.clients[key];
@@ -1346,7 +1328,6 @@ function openClientProfile(clientName) {
 
   const eligibleRules = (c?.eligibleDiscountIds || []).map(id => getDiscountRuleById(id)).filter(Boolean);
   const selectedId = c?.selectedDiscountId || "";
-  const selectedRule = selectedId ? getDiscountRuleById(selectedId) : null;
 
   box.innerHTML = `
     <div class="modal-title">Client Profile</div>
@@ -1368,7 +1349,7 @@ function openClientProfile(clientName) {
         </select>
       </div>
       <div class="hint" style="margin-top:8px;">
-        Eligible discounts are auto-calculated. Selecting one makes it the default reminder for booked appointments.
+        Eligible discounts auto-update. Picking one makes it the default reminder for booked appointments.
       </div>
       <div class="actions-row" style="margin-top:10px;">
         <button type="button" id="btnSaveClientDiscount">Save</button>
@@ -1380,7 +1361,8 @@ function openClientProfile(clientName) {
     </div>
   `;
 
-  $("btnCloseClient").addEventListener("click", () => closeClient());
+  $("btnCloseClient").addEventListener("click", closeClient);
+
   $("btnSaveClientDiscount").addEventListener("click", () => {
     const chosen = $("clientDiscountSelect")?.value || "";
     ensureClientsDBShape();
@@ -1393,7 +1375,15 @@ function openClientProfile(clientName) {
       : null;
 
     localStorage.setItem(LS.CLIENTS, JSON.stringify(clientsDB));
-    toast("Client updated", name, chosen ? `Discount set: ${discountLabel(rule)}` : "Discount cleared");
+
+    toastCard({
+      title: "Client updated",
+      sub: name,
+      mini: chosen ? `Discount set: ${discountLabel(rule)}` : "Discount cleared",
+      icon: "👤",
+      tone: "blue"
+    });
+
     closeClient();
     rebuildClientsDBAndNotify();
     render();
@@ -1403,7 +1393,7 @@ function openClientProfile(clientName) {
 }
 function closeClient() { hideModal("clientModal"); }
 
-/* ===================== APPOINTMENTS (WITH DISCOUNT REMINDERS) ===================== */
+/* ===================== APPOINTMENTS ===================== */
 function openAppointments() {
   const box = $("appointmentsBox");
   if (!box) return;
@@ -1454,10 +1444,8 @@ function openAppointments() {
     </div>
   `;
 
-  // open entry view
   box.querySelectorAll(".appt-card").forEach(card => {
     card.addEventListener("click", (ev) => {
-      // don’t trigger when clicking Apply
       if (ev.target && ev.target.matches("[data-appt-apply]")) return;
       const id = Number(card.getAttribute("data-id"));
       closeAppointments();
@@ -1465,7 +1453,6 @@ function openAppointments() {
     });
   });
 
-  // Apply discount buttons
   box.querySelectorAll("[data-appt-apply]").forEach(btn => {
     btn.addEventListener("click", (ev) => {
       ev.stopPropagation();
@@ -1474,7 +1461,6 @@ function openAppointments() {
       if (!entry) return;
       const ck = clientKeyFromName(entry.client);
       applyClientDiscountToEntry(entryId, ck);
-      // modal will refresh from render, so close + reopen
       closeAppointments();
       openAppointments();
     });
@@ -1486,7 +1472,7 @@ function openAppointments() {
 }
 function closeAppointments(){ hideModal("appointmentsModal"); }
 
-/* ===================== STUDIO (LIGHT) ===================== */
+/* ===================== DISCOUNT BUILDER UI (STUDIO) ===================== */
 function openStudio() {
   const box = $("studioBox");
   if (!box) return;
@@ -1495,42 +1481,186 @@ function openStudio() {
     <div class="modal-title">Studio</div>
 
     <div class="summary-box">
-      <div style="font-weight:900;color:var(--gold,#d4af37);">Split</div>
+      <div style="font-weight:900;color:var(--gold,#d4af37);">Payout Split</div>
       <div class="row">
         <input id="defaultSplitPct" type="number" value="${clampPct(splitSettings.defaultPct)}" placeholder="Default %">
         <button type="button" id="btnSaveSplit">Save</button>
       </div>
-      <div class="hint">Monthly overrides live in rewards/settings phase (next).</div>
+      <div class="hint">This affects totals display (your shop %).</div>
     </div>
 
-    <div class="actions-row" style="margin-top:14px;">
-      <button type="button" class="secondarybtn" id="btnCloseStudio">Close</button>
+    <div class="summary-box" style="margin-top:12px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+        <div style="font-weight:900;color:var(--gold,#d4af37);">Discount Builder</div>
+        <button type="button" id="btnAddDiscount" class="topBtn" style="padding:10px 12px;">+ Add</button>
+      </div>
+      <div class="hint" style="margin-top:8px;">
+        Discounts unlock automatically by tattoo count / spend. Type can be Percent, Static, or Free.
+      </div>
+
+      <div id="discountList" style="margin-top:12px;"></div>
+
+      <div class="actions-row" style="margin-top:12px;">
+        <button type="button" id="btnSaveDiscounts">Save Discounts</button>
+        <button type="button" class="secondarybtn" id="btnCloseStudio">Close</button>
+      </div>
     </div>
   `;
 
+  // split save
   $("btnSaveSplit").addEventListener("click", () => {
     splitSettings.defaultPct = clampPct($("defaultSplitPct")?.value || 100);
     localStorage.setItem(LS.SPLIT, JSON.stringify(splitSettings));
-    toast("Studio saved", "Split updated", `${splitSettings.defaultPct}%`);
-    closeStudio();
+    toastCard({ title: "Studio saved", sub: "Split updated", mini: `${splitSettings.defaultPct}%`, icon: "🏦", tone: "blue" });
     rebuildClientsDBAndNotify();
     render();
   });
 
   $("btnCloseStudio").addEventListener("click", closeStudio);
 
+  // discounts UI
+  renderDiscountBuilder();
+  $("btnAddDiscount").addEventListener("click", () => {
+    rewardsSettings.discounts ||= [];
+    rewardsSettings.discounts.push({
+      id: "d_" + Date.now(),
+      label: "New discount",
+      minCount: 0,
+      minSpend: 0,
+      type: "percent",
+      value: 10
+    });
+    renderDiscountBuilder();
+  });
+
+  $("btnSaveDiscounts").addEventListener("click", saveDiscountBuilder);
+
   showModal("studioModal");
 }
+
 function closeStudio(){ hideModal("studioModal"); }
 
-/* ===================== EXPORT (STUB, STILL WORKS) ===================== */
+function renderDiscountBuilder() {
+  const root = $("discountList");
+  if (!root) return;
+
+  const rules = Array.isArray(rewardsSettings.discounts) ? rewardsSettings.discounts : [];
+  root.innerHTML = "";
+
+  if (!rules.length) {
+    root.innerHTML = `<div style="opacity:.75; margin-top:10px;">No discounts yet. Tap “+ Add”.</div>`;
+    return;
+  }
+
+  rules.forEach((r, idx) => {
+    const card = document.createElement("div");
+    card.className = "summary-box";
+    card.style.marginTop = "10px";
+    card.style.borderColor = "rgba(212,175,55,.14)";
+    card.innerHTML = `
+      <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
+        <div style="font-weight:900;">${escapeHtml(r.label || "Discount")}</div>
+        <button type="button" class="dangerbtn" data-del-discount="${r.id}" style="padding:8px 10px;">Delete</button>
+      </div>
+
+      <div class="row" style="margin-top:10px;">
+        <input data-disc-field="label" data-disc-id="${r.id}" value="${escapeHtml(r.label || "")}" placeholder="Label (ex: 10% off)">
+        <select data-disc-field="type" data-disc-id="${r.id}">
+          <option value="percent" ${r.type === "percent" ? "selected" : ""}>Percent</option>
+          <option value="static"  ${r.type === "static"  ? "selected" : ""}>Static</option>
+          <option value="free"    ${r.type === "free"    ? "selected" : ""}>Free</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <input data-disc-field="minCount" data-disc-id="${r.id}" type="number" value="${Number(r.minCount || 0)}" placeholder="Min tattoos">
+        <input data-disc-field="minSpend" data-disc-id="${r.id}" type="number" value="${Number(r.minSpend || 0)}" placeholder="Min spend ($)">
+      </div>
+
+      <div class="row">
+        <input data-disc-field="value" data-disc-id="${r.id}" type="number" value="${Number(r.value || 0)}" placeholder="Value">
+        <div style="width:100%; display:flex; align-items:center; opacity:.8;">
+          <span style="font-weight:800;">Value meaning:</span>
+          <span style="margin-left:8px;">
+            Percent = % off • Static = $ off • Free = ignored
+          </span>
+        </div>
+      </div>
+    `;
+    root.appendChild(card);
+  });
+
+  // delete handlers
+  root.querySelectorAll("[data-del-discount]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-del-discount");
+      rewardsSettings.discounts = (rewardsSettings.discounts || []).filter(x => x.id !== id);
+      renderDiscountBuilder();
+    });
+  });
+
+  // live label update (so the card title updates as you type)
+  root.querySelectorAll('input[data-disc-field="label"]').forEach(inp => {
+    inp.addEventListener("input", () => {
+      const id = inp.getAttribute("data-disc-id");
+      const rule = (rewardsSettings.discounts || []).find(x => x.id === id);
+      if (rule) rule.label = inp.value;
+      // quick rerender to update title text
+      renderDiscountBuilder();
+    }, { once: true });
+  });
+}
+
+function saveDiscountBuilder() {
+  const root = $("discountList");
+  if (!root) return;
+
+  const rules = Array.isArray(rewardsSettings.discounts) ? rewardsSettings.discounts : [];
+
+  // read all fields
+  const fields = root.querySelectorAll("[data-disc-field]");
+  fields.forEach(el => {
+    const id = el.getAttribute("data-disc-id");
+    const field = el.getAttribute("data-disc-field");
+    const rule = rules.find(x => x.id === id);
+    if (!rule) return;
+
+    let val = el.value;
+    if (field === "minCount" || field === "minSpend" || field === "value") {
+      val = Number(val || 0);
+    }
+    rule[field] = val;
+  });
+
+  // normalize types
+  rules.forEach(r => {
+    r.type = (r.type || "percent");
+    if (r.type === "free") r.value = 0;
+    if (!r.id) r.id = "d_" + Date.now();
+    if (!r.label) r.label = discountLabel(r);
+    r.minCount = Number(r.minCount || 0);
+    r.minSpend = Number(r.minSpend || 0);
+    r.value = Number(r.value || 0);
+  });
+
+  rewardsSettings.discounts = rules;
+  localStorage.setItem(LS.REWARDS, JSON.stringify(rewardsSettings));
+
+  toastCard({ title: "Discounts saved", sub: `${rules.length} discount(s)`, icon: "💾", tone: "gold" });
+
+  // re-run automation so eligibilities update instantly
+  rebuildClientsDBAndNotify();
+  render();
+}
+
+/* ===================== EXPORT (stub stays) ===================== */
 function openExport() {
   const box = $("exportBox");
   if (!box) return;
   box.innerHTML = `
     <div class="modal-title">Export</div>
     <div class="summary-box">
-      <div style="opacity:.85;">Export suite polish is the next phase (CSV + pay period + next/prev + summary).</div>
+      <div style="opacity:.85;">Export suite polish is next (CSV + pay period + next/prev + summary).</div>
     </div>
     <div class="actions-row" style="margin-top:14px;">
       <button type="button" class="secondarybtn" id="btnCloseExport">Close</button>
@@ -1541,7 +1671,7 @@ function openExport() {
 }
 function closeExport(){ hideModal("exportModal"); }
 
-/* ===================== FAB WIRING (BULLETPROOF) ===================== */
+/* ===================== FAB WIRING ===================== */
 function bindFABs() {
   const addBtn = $("fabAdd");
   const depBtn = $("fabDeposit");
@@ -1564,13 +1694,12 @@ function bindFABs() {
   });
 }
 
-/* ===================== GLOBAL CLICK HOOKS (DISCOUNT APPLY IN LIST) ===================== */
+/* ===================== GLOBAL DELEGATES ===================== */
 function bindGlobalDelegates() {
   document.addEventListener("click", (e) => {
     const t = e.target;
     if (!t) return;
 
-    // List-card Apply button (rendered inside entries)
     if (t.matches("[data-applydisc]")) {
       e.stopPropagation();
       const entryId = Number(t.getAttribute("data-applydisc"));
@@ -1584,7 +1713,6 @@ function bindGlobalDelegates() {
 
 /* ===================== INIT ===================== */
 function init() {
-  // modal click-off wiring
   wireModalClickOff("formModal","formBox",closeForm);
   wireModalClickOff("viewModal","viewBox",closeView);
   wireModalClickOff("exportModal","exportBox",closeExport);
@@ -1595,18 +1723,14 @@ function init() {
   wireModalClickOff("clientModal","clientBox",closeClient);
 
   initLogo();
-
   $("q")?.addEventListener("keydown", (e) => { if (e.key === "Enter") applyFilters(); });
 
   bindFABs();
   bindGlobalDelegates();
 
-  // Automation pass at boot
   rebuildClientsDBAndNotify();
-
   render();
 }
-
 document.addEventListener("DOMContentLoaded", init);
 
 /* ===================== WINDOW EXPORTS ===================== */
