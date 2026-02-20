@@ -1,104 +1,14 @@
 /* =========================================================
-   Globber’s Ink Log — app.js (Automation + Toast Cards + Discount Builder)
-   - Toasts: 10s, card style, close button, timer bar
-   - Studio: Split + Discount Builder UI
-   - Automation: client stats + badges + discount eligibility + reminders
+   Globber’s Ink Log — app.js (FULL REWRITE, FAB FIX FINAL)
+   - PLUS / Deposit / Bammer buttons: unstoppable (capture + pointerdown)
+   - Safe modals (click outside closes)
+   - Toast notifications: 10s, card style
+   - Filters dropdown toggle
+   - Appointments screen (BOOKED)
+   - Studio screen: payout split + discount builder
    ========================================================= */
 
 /* ===================== STORAGE KEYS ===================== */
-/* =========================================================
-   Globber’s Ink Log — app.js (FAB FIX ONLY, BULLETPROOF)
-   - Fixes: PLUS button not responding
-   - Uses global delegation (capture) for clicks + touch
-   - Does NOT require fragile element-specific binding
-   ========================================================= */
-
-/* ----------------- YOUR EXISTING APP CODE STARTS -----------------
-   Keep ALL of your existing code as-is below.
-   The only “change” is: we add a bulletproof FAB handler that
-   will call your existing functions:
-     - openForm()
-     - openDepositQuick()
-     - openBammerQuick()
-
-   If your function names differ, rename them in runFabAction().
------------------------------------------------------------------- */
-
-/* ====== BULLETPROOF FAB DELEGATION (DROP-IN) ====== */
-function runFabAction(action) {
-  // If your app uses different names, change ONLY these lines:
-  if (action === "add" && typeof openForm === "function") openForm(null);
-  if (action === "deposit" && typeof openDepositQuick === "function") openDepositQuick();
-  if (action === "bammer" && typeof openBammerQuick === "function") openBammerQuick();
-}
-
-function detectFabActionFromTarget(target) {
-  if (!target || !target.closest) return null;
-
-  // Covers: IDs you’ve used + generic “fab” patterns + data-fab hooks
-  const el = target.closest(
-    "#fabAdd, #fabDeposit, #fabBammer, .fab.main, .fab.small, [data-fab='add'], [data-fab='deposit'], [data-fab='bammer']"
-  );
-  if (!el) return null;
-
-  // Explicit IDs / dataset win
-  if (el.id === "fabAdd" || el.dataset.fab === "add") return "add";
-  if (el.id === "fabDeposit" || el.dataset.fab === "deposit") return "deposit";
-  if (el.id === "fabBammer" || el.dataset.fab === "bammer") return "bammer";
-
-  // Class fallback
-  if (el.classList.contains("main")) return "add";
-
-  // If you use two .fab.small buttons: first = deposit, second = bammer
-  if (el.classList.contains("small")) {
-    const smalls = Array.from(document.querySelectorAll(".fab.small"));
-    const idx = smalls.indexOf(el);
-    if (idx === 0) return "deposit";
-    if (idx === 1) return "bammer";
-  }
-
-  return null;
-}
-
-function installFabDelegation() {
-  const handler = (e) => {
-    const action = detectFabActionFromTarget(e.target);
-    if (!action) return;
-
-    // This is what makes it “unstoppable”
-    e.preventDefault();
-    e.stopPropagation();
-
-    runFabAction(action);
-  };
-
-  // Capture phase = fires even when inner elements/overlays interfere
-  document.addEventListener("click", handler, true);
-
-  // Mobile: catch taps that sometimes don’t produce normal click
-  document.addEventListener(
-    "touchend",
-    (e) => {
-      const action = detectFabActionFromTarget(e.target);
-      if (!action) return;
-
-      e.preventDefault();
-      e.stopPropagation();
-
-      runFabAction(action);
-    },
-    { capture: true, passive: false }
-  );
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-  installFabDelegation();
-});
-
-/* ----------------- YOUR EXISTING APP CODE BELOW -----------------
-   Paste your CURRENT working app.js contents below this line.
-   Don’t change anything else.
------------------------------------------------------------------- */
 const LS = {
   ENTRIES: "entries",
   FILTERS: "filters",
@@ -112,16 +22,7 @@ const LS = {
 
 /* ===================== DEFAULTS ===================== */
 const DEFAULT_SPLIT = { defaultPct: 100, monthOverrides: {} };
-
-const DEFAULT_FILTERS = {
-  q: "",
-  status: "all",
-  location: "all",
-  from: "",
-  to: "",
-  sort: "newest"
-};
-
+const DEFAULT_FILTERS = { q: "", status: "all", location: "all", from: "", to: "", sort: "newest" };
 const DEFAULT_FILTERS_UI = { open: false };
 
 const DEFAULT_REWARDS = {
@@ -142,25 +43,20 @@ const DEFAULT_REWARDS = {
 let entries = safeJsonParse(localStorage.getItem(LS.ENTRIES), []) || [];
 let splitSettings = safeJsonParse(localStorage.getItem(LS.SPLIT), DEFAULT_SPLIT) || DEFAULT_SPLIT;
 let rewardsSettings = safeJsonParse(localStorage.getItem(LS.REWARDS), DEFAULT_REWARDS) || DEFAULT_REWARDS;
-
 let filters = safeJsonParse(localStorage.getItem(LS.FILTERS), DEFAULT_FILTERS) || DEFAULT_FILTERS;
 let filtersUI = safeJsonParse(localStorage.getItem(LS.FILTERS_UI), DEFAULT_FILTERS_UI) || DEFAULT_FILTERS_UI;
-
-let payday = Number(localStorage.getItem(LS.PAYDAY) || 0); // 0=Sun..6=Sat
+let payday = Number(localStorage.getItem(LS.PAYDAY) || 0);
 let clientsDB = safeJsonParse(localStorage.getItem(LS.CLIENTS), { clients: {} }) || { clients: {} };
 
 let editingId = null;
 let viewingId = null;
-let prefillClient = null;
 
 /* ===================== DOM HELPERS ===================== */
 const $ = (id) => document.getElementById(id);
 const normalize = (s) => String(s || "").trim().toLowerCase();
 const pad2 = (n) => String(n).padStart(2, "0");
 
-function safeJsonParse(s, fallback) {
-  try { return JSON.parse(s); } catch { return fallback; }
-}
+function safeJsonParse(s, fallback) { try { return JSON.parse(s); } catch { return fallback; } }
 function escapeHtml(s) {
   return String(s || "")
     .replaceAll("&", "&amp;")
@@ -197,17 +93,19 @@ function clampPct(p) {
 }
 function round2(n) { return Math.round(Number(n || 0) * 100) / 100; }
 
-/* ===================== ENTRY PAYMENT HELPERS ===================== */
+/* ===================== PAYMENT HELPERS ===================== */
 function paymentsArray(entry) { return Array.isArray(entry.payments) ? entry.payments : []; }
 function paidAmount(entry) { return paymentsArray(entry).reduce((sum, p) => sum + Number(p.amount || 0), 0); }
 function depositAmount(entry) {
   return paymentsArray(entry).filter(p => p.kind === "deposit").reduce((sum, p) => sum + Number(p.amount || 0), 0);
 }
 function hasSessions(entry) { return paymentsArray(entry).some(p => p.kind === "session" && Number(p.amount || 0) > 0); }
-function isDepositOnlyEntry(entry) { return depositAmount(entry) > 0 && !hasSessions(entry) && (entry.status || "").toLowerCase() === "booked"; }
+function isDepositOnlyEntry(entry) {
+  return depositAmount(entry) > 0 && !hasSessions(entry) && (entry.status || "").toLowerCase() === "booked";
+}
 
 /**
- * Totals rule (NOT displayed in UI):
+ * Totals rule (NOT displayed):
  * - PAID    => Total Price
  * - PARTIAL => Paid so far
  * - else    => 0
@@ -223,9 +121,7 @@ function getSplitPctForDate(dateStr) {
   if (!d) return clampPct(splitSettings.defaultPct || 100);
   const key = formatYYYYMM(d);
   const override = splitSettings.monthOverrides && splitSettings.monthOverrides[key];
-  const pct = (override !== undefined && override !== null)
-    ? Number(override)
-    : Number(splitSettings.defaultPct || 100);
+  const pct = (override !== undefined && override !== null) ? Number(override) : Number(splitSettings.defaultPct || 100);
   return clampPct(pct);
 }
 function netFromGross(gross, pct) { return Number(gross || 0) * (clampPct(pct) / 100); }
@@ -236,10 +132,10 @@ function totalForTotalsNet(entry) {
 }
 
 /**
- * Preview “Paid:” line:
+ * Preview Paid line:
  * - PAID    => total price
  * - PARTIAL => paid so far
- * - BOOKED  => deposit amount
+ * - BOOKED  => deposit
  * - else    => 0
  */
 function paidForPreview(entry) {
@@ -250,22 +146,23 @@ function paidForPreview(entry) {
   return 0;
 }
 
-/* ===================== TOASTS (10s + CARD) ===================== */
+/* ===================== TOASTS ===================== */
 const TOAST_MS = 10000;
+
+function ensureToastDoesntBlockClicks() {
+  const root = $("toasts");
+  if (!root) return;
+  // container should not eat clicks
+  root.style.pointerEvents = "none";
+  // each toast should be clickable (close button)
+  root.querySelectorAll(".toast").forEach(t => t.style.pointerEvents = "auto");
+}
 
 function toastCard(opts) {
   const root = $("toasts");
   if (!root) return;
 
-  const {
-    title = "Notification",
-    sub = "",
-    mini = "",
-    imgDataUrl = "",
-    icon = "✨",
-    tone = "gold" // gold | green | blue | red
-  } = (opts || {});
-
+  const { title="Notification", sub="", mini="", imgDataUrl="", icon="✨", tone="gold" } = (opts || {});
   const toneMap = {
     gold: { border: "rgba(212,175,55,.25)", glow: "rgba(212,175,55,.14)", iconBg: "rgba(212,175,55,.14)", iconRing: "rgba(212,175,55,.35)" },
     green:{ border: "rgba(42,211,111,.25)", glow: "rgba(42,211,111,.12)", iconBg: "rgba(42,211,111,.14)", iconRing: "rgba(42,211,111,.35)" },
@@ -280,6 +177,7 @@ function toastCard(opts) {
   el.style.boxShadow = `0 18px 44px rgba(0,0,0,.45), 0 0 0 1px ${t.glow}`;
   el.style.position = "relative";
   el.style.overflow = "hidden";
+  el.style.pointerEvents = "auto";
 
   el.innerHTML = `
     <div style="display:flex; gap:12px; align-items:flex-start;">
@@ -288,9 +186,7 @@ function toastCard(opts) {
         background:${t.iconBg};
         border:1px solid ${t.iconRing};
         box-shadow: 0 12px 26px rgba(0,0,0,.28);
-        display:flex;align-items:center;justify-content:center;
-        flex:0 0 44px;
-      ">
+        display:flex;align-items:center;justify-content:center; flex:0 0 44px;">
         ${imgDataUrl
           ? `<img src="${imgDataUrl}" alt="" style="width:34px;height:34px;border-radius:10px;object-fit:cover;">`
           : `<div style="font-size:20px; line-height:1;">${escapeHtml(icon)}</div>`
@@ -300,13 +196,11 @@ function toastCard(opts) {
       <div style="flex:1; min-width:0;">
         <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
           <div style="font-weight:900; color:var(--gold,#d4af37);">${escapeHtml(title)}</div>
-          <button type="button" data-toast-close
-            style="
-              border:1px solid rgba(255,255,255,.12);
-              background: rgba(0,0,0,.18);
-              color: rgba(255,255,255,.85);
-              padding:6px 10px;border-radius:12px;font-weight:900;
-            ">✕</button>
+          <button type="button" data-toast-close style="
+            border:1px solid rgba(255,255,255,.12);
+            background: rgba(0,0,0,.18);
+            color: rgba(255,255,255,.85);
+            padding:6px 10px;border-radius:12px;font-weight:900;">✕</button>
         </div>
 
         ${sub ? `<div style="opacity:.93; margin-top:4px; word-wrap:break-word;">${escapeHtml(sub)}</div>` : ""}
@@ -318,17 +212,17 @@ function toastCard(opts) {
       position:absolute; left:0; bottom:0;
       height:3px; width:100%;
       background: ${t.border};
-      transform-origin:left;
-      transform: scaleX(1);
+      transform-origin:left; transform: scaleX(1);
     "></div>
   `;
 
   root.appendChild(el);
+  ensureToastDoesntBlockClicks();
 
   const closeBtn = el.querySelector("[data-toast-close]");
   const bar = el.querySelector("[data-toast-bar]");
-
   let removed = false;
+
   const remove = () => {
     if (removed) return;
     removed = true;
@@ -338,11 +232,9 @@ function toastCard(opts) {
     setTimeout(() => el.remove(), 200);
   };
 
-  if (closeBtn) closeBtn.addEventListener("click", (e) => { e.stopPropagation(); remove(); });
+  closeBtn?.addEventListener("click", (e) => { e.stopPropagation(); remove(); });
 
-  // animate timer bar
   if (bar) {
-    // kick to next frame so transition works
     requestAnimationFrame(() => {
       bar.style.transition = `transform ${TOAST_MS}ms linear`;
       bar.style.transform = "scaleX(0)";
@@ -352,10 +244,10 @@ function toastCard(opts) {
   setTimeout(remove, TOAST_MS);
 }
 
-/* ===================== MODALS (SAFE) ===================== */
+/* ===================== MODALS ===================== */
 const MODAL_IDS = [
   "formModal","viewModal","exportModal","bammerModal","depositModal",
-  "clientModal","rewardsModal","appointmentsModal","studioModal"
+  "clientModal","appointmentsModal","studioModal"
 ];
 
 function forceCloseAllModals() {
@@ -368,8 +260,10 @@ function showModal(id) {
   const m = $(id);
   if (m) m.style.display = "flex";
 }
-function hideModal(id) { const m = $(id); if (m) m.style.display = "none"; }
-
+function hideModal(id) {
+  const m = $(id);
+  if (m) m.style.display = "none";
+}
 function wireModalClickOff(modalId, boxId, onClose) {
   const modal = $(modalId);
   const box = $(boxId);
@@ -385,16 +279,7 @@ function initLogo() {
   if (!img || !input) return;
 
   const saved = localStorage.getItem(LS.LOGO);
-  if (saved) {
-    img.src = saved;
-  } else {
-    img.src = "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(`
-      <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">
-        <rect width="64" height="64" rx="14" fill="#16201b"/>
-        <text x="50%" y="58%" text-anchor="middle" font-family="Inter" font-size="28" font-weight="800" fill="#d4af37">G</text>
-      </svg>
-    `);
-  }
+  if (saved) img.src = saved;
 
   img.addEventListener("click", () => input.click());
   input.addEventListener("change", () => {
@@ -410,68 +295,52 @@ function initLogo() {
   });
 }
 
-/* ===================== AUTOMATION CORE ===================== */
+/* ===================== AUTOMATION (CLIENTS) ===================== */
 function ensureClientsDBShape() {
   if (!clientsDB || typeof clientsDB !== "object") clientsDB = { clients: {} };
   if (!clientsDB.clients || typeof clientsDB.clients !== "object") clientsDB.clients = {};
 }
-
-function clientKeyFromName(name) {
-  return normalize(name).replace(/\s+/g, " ").trim();
-}
+function clientKeyFromName(name) { return normalize(name).replace(/\s+/g, " ").trim(); }
 
 function getLevelForCount(count) {
   const levels = Array.isArray(rewardsSettings.levels) ? rewardsSettings.levels : [];
   const sorted = [...levels].sort((a, b) => Number(a.minCount || 0) - Number(b.minCount || 0));
   let chosen = null;
-  for (const lvl of sorted) {
-    if (Number(count) >= Number(lvl.minCount || 0)) chosen = lvl;
-  }
+  for (const lvl of sorted) if (Number(count) >= Number(lvl.minCount || 0)) chosen = lvl;
   return chosen;
 }
 
 function isDiscountEligible(rule, stats) {
-  const minCount = Number(rule.minCount || 0);
-  const minSpend = Number(rule.minSpend || 0);
-  return (Number(stats.tattooCount || 0) >= minCount) && (Number(stats.spendGross || 0) >= minSpend);
+  return (Number(stats.tattooCount || 0) >= Number(rule.minCount || 0))
+      && (Number(stats.spendGross || 0) >= Number(rule.minSpend || 0));
 }
-
-function discountSortValue(rule) {
-  const type = String(rule.type || "");
-  const v = Number(rule.value || 0);
-  if (type === "free") return 999999;
-  if (type === "percent") return 1000 + v;
-  if (type === "static") return 500 + v;
-  return v;
-}
-
 function discountLabel(rule) {
-  if (!rule) return "";
-  const label = String(rule.label || "").trim();
+  const label = String(rule?.label || "").trim();
   if (label) return label;
-
-  if (rule.type === "percent") return `${rule.value}% off`;
-  if (rule.type === "static") return `$${Number(rule.value || 0)} off`;
-  if (rule.type === "free") return `Free`;
+  if (rule?.type === "percent") return `${Number(rule.value || 0)}% off`;
+  if (rule?.type === "static") return `$${Number(rule.value || 0)} off`;
+  if (rule?.type === "free") return "Free";
   return "Discount";
 }
-
 function getDiscountRuleById(id) {
   const rules = Array.isArray(rewardsSettings.discounts) ? rewardsSettings.discounts : [];
   return rules.find(r => r.id === id) || null;
 }
-
 function computeEligibleDiscounts(stats) {
   const rules = Array.isArray(rewardsSettings.discounts) ? rewardsSettings.discounts : [];
   const eligible = rules.filter(r => isDiscountEligible(r, stats));
-  eligible.sort((a, b) => discountSortValue(b) - discountSortValue(a));
+  // best first
+  eligible.sort((a, b) => {
+    const av = a.type === "free" ? 999999 : (a.type === "percent" ? 1000 + Number(a.value||0) : 500 + Number(a.value||0));
+    const bv = b.type === "free" ? 999999 : (b.type === "percent" ? 1000 + Number(b.value||0) : 500 + Number(b.value||0));
+    return bv - av;
+  });
   return eligible;
 }
 
 function rebuildClientsDBAndNotify() {
   ensureClientsDBShape();
   const before = JSON.parse(JSON.stringify(clientsDB.clients || {}));
-
   const map = {};
 
   for (const e of entries) {
@@ -479,28 +348,15 @@ function rebuildClientsDBAndNotify() {
     if (!name) continue;
     const key = clientKeyFromName(name);
 
-    map[key] ||= {
-      key,
-      name,
-      contact: "",
-      social: "",
-      tattooCount: 0,
-      spendGross: 0,
-      spendNet: 0
-    };
-
-    if (e.contact) map[key].contact = e.contact;
-    if (e.social) map[key].social = e.social;
+    map[key] ||= { key, name, tattooCount: 0, spendGross: 0, spendNet: 0 };
 
     if (!isDepositOnlyEntry(e)) map[key].tattooCount += 1;
-
     map[key].spendGross += totalForTotalsGross(e);
     map[key].spendNet += totalForTotalsNet(e);
   }
 
   for (const key of Object.keys(map)) {
     const base = map[key];
-
     const prev = clientsDB.clients[key] || {};
     const selectedDiscountId = prev.selectedDiscountId || null;
 
@@ -516,8 +372,6 @@ function rebuildClientsDBAndNotify() {
     clientsDB.clients[key] = {
       key,
       name: base.name,
-      contact: base.contact || prev.contact || "",
-      social: base.social || prev.social || "",
       tattooCount: base.tattooCount,
       spendGross: round2(base.spendGross),
       spendNet: round2(base.spendNet),
@@ -532,17 +386,7 @@ function rebuildClientsDBAndNotify() {
     };
   }
 
-  // keep any old manual clients around (don’t delete)
-  for (const key of Object.keys(clientsDB.clients)) {
-    if (!map[key]) {
-      clientsDB.clients[key].tattooCount ||= 0;
-      clientsDB.clients[key].spendGross ||= 0;
-      clientsDB.clients[key].spendNet ||= 0;
-      clientsDB.clients[key].eligibleDiscountIds ||= [];
-    }
-  }
-
-  // notifications: badge unlock + newly eligible discounts
+  // notifications: new badge / new discount eligibility
   for (const key of Object.keys(clientsDB.clients)) {
     const c = clientsDB.clients[key];
     const prev = before[key] || {};
@@ -561,14 +405,10 @@ function rebuildClientsDBAndNotify() {
     const oldElig = new Set(prev.eligibleDiscountIds || []);
     const newly = (c.eligibleDiscountIds || []).filter(id => !oldElig.has(id));
     if (newly.length) {
-      const labels = newly.map(id => {
-        const r = getDiscountRuleById(id);
-        return r ? discountLabel(r) : id;
-      }).join(", ");
       toastCard({
         title: "Discount unlocked",
         sub: c.name,
-        mini: labels,
+        mini: newly.map(id => discountLabel(getDiscountRuleById(id))).join(", "),
         icon: "💸",
         tone: "green"
       });
@@ -578,50 +418,9 @@ function rebuildClientsDBAndNotify() {
   localStorage.setItem(LS.CLIENTS, JSON.stringify(clientsDB));
 }
 
-/* ===================== DISCOUNT APPLY (REMIND + APPLY) ===================== */
-function applyClientDiscountToEntry(entryId, clientKey) {
-  const idx = entries.findIndex(e => e.id === entryId);
-  if (idx < 0) return;
-
-  const c = clientsDB.clients[clientKey];
-  if (!c || !c.selectedDiscount) {
-    toastCard({ title: "No discount selected", sub: c ? c.name : "Client", icon: "⚠️", tone: "red" });
-    return;
-  }
-
-  entries[idx].appliedDiscount = { ...c.selectedDiscount };
-  entries[idx].updatedAt = new Date().toISOString();
-  entries[idx].editHistory ||= [];
-  entries[idx].editHistory.push({
-    at: entries[idx].updatedAt,
-    kind: "discount_applied",
-    summary: `Applied discount: ${c.selectedDiscount.label}`
-  });
-
-  saveEntries();
-  rebuildClientsDBAndNotify();
-  render();
-
-  toastCard({
-    title: "Discount applied",
-    sub: entries[idx].client,
-    mini: c.selectedDiscount.label,
-    icon: "✅",
-    tone: "green"
-  });
-}
-
-/* ===================== SAVE ===================== */
-function saveEntries() {
-  localStorage.setItem(LS.ENTRIES, JSON.stringify(entries));
-}
+function saveEntries() { localStorage.setItem(LS.ENTRIES, JSON.stringify(entries)); }
 
 /* ===================== FILTERS UI ===================== */
-function toggleFilters() {
-  filtersUI.open = !filtersUI.open;
-  localStorage.setItem(LS.FILTERS_UI, JSON.stringify(filtersUI));
-  applyFiltersUIState();
-}
 function applyFiltersUIState() {
   const content = $("filtersContent");
   const chev = $("filtersChev");
@@ -647,6 +446,11 @@ function hydrateFilterUI() {
   if ($("toDate")) $("toDate").value = filters.to || "";
   if ($("sortFilter")) $("sortFilter").value = filters.sort || "newest";
   updateFiltersSummary();
+  applyFiltersUIState();
+}
+function toggleFilters() {
+  filtersUI.open = !filtersUI.open;
+  localStorage.setItem(LS.FILTERS_UI, JSON.stringify(filtersUI));
   applyFiltersUIState();
 }
 function applyFilters() {
@@ -687,6 +491,7 @@ function passesFilters(entry) {
     const hay = [entry.client, entry.description, entry.location].map(normalize).join(" | ");
     if (!hay.includes(q)) return false;
   }
+
   return true;
 }
 function getFilteredEntries() {
@@ -743,7 +548,6 @@ function createAccordion(title, badgeText) {
 
 /* ===================== STATS ===================== */
 function currentQuarterIndex(dateObj) { return Math.floor(dateObj.getMonth() / 3); }
-
 function getWeekWindowFromDate(anchorDate) {
   const now = new Date(anchorDate);
   const currentDay = now.getDay();
@@ -759,7 +563,6 @@ function getWeekWindowFromDate(anchorDate) {
 
   return { start, end };
 }
-
 function updateStats(list) {
   const todayEl = $("todayTotal");
   if (!todayEl) return;
@@ -789,13 +592,8 @@ function updateStats(list) {
       if (currentQuarterIndex(d) === qNow) quarter += amt;
     }
 
-    if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) {
-      month += amt;
-    }
-
-    if (d >= weekWin.start && d <= weekWin.end) {
-      week += amt;
-    }
+    if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) month += amt;
+    if (d >= weekWin.start && d <= weekWin.end) week += amt;
   });
 
   todayEl.textContent = money(today);
@@ -809,31 +607,8 @@ function updateStats(list) {
 function renderClientMiniBadges(clientName) {
   const key = clientKeyFromName(clientName);
   const c = clientsDB.clients[key];
-  if (!c) return "";
-  if (!c.levelName) return "";
+  if (!c || !c.levelName) return "";
   return `<span class="client-badge">${c.levelPng ? `<img src="${c.levelPng}" alt="">` : ""}${escapeHtml(c.levelName)}</span>`;
-}
-
-function renderBookedDiscountHint(entry) {
-  const status = (entry.status || "").toLowerCase();
-  if (status !== "booked") return "";
-
-  const key = clientKeyFromName(entry.client);
-  const c = clientsDB.clients[key];
-  if (!c) return "";
-
-  if ((c.eligibleDiscountIds || []).length && c.selectedDiscount && !entry.appliedDiscount) {
-    return `
-      <div class="sub-row" style="margin-top:8px;">
-        <span class="pill gold">Eligible: ${escapeHtml(c.selectedDiscount.label)}</span>
-        <button type="button" class="topBtn" style="padding:6px 10px; border-radius:12px; margin-left:8px;"
-          data-applydisc="${entry.id}">
-          Apply
-        </button>
-      </div>
-    `;
-  }
-  return "";
 }
 
 function render() {
@@ -865,9 +640,7 @@ function render() {
   list.forEach(e => {
     const d = parseLocalDate(e.date);
     if (!d) return;
-    const y = d.getFullYear();
-    const m = d.getMonth();
-    const day = d.getDate();
+    const y = d.getFullYear(), m = d.getMonth(), day = d.getDate();
     grouped[y] ??= {};
     grouped[y][m] ??= {};
     grouped[y][m][day] ??= [];
@@ -875,8 +648,7 @@ function render() {
   });
 
   Object.keys(grouped).sort((a, b) => Number(b) - Number(a)).forEach(year => {
-    const yearAmt = Object.values(grouped[year])
-      .flatMap(mo => Object.values(mo).flat())
+    const yearAmt = Object.values(grouped[year]).flatMap(mo => Object.values(mo).flat())
       .reduce((sum, e) => sum + totalForTotalsNet(e), 0);
 
     const yearAcc = createAccordion(String(year), money(yearAmt));
@@ -912,13 +684,12 @@ function render() {
               <div class="entry-sub">
                 <div class="sub-row"><strong>Paid:</strong> ${paidLine}</div>
                 <div class="sub-row clamp2">${escapeHtml(row2 || "")}</div>
-                ${renderBookedDiscountHint(entry)}
               </div>
             </div>
             <div class="status ${escapeHtml(entry.status || "unpaid")}">${escapeHtml(entry.status || "unpaid")}</div>
           `;
 
-          row.querySelector(".client-link").addEventListener("click", (ev) => {
+          row.querySelector(".client-link")?.addEventListener("click", (ev) => {
             ev.stopPropagation();
             openClientProfile(entry.client);
           });
@@ -933,7 +704,12 @@ function render() {
   updateStats(list);
 }
 
-/* ===================== ENTRY FORM / VIEW ===================== */
+/* ===================== ENTRY FORM ===================== */
+function opt(val, label, current) {
+  const sel = String(current || "").toLowerCase() === val ? "selected" : "";
+  return `<option value="${val}" ${sel}>${label}</option>`;
+}
+
 function openForm(existingEntry = null) {
   const box = $("formBox");
   if (!box) return;
@@ -942,17 +718,8 @@ function openForm(existingEntry = null) {
   editingId = existingEntry ? existingEntry.id : null;
 
   const entry = existingEntry || {
-    date: today,
-    status: "unpaid",
-    client: "",
-    location: "",
-    total: 0,
-    contact: "",
-    social: "",
-    description: "",
-    notes: "",
-    payments: [],
-    appliedDiscount: null
+    date: today, status: "unpaid", client: "", location: "", total: 0,
+    description: "", notes: "", payments: []
   };
 
   const dep = depositAmount(entry);
@@ -983,11 +750,6 @@ function openForm(existingEntry = null) {
     </div>
 
     <div class="row">
-      <input id="contact" placeholder="Contact (optional)" value="${escapeHtml(entry.contact || "")}">
-      <input id="social" placeholder="Social (optional)" value="${escapeHtml(entry.social || "")}">
-    </div>
-
-    <div class="row">
       <textarea id="description" placeholder="Description">${escapeHtml(entry.description || "")}</textarea>
     </div>
 
@@ -1008,31 +770,18 @@ function openForm(existingEntry = null) {
     </div>
   `;
 
-  if (!existingEntry && prefillClient) {
-    if ($("client")) $("client").value = prefillClient.client || "";
-    if ($("contact")) $("contact").value = prefillClient.contact || "";
-    if ($("social")) $("social").value = prefillClient.social || "";
-    prefillClient = null;
-  }
+  const sessionsWrap = $("sessions");
+  sessions.forEach(s => addSessionRow(s.amount, s.note || "", sessionsWrap));
 
-  sessions.forEach(s => addSessionRow(s.amount, s.note || ""));
-
-  $("btnAddSession").addEventListener("click", () => addSessionRow());
-  $("btnSaveEntry").addEventListener("click", saveEntry);
-  $("btnCloseForm").addEventListener("click", closeForm);
+  $("btnAddSession")?.addEventListener("click", () => addSessionRow("", "", $("sessions")));
+  $("btnSaveEntry")?.addEventListener("click", saveEntry);
+  $("btnCloseForm")?.addEventListener("click", closeForm);
 
   showModal("formModal");
 }
-
-function opt(val, label, current) {
-  const sel = String(current || "").toLowerCase() === val ? "selected" : "";
-  return `<option value="${val}" ${sel}>${label}</option>`;
-}
-
 function closeForm() { hideModal("formModal"); editingId = null; }
 
-function addSessionRow(amount = "", note = "") {
-  const container = $("sessions");
+function addSessionRow(amount = "", note = "", container) {
   if (!container) return;
   const row = document.createElement("div");
   row.className = "row";
@@ -1043,32 +792,10 @@ function addSessionRow(amount = "", note = "") {
   container.appendChild(row);
 }
 
-function diffEntry(before, after) {
-  const fields = ["date","client","status","total","location","contact","social","description","notes"];
-  const out = [];
-  for (const f of fields) {
-    const b = String(before[f] ?? "");
-    const a = String(after[f] ?? "");
-    if (b !== a) out.push(`${f}: "${trimForHistory(b)}" → "${trimForHistory(a)}"`);
-  }
-  const bPay = JSON.stringify(paymentsArray(before));
-  const aPay = JSON.stringify(after.payments || []);
-  if (bPay !== aPay) out.push(`payments updated`);
-  return out;
-}
-function trimForHistory(s) {
-  const t = String(s || "").trim();
-  if (t.length <= 24) return t;
-  return t.slice(0, 21) + "…";
-}
-
 function saveEntry() {
   const dateVal = $("date")?.value || "";
   const clientVal = String($("client")?.value || "").trim();
-  if (!dateVal || !clientVal) {
-    alert("Date and Client Name are required.");
-    return;
-  }
+  if (!dateVal || !clientVal) return alert("Date and Client Name are required.");
 
   const depositVal = Number($("deposit")?.value || 0);
   const payments = [];
@@ -1087,8 +814,6 @@ function saveEntry() {
     status: $("status")?.value || "unpaid",
     total: Number($("total")?.value || 0),
     location: $("location")?.value || "",
-    contact: $("contact")?.value || "",
-    social: $("social")?.value || "",
     description: $("description")?.value || "",
     notes: $("notes")?.value || "",
     payments
@@ -1099,31 +824,9 @@ function saveEntry() {
   if (editingId) {
     const idx = entries.findIndex(e => e.id === editingId);
     if (idx < 0) { editingId = null; return; }
-
-    const before = entries[idx];
-    const changes = diffEntry(before, newData);
-
-    entries[idx] = {
-      ...before,
-      ...newData,
-      updatedAt: nowIso,
-      editHistory: Array.isArray(before.editHistory) ? before.editHistory : []
-    };
-
-    if (changes.length) {
-      entries[idx].editHistory.push({ at: nowIso, kind: "edit", summary: changes.join(" • ") });
-    }
-
+    entries[idx] = { ...entries[idx], ...newData, updatedAt: nowIso };
   } else {
-    entries.push({
-      id: Date.now(),
-      ...newData,
-      appliedDiscount: null,
-      image: null,
-      createdAt: nowIso,
-      updatedAt: null,
-      editHistory: []
-    });
+    entries.push({ id: Date.now(), ...newData, createdAt: nowIso, updatedAt: null });
   }
 
   saveEntries();
@@ -1132,22 +835,7 @@ function saveEntry() {
   render();
 }
 
-function renderEditHistory(entry) {
-  const hist = Array.isArray(entry.editHistory) ? entry.editHistory : [];
-  if (!hist.length) return "";
-  const rows = hist.slice().reverse().slice(0, 8).map(h => {
-    return `<div style="margin-top:8px; opacity:.9;">
-      <div style="font-weight:900;">${escapeHtml(h.kind || "update")}</div>
-      <div style="opacity:.85; font-size:13px;">${escapeHtml(h.at || "")}</div>
-      <div style="opacity:.9;">${escapeHtml(h.summary || "")}</div>
-    </div>`;
-  }).join("");
-  return `<div style="margin-top:12px;">
-    <div style="font-weight:900;color:var(--gold,#d4af37);">Edit History</div>
-    ${rows}
-  </div>`;
-}
-
+/* ===================== ENTRY VIEW ===================== */
 function viewEntry(id) {
   const entry = entries.find(e => e.id === id);
   const box = $("viewBox");
@@ -1156,12 +844,6 @@ function viewEntry(id) {
   viewingId = id;
 
   const dep = depositAmount(entry);
-  const paidSoFar = paidAmount(entry);
-  const remaining = Math.max(0, Number(entry.total || 0) - paidSoFar);
-
-  const ck = clientKeyFromName(entry.client);
-  const c = clientsDB.clients[ck];
-  const eligible = c && c.selectedDiscount && (entry.status || "").toLowerCase() === "booked" && !entry.appliedDiscount;
 
   box.innerHTML = `
     <div class="modal-title">${escapeHtml(entry.client)} — ${escapeHtml(entry.date)}</div>
@@ -1171,29 +853,14 @@ function viewEntry(id) {
         <p><strong>Status:</strong> <span class="status ${escapeHtml(entry.status)}">${escapeHtml(entry.status)}</span></p>
         <p><strong>Total Price:</strong> ${money(entry.total)}</p>
         ${dep > 0 ? `<p><strong>Deposit:</strong> ${money(dep)}</p>` : ``}
-        ${entry.appliedDiscount ? `<p><strong>Discount Applied:</strong> ${escapeHtml(entry.appliedDiscount.label)}</p>` : ``}
       </div>
       <div style="width:100%;">
         <p><strong>Location:</strong> ${escapeHtml(entry.location || "")}</p>
-        ${c && c.levelName ? `<p><strong>Badge:</strong> ${escapeHtml(c.levelName)}</p>` : ``}
       </div>
     </div>
 
     ${entry.description ? `<p><strong>Description:</strong> ${escapeHtml(entry.description)}</p>` : ``}
-    ${entry.contact ? `<p><strong>Contact:</strong> ${escapeHtml(entry.contact)}</p>` : ``}
-    ${entry.social ? `<p><strong>Social:</strong> ${escapeHtml(entry.social)}</p>` : ``}
     ${entry.notes ? `<p><strong>Notes:</strong> ${escapeHtml(entry.notes)}</p>` : ``}
-
-    ${eligible ? `
-      <div class="summary-box" style="margin-top:12px;">
-        <div style="font-weight:900;color:var(--gold,#d4af37);">Discount Reminder</div>
-        <div style="margin-top:6px; opacity:.9;">Eligible: <b>${escapeHtml(c.selectedDiscount.label)}</b></div>
-        <div class="actions-row" style="margin-top:10px;">
-          <button type="button" id="btnApplyDiscount">Apply Discount</button>
-          <button type="button" class="secondarybtn" id="btnOpenClient">Open Client</button>
-        </div>
-      </div>
-    ` : ``}
 
     ${paymentsArray(entry).length ? `
       <h4 style="margin-top:14px;">Payments</h4>
@@ -1202,15 +869,6 @@ function viewEntry(id) {
       </ul>
     ` : ``}
 
-    <details style="margin-top:12px;">
-      <summary>More details</summary>
-      <div style="margin-top:10px;">
-        <p><strong>Paid So Far:</strong> ${money(paidSoFar)}</p>
-        ${Number(entry.total || 0) > 0 ? `<p><strong>Remaining:</strong> ${money(remaining)}</p>` : ``}
-        ${renderEditHistory(entry)}
-      </div>
-    </details>
-
     <div class="actions-row" style="margin-top:16px;">
       <button type="button" id="btnEditEntry">Edit</button>
       <button type="button" class="dangerbtn" id="btnDeleteEntry">Delete</button>
@@ -1218,18 +876,12 @@ function viewEntry(id) {
     </div>
   `;
 
-  $("btnEditEntry").addEventListener("click", () => { closeView(); openForm(entry); });
-  $("btnDeleteEntry").addEventListener("click", () => deleteEntry(id));
-  $("btnCloseView").addEventListener("click", closeView);
-
-  if (eligible) {
-    $("btnApplyDiscount").addEventListener("click", () => applyClientDiscountToEntry(entry.id, ck));
-    $("btnOpenClient").addEventListener("click", () => openClientProfile(entry.client));
-  }
+  $("btnEditEntry")?.addEventListener("click", () => { closeView(); openForm(entry); });
+  $("btnDeleteEntry")?.addEventListener("click", () => deleteEntry(id));
+  $("btnCloseView")?.addEventListener("click", closeView);
 
   showModal("viewModal");
 }
-
 function closeView() { hideModal("viewModal"); viewingId = null; }
 
 function deleteEntry(id) {
@@ -1253,7 +905,6 @@ function openBammerQuick() {
 
   box.innerHTML = `
     <div class="modal-title">Bammer (quick add)</div>
-
     <div class="row">
       <input id="bDate" type="date" value="${today}">
       <select id="bStatus">
@@ -1262,66 +913,50 @@ function openBammerQuick() {
         <option value="unpaid">UNPAID</option>
       </select>
     </div>
-
     <div class="row">
       <input id="bClient" placeholder="Client name">
       <input id="bTotal" type="number" placeholder="Total price">
     </div>
-
     <div class="row">
       <input id="bLocation" placeholder="Location">
       <input id="bDesc" placeholder="Description">
     </div>
-
     <div class="actions-row">
       <button type="button" id="btnSaveBammer">Save</button>
       <button type="button" class="secondarybtn" id="btnCloseBammer">Close</button>
     </div>
   `;
 
-  if (prefillClient) {
-    $("bClient").value = prefillClient.client || "";
-    prefillClient = null;
-  }
+  $("btnSaveBammer")?.addEventListener("click", () => {
+    const date = $("bDate")?.value || "";
+    const client = String($("bClient")?.value || "").trim();
+    if (!date || !client) return alert("Date + Client required.");
 
-  $("btnSaveBammer").addEventListener("click", saveBammer);
-  $("btnCloseBammer").addEventListener("click", closeBammerQuick);
+    const nowIso = new Date().toISOString();
+    entries.push({
+      id: Date.now(),
+      date,
+      client,
+      status: $("bStatus")?.value || "paid",
+      total: Number($("bTotal")?.value || 0),
+      location: $("bLocation")?.value || "",
+      description: $("bDesc")?.value || "",
+      notes: "",
+      payments: [],
+      createdAt: nowIso,
+      updatedAt: null
+    });
 
+    saveEntries();
+    closeBammerQuick();
+    rebuildClientsDBAndNotify();
+    render();
+  });
+
+  $("btnCloseBammer")?.addEventListener("click", closeBammerQuick);
   showModal("bammerModal");
 }
 function closeBammerQuick() { hideModal("bammerModal"); }
-
-function saveBammer() {
-  const date = $("bDate")?.value || "";
-  const client = String($("bClient")?.value || "").trim();
-  if (!date || !client) return alert("Date + Client required.");
-
-  const nowIso = new Date().toISOString();
-
-  entries.push({
-    id: Date.now(),
-    date,
-    client,
-    status: $("bStatus")?.value || "paid",
-    total: Number($("bTotal")?.value || 0),
-    location: $("bLocation")?.value || "",
-    description: $("bDesc")?.value || "",
-    contact: "",
-    social: "",
-    notes: "",
-    payments: [],
-    appliedDiscount: null,
-    image: null,
-    createdAt: nowIso,
-    updatedAt: null,
-    editHistory: []
-  });
-
-  saveEntries();
-  closeBammerQuick();
-  rebuildClientsDBAndNotify();
-  render();
-}
 
 /* ===================== QUICK ADD: DEPOSIT ONLY ===================== */
 function openDepositQuick() {
@@ -1332,156 +967,77 @@ function openDepositQuick() {
 
   box.innerHTML = `
     <div class="modal-title">Deposit (quick add)</div>
-
     <div class="row">
       <input id="dDate" type="date" value="${today}">
       <input id="dClient" placeholder="Client name">
     </div>
-
     <div class="row">
       <input id="dDeposit" type="number" placeholder="Deposit amount">
       <input id="dTotal" type="number" placeholder="Total price (optional)">
     </div>
-
     <div class="row">
       <input id="dLocation" placeholder="Location (optional)">
       <input id="dDesc" placeholder="Description (optional)">
     </div>
-
-    <div class="row">
-      <input id="dContact" placeholder="Contact (optional)">
-      <input id="dSocial" placeholder="Social (optional)">
-    </div>
-
     <div class="actions-row">
       <button type="button" id="btnSaveDeposit">Save</button>
       <button type="button" class="secondarybtn" id="btnCloseDeposit">Close</button>
     </div>
   `;
 
-  if (prefillClient) {
-    $("dClient").value = prefillClient.client || "";
-    $("dContact").value = prefillClient.contact || "";
-    $("dSocial").value = prefillClient.social || "";
-    prefillClient = null;
-  }
+  $("btnSaveDeposit")?.addEventListener("click", () => {
+    const date = $("dDate")?.value || "";
+    const client = String($("dClient")?.value || "").trim();
+    const dep = Number($("dDeposit")?.value || 0);
+    if (!date || !client) return alert("Date + Client required.");
+    if (!(dep > 0)) return alert("Deposit must be > 0.");
 
-  $("btnSaveDeposit").addEventListener("click", saveDepositOnly);
-  $("btnCloseDeposit").addEventListener("click", closeDepositQuick);
+    const nowIso = new Date().toISOString();
+    entries.push({
+      id: Date.now(),
+      date,
+      client,
+      status: "booked",
+      total: Number($("dTotal")?.value || 0),
+      location: $("dLocation")?.value || "",
+      description: $("dDesc")?.value || "",
+      notes: "",
+      payments: [{ amount: dep, kind: "deposit", note: "" }],
+      createdAt: nowIso,
+      updatedAt: null
+    });
 
+    saveEntries();
+    closeDepositQuick();
+    rebuildClientsDBAndNotify();
+    render();
+  });
+
+  $("btnCloseDeposit")?.addEventListener("click", closeDepositQuick);
   showModal("depositModal");
 }
 function closeDepositQuick() { hideModal("depositModal"); }
 
-function saveDepositOnly() {
-  const date = $("dDate")?.value || "";
-  const client = String($("dClient")?.value || "").trim();
-  const dep = Number($("dDeposit")?.value || 0);
-  if (!date || !client) return alert("Date + Client required.");
-  if (!(dep > 0)) return alert("Deposit must be > 0.");
-
-  const nowIso = new Date().toISOString();
-
-  entries.push({
-    id: Date.now(),
-    date,
-    client,
-    status: "booked",
-    total: Number($("dTotal")?.value || 0),
-    location: $("dLocation")?.value || "",
-    description: $("dDesc")?.value || "",
-    contact: $("dContact")?.value || "",
-    social: $("dSocial")?.value || "",
-    notes: "",
-    payments: [{ amount: dep, kind: "deposit", note: "" }],
-    appliedDiscount: null,
-    image: null,
-    createdAt: nowIso,
-    updatedAt: null,
-    editHistory: []
-  });
-
-  saveEntries();
-  closeDepositQuick();
-  rebuildClientsDBAndNotify();
-  render();
-}
-
-/* ===================== CLIENT PROFILE ===================== */
+/* ===================== CLIENT PROFILE (simple) ===================== */
 function openClientProfile(clientName) {
   const key = clientKeyFromName(clientName);
   const c = clientsDB.clients[key];
   const box = $("clientBox");
   if (!box) return;
 
-  const name = c?.name || clientName;
-  const levelName = c?.levelName || "";
-  const count = c?.tattooCount || 0;
-  const spend = c?.spendGross || 0;
-
-  const eligibleRules = (c?.eligibleDiscountIds || []).map(id => getDiscountRuleById(id)).filter(Boolean);
-  const selectedId = c?.selectedDiscountId || "";
-
   box.innerHTML = `
     <div class="modal-title">Client Profile</div>
-
     <div class="summary-box">
-      <div style="font-weight:900; font-size:18px;">${escapeHtml(name)}</div>
-      ${levelName ? `<div style="margin-top:6px;" class="client-badge">${c.levelPng ? `<img src="${c.levelPng}" alt="">` : ""}${escapeHtml(levelName)}</div>` : ""}
-      <div style="margin-top:10px; opacity:.9;">Tattoos: <b>${count}</b> • Spent: <b>${money(spend)}</b></div>
-      ${c?.contact ? `<div style="margin-top:6px;opacity:.85;">Contact: ${escapeHtml(c.contact)}</div>` : ""}
-      ${c?.social ? `<div style="margin-top:6px;opacity:.85;">Social: ${escapeHtml(c.social)}</div>` : ""}
+      <div style="font-weight:900; font-size:18px;">${escapeHtml(c?.name || clientName)}</div>
+      <div style="margin-top:10px; opacity:.9;">Tattoos: <b>${Number(c?.tattooCount || 0)}</b> • Spent: <b>${money(c?.spendGross || 0)}</b></div>
+      ${c?.levelName ? `<div style="margin-top:10px;" class="client-badge">${c.levelPng ? `<img src="${c.levelPng}" alt="">` : ""}${escapeHtml(c.levelName)}</div>` : ``}
     </div>
-
-    <div class="summary-box" style="margin-top:12px;">
-      <div style="font-weight:900;color:var(--gold,#d4af37);">Discount</div>
-      <div style="margin-top:8px;">
-        <select id="clientDiscountSelect">
-          <option value="">None</option>
-          ${eligibleRules.map(r => `<option value="${r.id}" ${r.id === selectedId ? "selected" : ""}>${escapeHtml(discountLabel(r))}</option>`).join("")}
-        </select>
-      </div>
-      <div class="hint" style="margin-top:8px;">
-        Eligible discounts auto-update. Picking one makes it the default reminder for booked appointments.
-      </div>
-      <div class="actions-row" style="margin-top:10px;">
-        <button type="button" id="btnSaveClientDiscount">Save</button>
-      </div>
-    </div>
-
     <div class="actions-row" style="margin-top:14px;">
       <button type="button" class="secondarybtn" id="btnCloseClient">Close</button>
     </div>
   `;
 
-  $("btnCloseClient").addEventListener("click", closeClient);
-
-  $("btnSaveClientDiscount").addEventListener("click", () => {
-    const chosen = $("clientDiscountSelect")?.value || "";
-    ensureClientsDBShape();
-    clientsDB.clients[key] ||= { key, name: clientName };
-    clientsDB.clients[key].selectedDiscountId = chosen || null;
-
-    const rule = chosen ? getDiscountRuleById(chosen) : null;
-    clientsDB.clients[key].selectedDiscount = rule
-      ? { id: rule.id, type: rule.type, value: rule.value, label: discountLabel(rule) }
-      : null;
-
-    localStorage.setItem(LS.CLIENTS, JSON.stringify(clientsDB));
-
-    toastCard({
-      title: "Client updated",
-      sub: name,
-      mini: chosen ? `Discount set: ${discountLabel(rule)}` : "Discount cleared",
-      icon: "👤",
-      tone: "blue"
-    });
-
-    closeClient();
-    rebuildClientsDBAndNotify();
-    render();
-  });
-
+  $("btnCloseClient")?.addEventListener("click", closeClient);
   showModal("clientModal");
 }
 function closeClient() { hideModal("clientModal"); }
@@ -1492,6 +1048,7 @@ function openAppointments() {
   if (!box) return;
 
   const today = new Date(); today.setHours(0,0,0,0);
+
   const booked = entries
     .filter(e => (e.status || "").toLowerCase() === "booked")
     .filter(e => {
@@ -1505,18 +1062,6 @@ function openAppointments() {
     ${booked.length ? booked.map(e => {
       const dep = depositAmount(e);
       const row2 = [e.location, e.description].filter(Boolean).join(" • ");
-      const ck = clientKeyFromName(e.client);
-      const c = clientsDB.clients[ck];
-      const hint = c && c.selectedDiscount && !e.appliedDiscount
-        ? `<div style="margin-top:8px;">
-             <span class="pill gold">Eligible: <b>${escapeHtml(c.selectedDiscount.label)}</b></span>
-             <button type="button" class="topBtn" style="padding:6px 10px; border-radius:12px; margin-left:8px;"
-               data-appt-apply="${e.id}">
-               Apply
-             </button>
-           </div>`
-        : "";
-
       return `
         <div class="appt-card" data-id="${e.id}">
           <div class="appt-top">
@@ -1526,7 +1071,6 @@ function openAppointments() {
           <div class="appt-sub">
             ${dep > 0 ? `<div class="pill gold">Deposit: <b style="color:var(--gold,#d4af37)">${money(dep)}</b></div>` : ``}
             ${row2 ? `<div style="opacity:.9;">${escapeHtml(row2)}</div>` : ``}
-            ${hint}
           </div>
         </div>
       `;
@@ -1538,37 +1082,24 @@ function openAppointments() {
   `;
 
   box.querySelectorAll(".appt-card").forEach(card => {
-    card.addEventListener("click", (ev) => {
-      if (ev.target && ev.target.matches("[data-appt-apply]")) return;
+    card.addEventListener("click", () => {
       const id = Number(card.getAttribute("data-id"));
       closeAppointments();
       viewEntry(id);
     });
   });
 
-  box.querySelectorAll("[data-appt-apply]").forEach(btn => {
-    btn.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      const entryId = Number(btn.getAttribute("data-appt-apply"));
-      const entry = entries.find(x => x.id === entryId);
-      if (!entry) return;
-      const ck = clientKeyFromName(entry.client);
-      applyClientDiscountToEntry(entryId, ck);
-      closeAppointments();
-      openAppointments();
-    });
-  });
-
-  $("btnCloseAppts").addEventListener("click", closeAppointments);
-
+  $("btnCloseAppts")?.addEventListener("click", closeAppointments);
   showModal("appointmentsModal");
 }
 function closeAppointments(){ hideModal("appointmentsModal"); }
 
-/* ===================== DISCOUNT BUILDER UI (STUDIO) ===================== */
+/* ===================== STUDIO (split + discounts) ===================== */
 function openStudio() {
   const box = $("studioBox");
   if (!box) return;
+
+  const rules = Array.isArray(rewardsSettings.discounts) ? rewardsSettings.discounts : [];
 
   box.innerHTML = `
     <div class="modal-title">Studio</div>
@@ -1579,16 +1110,12 @@ function openStudio() {
         <input id="defaultSplitPct" type="number" value="${clampPct(splitSettings.defaultPct)}" placeholder="Default %">
         <button type="button" id="btnSaveSplit">Save</button>
       </div>
-      <div class="hint">This affects totals display (your shop %).</div>
     </div>
 
     <div class="summary-box" style="margin-top:12px;">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
         <div style="font-weight:900;color:var(--gold,#d4af37);">Discount Builder</div>
         <button type="button" id="btnAddDiscount" class="topBtn" style="padding:10px 12px;">+ Add</button>
-      </div>
-      <div class="hint" style="margin-top:8px;">
-        Discounts unlock automatically by tattoo count / spend. Type can be Percent, Static, or Free.
       </div>
 
       <div id="discountList" style="margin-top:12px;"></div>
@@ -1600,8 +1127,7 @@ function openStudio() {
     </div>
   `;
 
-  // split save
-  $("btnSaveSplit").addEventListener("click", () => {
+  $("btnSaveSplit")?.addEventListener("click", () => {
     splitSettings.defaultPct = clampPct($("defaultSplitPct")?.value || 100);
     localStorage.setItem(LS.SPLIT, JSON.stringify(splitSettings));
     toastCard({ title: "Studio saved", sub: "Split updated", mini: `${splitSettings.defaultPct}%`, icon: "🏦", tone: "blue" });
@@ -1609,11 +1135,11 @@ function openStudio() {
     render();
   });
 
-  $("btnCloseStudio").addEventListener("click", closeStudio);
+  $("btnCloseStudio")?.addEventListener("click", closeStudio);
 
-  // discounts UI
   renderDiscountBuilder();
-  $("btnAddDiscount").addEventListener("click", () => {
+
+  $("btnAddDiscount")?.addEventListener("click", () => {
     rewardsSettings.discounts ||= [];
     rewardsSettings.discounts.push({
       id: "d_" + Date.now(),
@@ -1626,11 +1152,10 @@ function openStudio() {
     renderDiscountBuilder();
   });
 
-  $("btnSaveDiscounts").addEventListener("click", saveDiscountBuilder);
+  $("btnSaveDiscounts")?.addEventListener("click", saveDiscountBuilder);
 
   showModal("studioModal");
 }
-
 function closeStudio(){ hideModal("studioModal"); }
 
 function renderDiscountBuilder() {
@@ -1645,7 +1170,7 @@ function renderDiscountBuilder() {
     return;
   }
 
-  rules.forEach((r, idx) => {
+  rules.forEach((r) => {
     const card = document.createElement("div");
     card.className = "summary-box";
     card.style.marginTop = "10px";
@@ -1673,34 +1198,19 @@ function renderDiscountBuilder() {
       <div class="row">
         <input data-disc-field="value" data-disc-id="${r.id}" type="number" value="${Number(r.value || 0)}" placeholder="Value">
         <div style="width:100%; display:flex; align-items:center; opacity:.8;">
-          <span style="font-weight:800;">Value meaning:</span>
-          <span style="margin-left:8px;">
-            Percent = % off • Static = $ off • Free = ignored
-          </span>
+          <span style="font-weight:800;">Percent=% • Static=$ • Free=ignored</span>
         </div>
       </div>
     `;
     root.appendChild(card);
   });
 
-  // delete handlers
   root.querySelectorAll("[data-del-discount]").forEach(btn => {
     btn.addEventListener("click", () => {
       const id = btn.getAttribute("data-del-discount");
       rewardsSettings.discounts = (rewardsSettings.discounts || []).filter(x => x.id !== id);
       renderDiscountBuilder();
     });
-  });
-
-  // live label update (so the card title updates as you type)
-  root.querySelectorAll('input[data-disc-field="label"]').forEach(inp => {
-    inp.addEventListener("input", () => {
-      const id = inp.getAttribute("data-disc-id");
-      const rule = (rewardsSettings.discounts || []).find(x => x.id === id);
-      if (rule) rule.label = inp.value;
-      // quick rerender to update title text
-      renderDiscountBuilder();
-    }, { once: true });
   });
 }
 
@@ -1710,102 +1220,113 @@ function saveDiscountBuilder() {
 
   const rules = Array.isArray(rewardsSettings.discounts) ? rewardsSettings.discounts : [];
 
-  // read all fields
-  const fields = root.querySelectorAll("[data-disc-field]");
-  fields.forEach(el => {
+  root.querySelectorAll("[data-disc-field]").forEach(el => {
     const id = el.getAttribute("data-disc-id");
     const field = el.getAttribute("data-disc-field");
     const rule = rules.find(x => x.id === id);
     if (!rule) return;
 
     let val = el.value;
-    if (field === "minCount" || field === "minSpend" || field === "value") {
-      val = Number(val || 0);
-    }
+    if (field === "minCount" || field === "minSpend" || field === "value") val = Number(val || 0);
+
     rule[field] = val;
   });
 
-  // normalize types
   rules.forEach(r => {
     r.type = (r.type || "percent");
     if (r.type === "free") r.value = 0;
-    if (!r.id) r.id = "d_" + Date.now();
-    if (!r.label) r.label = discountLabel(r);
     r.minCount = Number(r.minCount || 0);
     r.minSpend = Number(r.minSpend || 0);
     r.value = Number(r.value || 0);
+    if (!r.label) r.label = discountLabel(r);
   });
 
   rewardsSettings.discounts = rules;
   localStorage.setItem(LS.REWARDS, JSON.stringify(rewardsSettings));
 
   toastCard({ title: "Discounts saved", sub: `${rules.length} discount(s)`, icon: "💾", tone: "gold" });
-
-  // re-run automation so eligibilities update instantly
   rebuildClientsDBAndNotify();
   render();
 }
 
-/* ===================== EXPORT (stub stays) ===================== */
+/* ===================== EXPORT (placeholder) ===================== */
 function openExport() {
   const box = $("exportBox");
   if (!box) return;
   box.innerHTML = `
     <div class="modal-title">Export</div>
-    <div class="summary-box">
-      <div style="opacity:.85;">Export suite polish is next (CSV + pay period + next/prev + summary).</div>
-    </div>
+    <div class="summary-box"><div style="opacity:.85;">Export polish is next (pay period + csv + summary).</div></div>
     <div class="actions-row" style="margin-top:14px;">
       <button type="button" class="secondarybtn" id="btnCloseExport">Close</button>
     </div>
   `;
-  $("btnCloseExport").addEventListener("click", closeExport);
+  $("btnCloseExport")?.addEventListener("click", closeExport);
   showModal("exportModal");
 }
 function closeExport(){ hideModal("exportModal"); }
 
-/* ===================== FAB WIRING ===================== */
-function bindFABs() {
-  const addBtn = $("fabAdd");
-  const depBtn = $("fabDeposit");
-  const bamBtn = $("fabBammer");
+/* ===================== FAB FIX (THE IMPORTANT PART) ===================== */
+function hardenFabLayers() {
+  const fabEls = [
+    $("fabAdd"), $("fabDeposit"), $("fabBammer"),
+    ...Array.from(document.querySelectorAll(".fab")),
+    ...Array.from(document.querySelectorAll("[data-fab]"))
+  ].filter(Boolean);
 
-  if (addBtn) addBtn.addEventListener("click", (e) => { e.preventDefault(); openForm(); });
-  if (depBtn) depBtn.addEventListener("click", (e) => { e.preventDefault(); openDepositQuick(); });
-  if (bamBtn) bamBtn.addEventListener("click", (e) => { e.preventDefault(); openBammerQuick(); });
-
-  const main = document.querySelector(".fab.main");
-  const smalls = Array.from(document.querySelectorAll(".fab.small"));
-
-  if (!addBtn && main) main.addEventListener("click", (e) => { e.preventDefault(); openForm(); });
-  if (!depBtn && smalls[0]) smalls[0].addEventListener("click", (e) => { e.preventDefault(); openDepositQuick(); });
-  if (!bamBtn && smalls[1]) smalls[1].addEventListener("click", (e) => { e.preventDefault(); openBammerQuick(); });
-
-  const all = [addBtn, depBtn, bamBtn, main, smalls[0], smalls[1]].filter(Boolean);
-  all.forEach(btn => {
-    btn.addEventListener("touchend", (e) => { e.preventDefault(); btn.click(); }, { passive: false });
+  fabEls.forEach(el => {
+    el.style.position = el.style.position || "fixed";
+    el.style.zIndex = "999999";
+    el.style.pointerEvents = "auto";
+    // prevent inner icons from stealing the event target
+    el.querySelectorAll("*").forEach(child => child.style.pointerEvents = "none");
   });
+
+  ensureToastDoesntBlockClicks();
 }
 
-/* ===================== GLOBAL DELEGATES ===================== */
-function bindGlobalDelegates() {
-  document.addEventListener("click", (e) => {
-    const t = e.target;
-    if (!t) return;
+function detectFabActionFromTarget(target) {
+  const el = target?.closest?.(
+    "#fabAdd, #fabDeposit, #fabBammer, .fab.main, .fab.small, [data-fab='add'], [data-fab='deposit'], [data-fab='bammer']"
+  );
+  if (!el) return null;
 
-    if (t.matches("[data-applydisc]")) {
-      e.stopPropagation();
-      const entryId = Number(t.getAttribute("data-applydisc"));
-      const entry = entries.find(x => x.id === entryId);
-      if (!entry) return;
-      const ck = clientKeyFromName(entry.client);
-      applyClientDiscountToEntry(entryId, ck);
-    }
-  });
+  if (el.id === "fabAdd" || el.dataset.fab === "add" || el.classList.contains("main")) return "add";
+  if (el.id === "fabDeposit" || el.dataset.fab === "deposit") return "deposit";
+  if (el.id === "fabBammer" || el.dataset.fab === "bammer") return "bammer";
+
+  if (el.classList.contains("small")) {
+    const smalls = Array.from(document.querySelectorAll(".fab.small"));
+    const idx = smalls.indexOf(el);
+    if (idx === 0) return "deposit";
+    return "bammer";
+  }
+  return null;
+}
+
+function runFabAction(action) {
+  if (action === "add") openForm(null);
+  if (action === "deposit") openDepositQuick();
+  if (action === "bammer") openBammerQuick();
+}
+
+// capture-phase pointerdown = fixes “click never fires” on some mobile + overlays
+function installFabDelegation() {
+  const handler = (e) => {
+    const action = detectFabActionFromTarget(e.target);
+    if (!action) return;
+    e.preventDefault();
+    e.stopPropagation();
+    runFabAction(action);
+  };
+
+  document.addEventListener("pointerdown", handler, true);
+  document.addEventListener("click", handler, true);
+  document.addEventListener("touchend", handler, { capture: true, passive: false });
 }
 
 /* ===================== INIT ===================== */
 function init() {
+  // modal click-off close
   wireModalClickOff("formModal","formBox",closeForm);
   wireModalClickOff("viewModal","viewBox",closeView);
   wireModalClickOff("exportModal","exportBox",closeExport);
@@ -1816,21 +1337,26 @@ function init() {
   wireModalClickOff("clientModal","clientBox",closeClient);
 
   initLogo();
+
   $("q")?.addEventListener("keydown", (e) => { if (e.key === "Enter") applyFilters(); });
 
-  bindFABs();
-  bindGlobalDelegates();
+  installFabDelegation();
+
+  // keep reinforcing layering (some UIs re-render header/fab)
+  hardenFabLayers();
+  setTimeout(hardenFabLayers, 200);
+  setTimeout(hardenFabLayers, 800);
 
   rebuildClientsDBAndNotify();
   render();
 }
+
 document.addEventListener("DOMContentLoaded", init);
 
-/* ===================== WINDOW EXPORTS ===================== */
+/* ===================== WINDOW EXPORTS (for index.html buttons) ===================== */
 window.openForm = () => openForm(null);
 window.openDepositQuick = openDepositQuick;
 window.openBammerQuick = openBammerQuick;
-
 window.openAppointments = openAppointments;
 window.openStudio = openStudio;
 window.openExport = openExport;
