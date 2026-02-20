@@ -1,13 +1,12 @@
 /* =========================================================
    Globber’s Ink Log — app.js
-   VERSION: 2026-02-20-1
-   Purpose: make it impossible to “look unchanged”
-   - On load: shows a toast "APP.JS LOADED v2026-02-20-1"
-   - FAB clicks always work (capture-phase pointerdown)
-   - Works even if main button is "+" OR a hamburger
+   VERSION: 2026-02-20-2
+   FIX:
+   - Prevents “double click” by using ONE event path (pointerdown)
+   - Adds a tight debounce guard to ignore ghost events
    ========================================================= */
 
-const APP_VERSION = "2026-02-20-1";
+const APP_VERSION = "2026-02-20-2";
 
 const LS = {
   ENTRIES: "entries",
@@ -16,18 +15,14 @@ const LS = {
   LOGO: "logoDataUrl",
   PAYDAY: "payday",
   SPLIT: "splitSettings",
-  REWARDS: "rewardsSettings",
-  CLIENTS: "clientsDB"
 };
 
 const DEFAULT_SPLIT = { defaultPct: 100, monthOverrides: {} };
 const DEFAULT_FILTERS = { q: "", status: "all", location: "all", from: "", to: "", sort: "newest" };
 const DEFAULT_FILTERS_UI = { open: false };
-const DEFAULT_REWARDS = { levels: [], discounts: [] };
 
 let entries = safeJsonParse(localStorage.getItem(LS.ENTRIES), []) || [];
 let splitSettings = safeJsonParse(localStorage.getItem(LS.SPLIT), DEFAULT_SPLIT) || DEFAULT_SPLIT;
-let rewardsSettings = safeJsonParse(localStorage.getItem(LS.REWARDS), DEFAULT_REWARDS) || DEFAULT_REWARDS;
 let filters = safeJsonParse(localStorage.getItem(LS.FILTERS), DEFAULT_FILTERS) || DEFAULT_FILTERS;
 let filtersUI = safeJsonParse(localStorage.getItem(LS.FILTERS_UI), DEFAULT_FILTERS_UI) || DEFAULT_FILTERS_UI;
 let payday = Number(localStorage.getItem(LS.PAYDAY) || 0);
@@ -335,7 +330,7 @@ function updateStats(list) {
   yearEl && (yearEl.textContent = money(year));
 }
 
-/* ===================== RENDER (simple grouping) ===================== */
+/* ===================== RENDER ===================== */
 function createAccordion(title, badgeText) {
   const wrap = document.createElement("div");
   wrap.className = "accordion";
@@ -453,7 +448,6 @@ function render() {
             </div>
             <div class="status ${escapeHtml(entry.status || "unpaid")}">${escapeHtml(entry.status || "unpaid")}</div>
           `;
-          row.addEventListener("click", () => alert("View modal wired in your full build (this is the load/test build)."));
           dAcc.content.appendChild(row);
         });
       });
@@ -463,7 +457,7 @@ function render() {
   updateStats(list);
 }
 
-/* ===================== FAB FIX (works even if + is hamburger) ===================== */
+/* ===================== FAB FIX (NO DOUBLE FIRE) ===================== */
 function hardenFabClickability() {
   ["fabAdd","fabDeposit","fabBammer"].forEach(id => {
     const el = $(id);
@@ -475,6 +469,7 @@ function hardenFabClickability() {
   ensureToastPointerEvents();
 }
 
+let lastFabAt = 0;
 function detectFabAction(target) {
   const el =
     target?.closest?.("#fabAdd, #fabDeposit, #fabBammer") ||
@@ -484,11 +479,8 @@ function detectFabAction(target) {
 
   if (el.id === "fabDeposit") return "deposit";
   if (el.id === "fabBammer") return "bammer";
-
-  // main button can be + OR hamburger (≡) or anything — treat it as Add
   if (el.id === "fabAdd" || el.classList.contains("main")) return "add";
 
-  // fallback: first small=deposit, second small=bammer
   if (el.classList.contains("small")) {
     const smalls = Array.from(document.querySelectorAll(".fab.small"));
     const idx = smalls.indexOf(el);
@@ -504,18 +496,21 @@ function runFabAction(action) {
 }
 
 function installFabDelegation() {
-  const handler = (e) => {
+  // ONE listener only. No click. No touchend. No double fire.
+  document.addEventListener("pointerdown", (e) => {
     const action = detectFabAction(e.target);
     if (!action) return;
+
+    const now = Date.now();
+    if (now - lastFabAt < 350) return; // ghost/duplicate guard
+    lastFabAt = now;
+
     e.preventDefault();
     e.stopPropagation();
-    runFabAction(action);
-  };
+    if (e.stopImmediatePropagation) e.stopImmediatePropagation();
 
-  // capture-phase so overlays / weird layers can't eat taps
-  document.addEventListener("pointerdown", handler, true);
-  document.addEventListener("click", handler, true);
-  document.addEventListener("touchend", handler, { capture: true, passive: false });
+    runFabAction(action);
+  }, true);
 }
 
 /* ===================== INIT ===================== */
@@ -526,14 +521,14 @@ function init() {
   setTimeout(hardenFabClickability, 250);
   setTimeout(hardenFabClickability, 900);
 
-  toastCard({ title: "APP.JS LOADED", sub: "You are on the NEW build.", mini: `v${APP_VERSION}`, icon: "✅" });
+  toastCard({ title: "APP.JS LOADED", sub: "No double taps now.", mini: `v${APP_VERSION}`, icon: "✅" });
 
   render();
 }
 
 document.addEventListener("DOMContentLoaded", init);
 
-/* ===================== GLOBALS for HTML onclick ===================== */
+/* ===================== GLOBALS for your HTML onclick ===================== */
 window.toggleFilters = toggleFilters;
 window.applyFilters = applyFilters;
 window.clearFilters = clearFilters;
@@ -542,6 +537,6 @@ window.openAppointments = () => toastCard({ title: "Open", sub: "Appointments", 
 window.openStudio = () => toastCard({ title: "Open", sub: "Studio", mini:`v${APP_VERSION}`, icon:"🏦" });
 window.openExport = () => toastCard({ title: "Open", sub: "Export", mini:`v${APP_VERSION}`, icon:"📤" });
 
-window.openForm = () => toastCard({ title: "Open", sub: "Add Entry", mini:`v${APP_VERSION}`, icon:"➕" });
-window.openDepositQuick = () => toastCard({ title: "Open", sub: "Deposit", mini:`v${APP_VERSION}`, icon:"💵" });
-window.openBammerQuick = () => toastCard({ title: "Open", sub: "Bammer", mini:`v${APP_VERSION}`, icon:"💥" });
+window.openForm = () => runFabAction("add");
+window.openDepositQuick = () => runFabAction("deposit");
+window.openBammerQuick = () => runFabAction("bammer");
