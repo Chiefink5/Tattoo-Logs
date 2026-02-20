@@ -9,8 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
 
-  <!-- cache bust -->
-  <link rel="stylesheet" href="styles.css?v=2026-02-20-1" />
+  <link rel="stylesheet" href="styles.css" />
 </head>
 
 <body>
@@ -31,9 +30,9 @@
       </div>
 
       <div class="brandActions">
-        <button type="button" class="topBtn" onclick="openAppointments()">Appointments</button>
-        <button type="button" class="topBtn" onclick="openStudio()">Studio</button>
-        <button type="button" class="topBtn" onclick="openExport()">Export</button>
+        <button type="button" class="topBtn" id="btnAppointments">Appointments</button>
+        <button type="button" class="topBtn" id="btnStudio">Studio</button>
+        <button type="button" class="topBtn" id="btnExport">Export</button>
       </div>
     </header>
 
@@ -46,7 +45,7 @@
     </section>
 
     <section class="filters">
-      <div class="filtersHeader" onclick="toggleFilters()">
+      <div class="filtersHeader" id="filtersHeader">
         <div class="filtersTitle">Filters <span id="filtersSummary" class="filtersSummary">• none</span></div>
         <div id="filtersChev" class="filtersChev">▾</div>
       </div>
@@ -78,8 +77,8 @@
         </div>
 
         <div class="actionsRow">
-          <button type="button" onclick="applyFilters()">Apply</button>
-          <button type="button" class="secondarybtn" onclick="clearFilters()">Clear</button>
+          <button type="button" id="btnApplyFilters">Apply</button>
+          <button type="button" class="secondarybtn" id="btnClearFilters">Clear</button>
         </div>
       </div>
     </section>
@@ -94,25 +93,22 @@
     <div id="exportModal" class="modal"><div id="exportBox" class="modalBox"></div></div>
     <div id="bammerModal" class="modal"><div id="bammerBox" class="modalBox"></div></div>
     <div id="depositModal" class="modal"><div id="depositBox" class="modalBox"></div></div>
-    <div id="clientModal" class="modal"><div id="clientBox" class="modalBox"></div></div>
-    <div id="rewardsModal" class="modal"><div id="rewardsBox" class="modalBox"></div></div>
     <div id="appointmentsModal" class="modal"><div id="appointmentsBox" class="modalBox"></div></div>
     <div id="studioModal" class="modal"><div id="studioBox" class="modalBox"></div></div>
 
   </div>
 
-  <!-- FABs -->
-  <div class="fabStack">
-    <button class="fab small" id="fabDeposit" title="Deposit" onclick="openDepositQuick()">
+  <!-- FABs OUTSIDE .page so nothing inside can cover them -->
+  <div class="fabStack" id="fabStack">
+    <button class="fab small" id="fabDeposit" title="Deposit" type="button">
       <span class="fabIcon">$↘</span>
     </button>
-    <button class="fab small" id="fabBammer" title="Bammer" onclick="openBammerQuick()">
+    <button class="fab small" id="fabBammer" title="Bammer" type="button">
       <span class="fabIcon">💥</span>
     </button>
-    <button class="fab main" id="fabAdd" title="Add Entry" onclick="openForm()">+</button>
+    <button class="fab main" id="fabAdd" title="Add Entry" type="button">+</button>
   </div>
 
-  <!-- cache bust -->
-  <script src="app.js?v=2026-02-20-5"></script>
+  <script src="app.js"></script>
 </body>
 </html>
