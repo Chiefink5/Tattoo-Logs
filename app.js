@@ -6,6 +6,99 @@
    ========================================================= */
 
 /* ===================== STORAGE KEYS ===================== */
+/* =========================================================
+   Globber’s Ink Log — app.js (FAB FIX ONLY, BULLETPROOF)
+   - Fixes: PLUS button not responding
+   - Uses global delegation (capture) for clicks + touch
+   - Does NOT require fragile element-specific binding
+   ========================================================= */
+
+/* ----------------- YOUR EXISTING APP CODE STARTS -----------------
+   Keep ALL of your existing code as-is below.
+   The only “change” is: we add a bulletproof FAB handler that
+   will call your existing functions:
+     - openForm()
+     - openDepositQuick()
+     - openBammerQuick()
+
+   If your function names differ, rename them in runFabAction().
+------------------------------------------------------------------ */
+
+/* ====== BULLETPROOF FAB DELEGATION (DROP-IN) ====== */
+function runFabAction(action) {
+  // If your app uses different names, change ONLY these lines:
+  if (action === "add" && typeof openForm === "function") openForm(null);
+  if (action === "deposit" && typeof openDepositQuick === "function") openDepositQuick();
+  if (action === "bammer" && typeof openBammerQuick === "function") openBammerQuick();
+}
+
+function detectFabActionFromTarget(target) {
+  if (!target || !target.closest) return null;
+
+  // Covers: IDs you’ve used + generic “fab” patterns + data-fab hooks
+  const el = target.closest(
+    "#fabAdd, #fabDeposit, #fabBammer, .fab.main, .fab.small, [data-fab='add'], [data-fab='deposit'], [data-fab='bammer']"
+  );
+  if (!el) return null;
+
+  // Explicit IDs / dataset win
+  if (el.id === "fabAdd" || el.dataset.fab === "add") return "add";
+  if (el.id === "fabDeposit" || el.dataset.fab === "deposit") return "deposit";
+  if (el.id === "fabBammer" || el.dataset.fab === "bammer") return "bammer";
+
+  // Class fallback
+  if (el.classList.contains("main")) return "add";
+
+  // If you use two .fab.small buttons: first = deposit, second = bammer
+  if (el.classList.contains("small")) {
+    const smalls = Array.from(document.querySelectorAll(".fab.small"));
+    const idx = smalls.indexOf(el);
+    if (idx === 0) return "deposit";
+    if (idx === 1) return "bammer";
+  }
+
+  return null;
+}
+
+function installFabDelegation() {
+  const handler = (e) => {
+    const action = detectFabActionFromTarget(e.target);
+    if (!action) return;
+
+    // This is what makes it “unstoppable”
+    e.preventDefault();
+    e.stopPropagation();
+
+    runFabAction(action);
+  };
+
+  // Capture phase = fires even when inner elements/overlays interfere
+  document.addEventListener("click", handler, true);
+
+  // Mobile: catch taps that sometimes don’t produce normal click
+  document.addEventListener(
+    "touchend",
+    (e) => {
+      const action = detectFabActionFromTarget(e.target);
+      if (!action) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      runFabAction(action);
+    },
+    { capture: true, passive: false }
+  );
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  installFabDelegation();
+});
+
+/* ----------------- YOUR EXISTING APP CODE BELOW -----------------
+   Paste your CURRENT working app.js contents below this line.
+   Don’t change anything else.
+------------------------------------------------------------------ */
 const LS = {
   ENTRIES: "entries",
   FILTERS: "filters",
