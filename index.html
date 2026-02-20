@@ -1,114 +1,55 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Globber’s Ink Log</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="styles.css" />
 </head>
 
 <body>
-  <div class="page">
 
-    <header class="topbar">
-      <div class="brandRow">
-        <div class="brandLeft">
-          <div class="logoWrap" title="Click to change logo">
-            <img id="logoImg" class="logoImg" alt="Logo" />
-            <input id="logoInput" type="file" accept="image/png,image/*" hidden />
-          </div>
+<div class="app">
 
-          <div class="brandText">
-            <div class="brandTitle">Globber’s Ink Log</div>
-          </div>
-        </div>
-      </div>
+  <header class="header">
+    <div class="brand">
+      <img id="logoImg" class="logo" />
+      <input id="logoInput" type="file" accept="image/*" hidden />
+      <div class="title">Globber’s Ink Log</div>
+    </div>
 
-      <div class="brandActions">
-        <button type="button" class="topBtn" id="btnAppointments">Appointments</button>
-        <button type="button" class="topBtn" id="btnStudio">Studio</button>
-        <button type="button" class="topBtn" id="btnExport">Export</button>
-      </div>
-    </header>
+    <div class="topButtons">
+      <button onclick="openAppointments()">Appointments</button>
+      <button onclick="openStudio()">Studio</button>
+      <button onclick="openExport()">Export</button>
+    </div>
+  </header>
 
-    <section class="stats">
-      <div class="stat"><div class="statNum" id="todayTotal">$0</div><div class="statLbl">Today</div></div>
-      <div class="stat"><div class="statNum" id="weekTotal">$0</div><div class="statLbl">Week</div></div>
-      <div class="stat"><div class="statNum" id="monthTotal">$0</div><div class="statLbl">Month</div></div>
-      <div class="stat"><div class="statNum" id="quarterTotal">$0</div><div class="statLbl">Quarter</div></div>
-      <div class="stat"><div class="statNum" id="yearTotal">$0</div><div class="statLbl">Year</div></div>
-    </section>
+  <section class="stats">
+    <div><div id="todayTotal">$0</div><span>Today</span></div>
+    <div><div id="weekTotal">$0</div><span>Week</span></div>
+    <div><div id="monthTotal">$0</div><span>Month</span></div>
+    <div><div id="yearTotal">$0</div><span>Year</span></div>
+  </section>
 
-    <section class="filters">
-      <div class="filtersHeader" id="filtersHeader">
-        <div class="filtersTitle">Filters <span id="filtersSummary" class="filtersSummary">• none</span></div>
-        <div id="filtersChev" class="filtersChev">▾</div>
-      </div>
+  <main id="entries"></main>
 
-      <div id="filtersContent" class="filtersContent">
-        <div class="row">
-          <input id="q" type="text" placeholder="Search name / desc / location" />
-          <select id="statusFilter">
-            <option value="all">All Status</option>
-            <option value="unpaid">UNPAID</option>
-            <option value="partial">PARTIAL</option>
-            <option value="paid">PAID</option>
-            <option value="booked">BOOKED</option>
-            <option value="no_show">NO SHOW</option>
-          </select>
-        </div>
+  <div id="toasts"></div>
 
-        <div class="row">
-          <select id="locationFilter"><option value="all">All Locations</option></select>
-          <select id="sortFilter">
-            <option value="newest">Newest</option>
-            <option value="oldest">Oldest</option>
-          </select>
-        </div>
+</div>
 
-        <div class="row">
-          <input id="fromDate" type="date" />
-          <input id="toDate" type="date" />
-        </div>
+<div class="fabStack">
+  <button id="fabDeposit" class="fab small">$↘</button>
+  <button id="fabBammer" class="fab small">💥</button>
+  <button id="fabAdd" class="fab main">+</button>
+</div>
 
-        <div class="actionsRow">
-          <button type="button" id="btnApplyFilters">Apply</button>
-          <button type="button" class="secondarybtn" id="btnClearFilters">Clear</button>
-        </div>
-      </div>
-    </section>
+<div id="modalRoot"></div>
 
-    <main id="entries" class="entries"></main>
-
-    <div id="toasts" class="toasts"></div>
-
-    <!-- Modals -->
-    <div id="formModal" class="modal"><div id="formBox" class="modalBox"></div></div>
-    <div id="viewModal" class="modal"><div id="viewBox" class="modalBox"></div></div>
-    <div id="exportModal" class="modal"><div id="exportBox" class="modalBox"></div></div>
-    <div id="bammerModal" class="modal"><div id="bammerBox" class="modalBox"></div></div>
-    <div id="depositModal" class="modal"><div id="depositBox" class="modalBox"></div></div>
-    <div id="appointmentsModal" class="modal"><div id="appointmentsBox" class="modalBox"></div></div>
-    <div id="studioModal" class="modal"><div id="studioBox" class="modalBox"></div></div>
-
-  </div>
-
-  <!-- FABs OUTSIDE .page so nothing inside can cover them -->
-  <div class="fabStack" id="fabStack">
-    <button class="fab small" id="fabDeposit" title="Deposit" type="button">
-      <span class="fabIcon">$↘</span>
-    </button>
-    <button class="fab small" id="fabBammer" title="Bammer" type="button">
-      <span class="fabIcon">💥</span>
-    </button>
-    <button class="fab main" id="fabAdd" title="Add Entry" type="button">+</button>
-  </div>
-
-  <script src="app.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
