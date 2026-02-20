@@ -1,12 +1,13 @@
 /* =========================================================
    Globber’s Ink Log — app.js
-   VERSION: 2026-02-20-5
-   HARD FIX:
-   - Forces FAB stack to top with runtime CSS (!important)
-   - Makes FAB receive taps even if something overlays it
-   - Direct listeners on buttons + capture-phase fallback
-   - No global “block everything” that breaks other clicks
+   VERSION: 2026-02-20-6
+   HARD-HARD FIX:
+   - FAB works even if an overlay is on top (coordinate hitbox trigger)
+   - No global click-blocking that breaks other UI
+   - Runtime CSS forces FAB stack to top + pointer events ON
    ========================================================= */
+
+const APP_VERSION = "2026-02-20-6";
 
 const LS = {
   ENTRIES: "entries",
@@ -16,7 +17,7 @@ const LS = {
   PAYDAY: "payday",
   SPLIT: "splitSettings",
   REWARDS: "rewardsSettings",
-  CLIENTS: "clientsDB"
+  CLIENTS: "clientsDB",
 };
 
 const DEFAULT_SPLIT = { defaultPct: 100, monthOverrides: {} };
@@ -120,7 +121,7 @@ function paidForPreview(entry) {
   return 0;
 }
 
-/* ===================== TOASTS (10s) ===================== */
+/* ===================== TOASTS (10s, non-blocking) ===================== */
 const TOAST_MS = 10000;
 function ensureToastPointerEvents() {
   const root = $("toasts");
@@ -128,12 +129,10 @@ function ensureToastPointerEvents() {
   root.style.pointerEvents = "none";
   root.querySelectorAll(".toast").forEach(t => (t.style.pointerEvents = "auto"));
 }
-function toastCard(opts) {
+function toastCard({ title="Notification", sub="", mini="", icon="✨" } = {}) {
   const root = $("toasts");
   if (!root) return;
-  ensureToastPointerEvents();
 
-  const { title="Notification", sub="", mini="", icon="✨" } = (opts || {});
   const el = document.createElement("div");
   el.className = "toast";
   el.style.pointerEvents = "auto";
@@ -160,6 +159,7 @@ function toastCard(opts) {
       background:rgba(212,175,55,.25);transform-origin:left;transform:scaleX(1);"></div>
   `;
   root.appendChild(el);
+  ensureToastPointerEvents();
 
   const closeBtn = el.querySelector("[data-toast-close]");
   const bar = el.querySelector("[data-toast-bar]");
@@ -207,10 +207,9 @@ function wireModalClickOff(modalId, boxId, onClose) {
   box.addEventListener("click", (e) => e.stopPropagation());
 }
 
-/* ===================== RUNTIME CSS (FAB always on top) ===================== */
+/* ===================== RUNTIME CSS (FAB always top) ===================== */
 function forceFabCSS() {
   if (document.getElementById("fab-hardfix-style")) return;
-
   const style = document.createElement("style");
   style.id = "fab-hardfix-style";
   style.textContent = `
@@ -219,18 +218,17 @@ function forceFabCSS() {
       right: 18px !important;
       bottom: 22px !important;
       z-index: 2147483647 !important;
-      pointer-events: none !important;
+      pointer-events: auto !important;
+      touch-action: manipulation !important;
+      -webkit-tap-highlight-color: transparent !important;
     }
     .fabStack .fab{
       pointer-events: auto !important;
       z-index: 2147483647 !important;
       touch-action: manipulation !important;
-      -webkit-tap-highlight-color: transparent !important;
     }
-    /* prevent any parent stacking context from trapping it */
-    .page{ position: relative !important; z-index: 0 !important; }
-    .modal{ z-index: 999999 !important; }
     #toasts{ z-index: 2147483646 !important; }
+    .modal{ z-index: 999999 !important; }
   `;
   document.head.appendChild(style);
 }
@@ -862,7 +860,7 @@ function openDepositQuick() {
 }
 function closeDepositQuick() { hideModal("depositModal"); }
 
-/* ===================== EXPORT / APPTS / STUDIO (keep as-is) ===================== */
+/* ===================== TOP BUTTON MODALS (simple) ===================== */
 function openExport() {
   const box = $("exportBox");
   if (!box) return;
@@ -883,13 +881,9 @@ function openAppointments() {
   if (!box) return;
 
   const today = new Date(); today.setHours(0,0,0,0);
-
   const booked = entries
     .filter(e => (e.status || "").toLowerCase() === "booked")
-    .filter(e => {
-      const d = parseLocalDate(e.date);
-      return d && d >= today;
-    })
+    .filter(e => { const d = parseLocalDate(e.date); return d && d >= today; })
     .sort((a,b) => (parseLocalDate(a.date) - parseLocalDate(b.date)));
 
   box.innerHTML = `
@@ -985,7 +979,6 @@ function openStudio() {
   });
 
   $("btnSaveDiscounts")?.addEventListener("click", saveDiscountBuilder);
-
   showModal("studioModal");
 }
 function closeStudio(){ hideModal("studioModal"); }
@@ -1086,51 +1079,77 @@ function saveDiscountBuilder() {
   render();
 }
 
-/* ===================== FAB BINDING (guaranteed) ===================== */
+/* ===================== FAB (COORDINATE HITBOX FIX) ===================== */
 let lastFabAt = 0;
-function canFireFab() {
+function fabCanFire() {
   const now = Date.now();
   if (now - lastFabAt < 320) return false;
   lastFabAt = now;
   return true;
 }
 
-function bindFabStrict(el, actionFn) {
-  if (!el) return;
+function getFabRects() {
+  const add = $("fabAdd") || document.querySelector(".fab.main");
+  const dep = $("fabDeposit") || document.querySelectorAll(".fab.small")[0];
+  const bam = $("fabBammer") || document.querySelectorAll(".fab.small")[1];
+  const rects = [];
 
-  const fire = (e) => {
-    if (!canFireFab()) return;
+  if (dep) rects.push({ el: dep, action: "deposit", rect: dep.getBoundingClientRect() });
+  if (bam) rects.push({ el: bam, action: "bammer", rect: bam.getBoundingClientRect() });
+  if (add) rects.push({ el: add, action: "add", rect: add.getBoundingClientRect() });
+
+  return rects;
+}
+
+function pointInRect(x, y, r) {
+  return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+}
+
+function runFabAction(action) {
+  if (action === "add") openForm(null);
+  if (action === "deposit") openDepositQuick();
+  if (action === "bammer") openBammerQuick();
+}
+
+function installFabHitboxFix() {
+  // If the tap happens inside the FAB rectangle, fire the FAB action
+  // even if some overlay is "on top" and steals the actual target.
+  const handler = (e) => {
+    const x = e.clientX, y = e.clientY;
+    if (typeof x !== "number" || typeof y !== "number") return;
+
+    const rects = getFabRects();
+    const hit = rects.find(r => pointInRect(x, y, r.rect));
+    if (!hit) return;
+
+    if (!fabCanFire()) return;
+
     e.preventDefault();
     e.stopPropagation();
     if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-    actionFn();
+
+    runFabAction(hit.action);
   };
 
-  // all of these are LOCAL to the button, not global
-  el.addEventListener("pointerdown", fire, { capture: true });
-  el.addEventListener("touchstart", fire, { capture: true, passive: false });
-  el.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); }, { capture: true });
-}
+  document.addEventListener("pointerdown", handler, true);
+  // iOS fallback
+  document.addEventListener("touchstart", (e) => {
+    const t = e.touches && e.touches[0];
+    if (!t) return;
+    handler({ clientX: t.clientX, clientY: t.clientY, preventDefault: () => e.preventDefault(), stopPropagation: () => e.stopPropagation(), stopImmediatePropagation: () => {} });
+  }, { capture: true, passive: false });
 
-function installFabBindings() {
-  // IDs (preferred)
-  bindFabStrict($("fabAdd"), () => openForm(null));
-  bindFabStrict($("fabDeposit"), openDepositQuick);
-  bindFabStrict($("fabBammer"), openBammerQuick);
-
-  // fallback if IDs aren’t present in the live build
-  const main = document.querySelector(".fab.main");
-  const smalls = Array.from(document.querySelectorAll(".fab.small"));
-  if (main && main.id !== "fabAdd") bindFabStrict(main, () => openForm(null));
-  if (smalls[0] && smalls[0].id !== "fabDeposit") bindFabStrict(smalls[0], openDepositQuick);
-  if (smalls[1] && smalls[1].id !== "fabBammer") bindFabStrict(smalls[1], openBammerQuick);
-
-  // capture fallback: if something tries to eat events, we still trigger when the target is within FAB
-  document.addEventListener("pointerdown", (e) => {
-    const t = e.target;
-    const hit = t?.closest?.("#fabAdd,#fabDeposit,#fabBammer,.fab.main,.fab.small");
-    if (!hit) return;
-    // handled by the button handlers already
+  // Also kill click only when it’s on/near the FAB stack (so inline onclick doesn't double fire)
+  document.addEventListener("click", (e) => {
+    const stack = document.querySelector(".fabStack");
+    if (!stack) return;
+    const r = stack.getBoundingClientRect();
+    const x = e.clientX, y = e.clientY;
+    if (pointInRect(x, y, r)) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+    }
   }, true);
 }
 
@@ -1147,12 +1166,11 @@ function init() {
   wireModalClickOff("studioModal","studioBox",closeStudio);
 
   initLogo();
-
   $("q")?.addEventListener("keydown", (e) => { if (e.key === "Enter") applyFilters(); });
 
-  installFabBindings();
+  installFabHitboxFix();
 
-  // re-apply a few times in case CSS loads late
+  // re-apply in case CSS loads late
   ensureToastPointerEvents();
   setTimeout(forceFabCSS, 50);
   setTimeout(forceFabCSS, 250);
@@ -1161,13 +1179,12 @@ function init() {
   rebuildClientsDB();
   render();
 
-  // tiny confirmation (won’t block)
-  toastCard({ title: "Loaded", sub: "FAB hard-fix active.", mini: "v2026-02-20-5", icon: "✅" });
+  toastCard({ title: "Loaded", sub: "FAB hitbox fix active.", mini: `v${APP_VERSION}`, icon: "✅" });
 }
 
 document.addEventListener("DOMContentLoaded", init);
 
-/* ===================== GLOBALS ===================== */
+/* ===================== GLOBALS (HTML onclick) ===================== */
 window.openForm = () => openForm(null);
 window.openDepositQuick = openDepositQuick;
 window.openBammerQuick = openBammerQuick;
