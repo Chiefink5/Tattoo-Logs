@@ -9,7 +9,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="styles.css" />
+  <!-- cache bust -->
+  <link rel="stylesheet" href="styles.css?v=2026-02-20-1" />
 </head>
 
 <body>
@@ -100,7 +101,7 @@
 
   </div>
 
-  <!-- FABs are OUTSIDE .page so nothing inside can cover them -->
+  <!-- FABs -->
   <div class="fabStack">
     <button class="fab small" id="fabDeposit" title="Deposit" onclick="openDepositQuick()">
       <span class="fabIcon">$↘</span>
@@ -111,6 +112,7 @@
     <button class="fab main" id="fabAdd" title="Add Entry" onclick="openForm()">+</button>
   </div>
 
-  <script src="app.js"></script>
+  <!-- cache bust -->
+  <script src="app.js?v=2026-02-20-1"></script>
 </body>
 </html>
