@@ -15,7 +15,6 @@
 <body>
   <div class="page">
 
-    <!-- HEADER -->
     <header class="topbar">
       <div class="brandRow">
         <div class="brandLeft">
@@ -30,7 +29,6 @@
         </div>
       </div>
 
-      <!-- Buttons on their own row -->
       <div class="brandActions">
         <button type="button" class="topBtn" onclick="openAppointments()">Appointments</button>
         <button type="button" class="topBtn" onclick="openStudio()">Studio</button>
@@ -38,7 +36,6 @@
       </div>
     </header>
 
-    <!-- STATS -->
     <section class="stats">
       <div class="stat"><div class="statNum" id="todayTotal">$0</div><div class="statLbl">Today</div></div>
       <div class="stat"><div class="statNum" id="weekTotal">$0</div><div class="statLbl">Week</div></div>
@@ -47,7 +44,6 @@
       <div class="stat"><div class="statNum" id="yearTotal">$0</div><div class="statLbl">Year</div></div>
     </section>
 
-    <!-- FILTERS -->
     <section class="filters">
       <div class="filtersHeader" onclick="toggleFilters()">
         <div class="filtersTitle">Filters <span id="filtersSummary" class="filtersSummary">• none</span></div>
@@ -87,23 +83,11 @@
       </div>
     </section>
 
-    <!-- ENTRIES -->
     <main id="entries" class="entries"></main>
-
-    <!-- Floating Buttons -->
-    <div class="fabStack">
-      <button class="fab small" title="Deposit" onclick="openDepositQuick()">
-        <span class="fabIcon">$↘</span>
-      </button>
-      <button class="fab small" title="Bammer" onclick="openBammerQuick()">
-        <span class="fabIcon">💥</span>
-      </button>
-      <button class="fab main" title="Add Entry" onclick="openForm()">+</button>
-    </div>
 
     <div id="toasts" class="toasts"></div>
 
-    <!-- Modals (IDs must exist) -->
+    <!-- Modals -->
     <div id="formModal" class="modal"><div id="formBox" class="modalBox"></div></div>
     <div id="viewModal" class="modal"><div id="viewBox" class="modalBox"></div></div>
     <div id="exportModal" class="modal"><div id="exportBox" class="modalBox"></div></div>
@@ -114,6 +98,17 @@
     <div id="appointmentsModal" class="modal"><div id="appointmentsBox" class="modalBox"></div></div>
     <div id="studioModal" class="modal"><div id="studioBox" class="modalBox"></div></div>
 
+  </div>
+
+  <!-- FABs are OUTSIDE .page so nothing inside can cover them -->
+  <div class="fabStack">
+    <button class="fab small" id="fabDeposit" title="Deposit" onclick="openDepositQuick()">
+      <span class="fabIcon">$↘</span>
+    </button>
+    <button class="fab small" id="fabBammer" title="Bammer" onclick="openBammerQuick()">
+      <span class="fabIcon">💥</span>
+    </button>
+    <button class="fab main" id="fabAdd" title="Add Entry" onclick="openForm()">+</button>
   </div>
 
   <script src="app.js"></script>
