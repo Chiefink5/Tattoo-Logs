@@ -32,11 +32,18 @@ let rewardsSettings = JSON.parse(localStorage.getItem("rewardsSettings") || "nul
     { id: "lvl2", name: "Regular", minCount: 5, pngDataUrl: "" },
     { id: "lvl3", name: "VIP", minCount: 10, pngDataUrl: "" }
   ],
+  // discount tiers are now: { id, label, minCount, type: "percent"|"static"|"free", value }
   discounts: [
-    { id: "d1", label: "5% off", minCount: 5, percent: 5 },
-    { id: "d2", label: "10% off", minCount: 10, percent: 10 }
+    { id: "d1", label: "5% off", minCount: 5, type: "percent", value: 5 },
+    { id: "d2", label: "$20 off", minCount: 10, type: "static", value: 20 }
   ]
 };
+
+// Client-specific discount overrides (what YOU want to apply for them right now)
+let clientDiscountOverrides =
+  JSON.parse(localStorage.getItem("clientDiscountOverrides") || "null") || {
+    // "clientkey": { tierId: "d2" }  // or tierId: "" for none
+  };
 
 let prefillClient = null;
 
@@ -45,72 +52,68 @@ let toastQueue = [];
 let toastTimer = null;
 
 // ================= HELPERS =================
-function safeEl(id){ return document.getElementById(id); }
-function safeVal(id){ const el = safeEl(id); return el ? el.value : ""; }
-function pad2(n){ return String(n).padStart(2,"0"); }
-function money(n){
+function safeEl(id) { return document.getElementById(id); }
+function safeVal(id) { const el = safeEl(id); return el ? el.value : ""; }
+function pad2(n) { return String(n).padStart(2, "0"); }
+function money(n) {
   const num = Number(n || 0);
   const v = Number.isFinite(num) ? num : 0;
-  return "$" + v.toFixed(2).replace(/\.00$/,"");
+  return "$" + v.toFixed(2).replace(/\.00$/, "");
 }
-function monthName(year, monthIndex){
-  return new Date(year, monthIndex, 1).toLocaleString("default",{month:"long"});
+function monthName(year, monthIndex) {
+  return new Date(year, monthIndex, 1).toLocaleString("default", { month: "long" });
 }
-function parseLocalDate(dateStr){
+function parseLocalDate(dateStr) {
   const parts = String(dateStr || "").split("-");
-  if(parts.length !== 3) return null;
+  if (parts.length !== 3) return null;
   const y = Number(parts[0]), m = Number(parts[1]) - 1, d = Number(parts[2]);
   const dt = new Date(y, m, d);
-  dt.setHours(0,0,0,0);
+  dt.setHours(0, 0, 0, 0);
   return dt;
 }
-function formatYYYYMMDD(d){
-  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
-}
-function formatYYYYMM(d){
-  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}`;
-}
-function clampPct(p){
+function formatYYYYMMDD(d) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
+function formatYYYYMM(d) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`; }
+function clampPct(p) {
   p = Number(p);
-  if(!Number.isFinite(p)) return 100;
+  if (!Number.isFinite(p)) return 100;
   return Math.max(0, Math.min(100, p));
 }
-function normalize(s){ return String(s||"").toLowerCase(); }
-function uid(prefix="id"){ return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`; }
+function normalize(s) { return String(s || "").toLowerCase(); }
+function uid(prefix = "id") { return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`; }
 
-function paymentsArray(entry){ return Array.isArray(entry.payments) ? entry.payments : []; }
-function paidAmount(entry){ return paymentsArray(entry).reduce((sum,p)=>sum + Number(p.amount || 0), 0); }
-function depositAmount(entry){
-  return paymentsArray(entry).filter(p=>p.kind==="deposit").reduce((sum,p)=>sum + Number(p.amount||0), 0);
+function paymentsArray(entry) { return Array.isArray(entry.payments) ? entry.payments : []; }
+function paidAmount(entry) { return paymentsArray(entry).reduce((sum, p) => sum + Number(p.amount || 0), 0); }
+function depositAmount(entry) {
+  return paymentsArray(entry).filter(p => p.kind === "deposit").reduce((sum, p) => sum + Number(p.amount || 0), 0);
 }
-function hasAnyPayments(entry){ return paymentsArray(entry).some(p => Number(p.amount||0) > 0); }
-function hasSessions(entry){ return paymentsArray(entry).some(p => p.kind === "session" && Number(p.amount||0) > 0); }
-function isDepositOnlyEntry(entry){ return depositAmount(entry) > 0 && !hasSessions(entry); }
-function isTattooEntry(entry){ return !isDepositOnlyEntry(entry); }
+function hasAnyPayments(entry) { return paymentsArray(entry).some(p => Number(p.amount || 0) > 0); }
+function hasSessions(entry) { return paymentsArray(entry).some(p => p.kind === "session" && Number(p.amount || 0) > 0); }
+function isDepositOnlyEntry(entry) { return depositAmount(entry) > 0 && !hasSessions(entry); }
+function isTattooEntry(entry) { return !isDepositOnlyEntry(entry); }
 
-function currentQuarterIndex(dateObj){ return Math.floor(dateObj.getMonth() / 3); }
+function currentQuarterIndex(dateObj) { return Math.floor(dateObj.getMonth() / 3); }
 
 // ---- Totals (gross) ----
-function totalForTotalsGross(entry){
+function totalForTotalsGross(entry) {
   const status = (entry.status || "unpaid").toLowerCase();
-  if(status === "paid") return Number(entry.total || 0);
-  if(status === "partial") return paidAmount(entry);
+  if (status === "paid") return Number(entry.total || 0);
+  if (status === "partial") return paidAmount(entry);
   return 0;
 }
 
 // Card preview “Paid:”
-function paidForPreview(entry){
+function paidForPreview(entry) {
   const status = (entry.status || "unpaid").toLowerCase();
-  if(status === "paid") return Number(entry.total || 0);
-  if(status === "partial") return paidAmount(entry);
-  if(status === "booked") return depositAmount(entry);
+  if (status === "paid") return Number(entry.total || 0);
+  if (status === "partial") return paidAmount(entry);
+  if (status === "booked") return depositAmount(entry);
   return 0;
 }
 
-// ---- Split math (net behind the scenes) ----
-function getSplitPctForDate(dateStr){
+// ---- Split math (kept behind the scenes) ----
+function getSplitPctForDate(dateStr) {
   const d = parseLocalDate(dateStr);
-  if(!d) return clampPct(splitSettings.defaultPct || 100);
+  if (!d) return clampPct(splitSettings.defaultPct || 100);
   const key = formatYYYYMM(d);
   const override = splitSettings.monthOverrides && splitSettings.monthOverrides[key];
   const pct = (override !== undefined && override !== null)
@@ -118,38 +121,191 @@ function getSplitPctForDate(dateStr){
     : Number(splitSettings.defaultPct || 100);
   return clampPct(pct);
 }
-function netFromGross(gross, pct){ return Number(gross||0) * (clampPct(pct) / 100); }
-function totalForTotalsNet(entry){
+function netFromGross(gross, pct) { return Number(gross || 0) * (clampPct(pct) / 100); }
+function totalForTotalsNet(entry) {
   const gross = totalForTotalsGross(entry);
   const pct = getSplitPctForDate(entry.date);
   return netFromGross(gross, pct);
 }
 
+// ================= CLIENT REWARDS + DISCOUNTS =================
+function clientKey(name) { return normalize(String(name || "")).trim(); }
+
+function getClientEntries(name) {
+  const key = clientKey(name);
+  return entries
+    .filter(e => clientKey(e.client) === key)
+    .slice()
+    .sort((a, b) => b.id - a.id);
+}
+
+function getClientTattooCount(name) {
+  return getClientEntries(name).filter(isTattooEntry).length;
+}
+
+function getBestLevelForCount(count) {
+  const levels = Array.isArray(rewardsSettings.levels) ? rewardsSettings.levels : [];
+  const sorted = levels
+    .filter(l => Number(l.minCount || 0) > 0)
+    .slice()
+    .sort((a, b) => Number(a.minCount) - Number(b.minCount));
+  let best = null;
+  for (const l of sorted) if (count >= Number(l.minCount || 0)) best = l;
+  return best;
+}
+
+function normalizeDiscountTier(t) {
+  const type = (t.type || "percent").toLowerCase();
+  const fixedType = (type === "percent" || type === "static" || type === "free") ? type : "percent";
+  const value = Number(t.value || 0);
+  return {
+    id: t.id,
+    label: String(t.label || "").trim() || (fixedType === "free" ? "FREE" : fixedType === "static" ? "$ off" : "% off"),
+    minCount: Math.max(0, Number(t.minCount || 0)),
+    type: fixedType,
+    value: fixedType === "free" ? 0 : (Number.isFinite(value) ? value : 0)
+  };
+}
+
+function getBestDiscountForCount(count) {
+  const tiers = Array.isArray(rewardsSettings.discounts) ? rewardsSettings.discounts : [];
+  const sorted = tiers
+    .map(normalizeDiscountTier)
+    .filter(t => Number(t.minCount || 0) > 0)
+    .slice()
+    .sort((a, b) => Number(a.minCount) - Number(b.minCount));
+  let best = null;
+  for (const t of sorted) if (count >= Number(t.minCount || 0)) best = t;
+  return best;
+}
+
+// “Discount to apply” for a client:
+// - If you selected an override on their profile → use that
+// - Else → best tier by tattoo count
+function getDiscountForClient(name) {
+  const key = clientKey(name);
+  const overrideTierId = (clientDiscountOverrides[key] && clientDiscountOverrides[key].tierId) ? String(clientDiscountOverrides[key].tierId) : "";
+  const tiers = (Array.isArray(rewardsSettings.discounts) ? rewardsSettings.discounts : []).map(normalizeDiscountTier);
+
+  if (overrideTierId) {
+    const found = tiers.find(t => t.id === overrideTierId);
+    if (found) return { ...found, source: "override" };
+  }
+
+  const cnt = getClientTattooCount(name);
+  const best = getBestDiscountForCount(cnt);
+  return best ? { ...normalizeDiscountTier(best), source: "auto" } : null;
+}
+
+function discountToText(d) {
+  if (!d) return "—";
+  if (d.type === "free") return `FREE (${d.source === "override" ? "set" : "auto"})`;
+  if (d.type === "static") return `${money(d.value)} off (${d.source === "override" ? "set" : "auto"})`;
+  return `${Number(d.value || 0)}% off (${d.source === "override" ? "set" : "auto"})`;
+}
+
+// Reminders: any BOOKED entry today+ counts as upcoming appointment
+function getUpcomingBookedForClient(name) {
+  const key = clientKey(name);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return entries
+    .filter(e => clientKey(e.client) === key)
+    .filter(e => (e.status || "").toLowerCase() === "booked")
+    .filter(e => {
+      const d = parseLocalDate(e.date);
+      return d && d >= today;
+    })
+    .slice()
+    .sort((a, b) => {
+      const da = parseLocalDate(a.date) || new Date(0);
+      const db = parseLocalDate(b.date) || new Date(0);
+      return da - db;
+    });
+}
+
+function getClientNetTotal(name) {
+  return getClientEntries(name).reduce((sum, e) => sum + totalForTotalsNet(e), 0);
+}
+
+function getClientProgressSnapshot(name) {
+  const cnt = getClientTattooCount(name);
+  const level = getBestLevelForCount(cnt);
+  const disc = getDiscountForClient(name);
+  return {
+    tattooCount: cnt,
+    levelId: level ? level.id : "",
+    levelName: level ? level.name : "",
+    levelPng: level ? (level.pngDataUrl || "") : "",
+    discountTierId: disc ? disc.id : "",
+    discountText: discountToText(disc),
+    discountSource: disc ? disc.source : ""
+  };
+}
+
+function maybeNotifyClientProgress(name, before, after) {
+  if (!before || !after) return;
+
+  const total = money(getClientNetTotal(name));
+
+  if (before.levelId !== after.levelId && after.levelId) {
+    pushToast({
+      title: `New Badge — ${after.levelName}`,
+      sub: `${name} hit ${after.tattooCount} tattoos.`,
+      mini: `Total: ${total}`,
+      imgDataUrl: after.levelPng || "",
+      actionLabel: "View Client",
+      actionFn: () => openClientProfile(name)
+    });
+  }
+
+  // only toast discount if it changed AND it’s from auto tiers (overrides are manual)
+  if (before.discountTierId !== after.discountTierId && after.discountTierId && after.discountSource === "auto") {
+    pushToast({
+      title: `Discount Unlocked`,
+      sub: `${name}: ${after.discountText.replace(/\s*$begin:math:text$auto$end:math:text$/, "")}`,
+      mini: `Total: ${total}`,
+      imgDataUrl: after.levelPng || "",
+      actionLabel: "View Client",
+      actionFn: () => openClientProfile(name)
+    });
+  }
+}
+
+function badgeHtmlForClient(name) {
+  const snap = getClientProgressSnapshot(name);
+  if (!snap.levelId) return "";
+  const img = snap.levelPng ? `<img src="${snap.levelPng}" alt="badge">` : "";
+  return `<span class="client-badge" title="Badge level">${img}${snap.levelName} (${snap.tattooCount})</span>`;
+}
+
 // ================= PERSIST =================
-function save(){
+function save() {
   localStorage.setItem("entries", JSON.stringify(entries));
   render();
 }
-function saveFilters(){ localStorage.setItem("filters", JSON.stringify(filters)); }
-function saveFiltersUI(){ localStorage.setItem("filtersUI", JSON.stringify(filtersUI)); }
-function saveRewardsSettings(){ localStorage.setItem("rewardsSettings", JSON.stringify(rewardsSettings)); }
+function saveFilters() { localStorage.setItem("filters", JSON.stringify(filters)); }
+function saveFiltersUI() { localStorage.setItem("filtersUI", JSON.stringify(filtersUI)); }
+function saveRewardsSettings() { localStorage.setItem("rewardsSettings", JSON.stringify(rewardsSettings)); }
+function saveClientOverrides() { localStorage.setItem("clientDiscountOverrides", JSON.stringify(clientDiscountOverrides)); }
 
 // ================= TOASTS =================
-function pushToast(toast){
+function pushToast(toast) {
   toastQueue.push(toast);
-  if(!toastTimer) toastTimer = setInterval(flushToast, 250);
+  if (!toastTimer) toastTimer = setInterval(flushToast, 250);
 }
-function flushToast(){
-  if(!toastQueue.length){
+function flushToast() {
+  if (!toastQueue.length) {
     clearInterval(toastTimer);
     toastTimer = null;
     return;
   }
   showToast(toastQueue.shift());
 }
-function showToast({ title, sub, mini, imgDataUrl, actionLabel, actionFn }){
+function showToast({ title, sub, mini, imgDataUrl, actionLabel, actionFn }) {
   const wrap = safeEl("toasts");
-  if(!wrap) return;
+  if (!wrap) return;
 
   const el = document.createElement("div");
   el.className = "toast";
@@ -168,15 +324,15 @@ function showToast({ title, sub, mini, imgDataUrl, actionLabel, actionFn }){
     ${actionLabel ? `<div class="t-actions"><button type="button">${actionLabel}</button></div>` : ``}
   `;
 
-  if(actionLabel && typeof actionFn === "function"){
-    el.querySelector("button").addEventListener("click", ()=>{
+  if (actionLabel && typeof actionFn === "function") {
+    el.querySelector("button").addEventListener("click", () => {
       actionFn();
       el.remove();
     });
   }
 
   wrap.appendChild(el);
-  setTimeout(()=>{ el.remove(); }, 5500);
+  setTimeout(() => { el.remove(); }, 5500);
 }
 
 // ================= MODALS (click off to close) =================
@@ -199,10 +355,10 @@ const appointmentsBox = safeEl("appointmentsBox");
 const studioModal = safeEl("studioModal");
 const studioBox = safeEl("studioBox");
 
-function wireModal(modal, box, closer){
-  if(!modal || !box) return;
-  modal.addEventListener("click",(e)=>{ if(e.target===modal) closer(); });
-  box.addEventListener("click",(e)=> e.stopPropagation());
+function wireModal(modal, box, closer) {
+  if (!modal || !box) return;
+  modal.addEventListener("click", (e) => { if (e.target === modal) closer(); });
+  box.addEventListener("click", (e) => e.stopPropagation());
 }
 wireModal(formModal, formBox, closeForm);
 wireModal(viewModal, viewBox, closeView);
@@ -215,13 +371,13 @@ wireModal(appointmentsModal, appointmentsBox, closeAppointments);
 wireModal(studioModal, studioBox, closeStudio);
 
 // ================= LOGO =================
-function initLogo(){
+function initLogo() {
   const img = safeEl("logoImg");
   const input = safeEl("logoInput");
-  if(!img || !input) return;
+  if (!img || !input) return;
 
   const saved = localStorage.getItem("logoDataUrl");
-  if(saved){
+  if (saved) {
     img.src = saved;
   } else {
     img.src = "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(`
@@ -232,12 +388,12 @@ function initLogo(){
     `);
   }
 
-  img.addEventListener("click", ()=> input.click());
-  input.addEventListener("change", ()=>{
+  img.addEventListener("click", () => input.click());
+  input.addEventListener("change", () => {
     const file = input.files && input.files[0];
-    if(!file) return;
+    if (!file) return;
     const reader = new FileReader();
-    reader.onload = (e)=>{
+    reader.onload = (e) => {
       localStorage.setItem("logoDataUrl", e.target.result);
       img.src = e.target.result;
       input.value = "";
@@ -245,7 +401,7 @@ function initLogo(){
     reader.readAsDataURL(file);
   });
 }
-function removeLogo(){
+function removeLogo() {
   localStorage.removeItem("logoDataUrl");
   initLogo();
 }
@@ -253,43 +409,43 @@ initLogo();
 window.removeLogo = removeLogo;
 
 // ================= FILTER TOGGLE UI =================
-function toggleFilters(){
+function toggleFilters() {
   filtersUI.open = !filtersUI.open;
   saveFiltersUI();
   applyFiltersUIState();
 }
-function applyFiltersUIState(){
+function applyFiltersUIState() {
   const content = safeEl("filtersContent");
   const chev = safeEl("filtersChev");
-  if(content) content.style.display = filtersUI.open ? "block" : "none";
-  if(chev) chev.textContent = filtersUI.open ? "▴" : "▾";
+  if (content) content.style.display = filtersUI.open ? "block" : "none";
+  if (chev) chev.textContent = filtersUI.open ? "▴" : "▾";
 }
 window.toggleFilters = toggleFilters;
 
 // Build a tiny summary string for the Filters header
-function updateFiltersSummary(){
+function updateFiltersSummary() {
   const parts = [];
-  if(filters.q) parts.push(`Search: "${filters.q}"`);
-  if(filters.status && filters.status !== "all") parts.push(`Status: ${filters.status.toUpperCase()}`);
-  if(filters.location && filters.location !== "all") parts.push(`Loc: ${filters.location}`);
-  if(filters.from) parts.push(`From: ${filters.from}`);
-  if(filters.to) parts.push(`To: ${filters.to}`);
-  if(filters.sort && filters.sort !== "newest") parts.push(`Sort: ${filters.sort}`);
+  if (filters.q) parts.push(`Search: "${filters.q}"`);
+  if (filters.status && filters.status !== "all") parts.push(`Status: ${filters.status.toUpperCase()}`);
+  if (filters.location && filters.location !== "all") parts.push(`Loc: ${filters.location}`);
+  if (filters.from) parts.push(`From: ${filters.from}`);
+  if (filters.to) parts.push(`To: ${filters.to}`);
+  if (filters.sort && filters.sort !== "newest") parts.push(`Sort: ${filters.sort}`);
 
   const s = safeEl("filtersSummary");
-  if(!s) return;
+  if (!s) return;
   s.textContent = parts.length ? `• ${parts.join(" • ")}` : "• none";
 }
 
 // ================= STUDIO (Split + Rewards in one window) =================
-function openStudio(){
-  if(!studioModal) return;
+function openStudio() {
+  if (!studioModal) return;
 
   const def = safeEl("defaultSplitPct");
-  if(def) def.value = String(clampPct(splitSettings.defaultPct));
+  if (def) def.value = String(clampPct(splitSettings.defaultPct));
 
   const list = safeEl("overrideList");
-  if(list){
+  if (list) {
     const keys = Object.keys(splitSettings.monthOverrides || {}).sort().reverse();
     list.innerHTML = keys.length
       ? keys.map(k => `• <b style="color:var(--gold)">${k}</b> → ${clampPct(splitSettings.monthOverrides[k])}%`).join("<br>")
@@ -298,30 +454,27 @@ function openStudio(){
 
   studioModal.style.display = "flex";
 }
-function closeStudio(){
-  if(!studioModal) return;
-  studioModal.style.display = "none";
-}
-function saveSplitSettings(){
+function closeStudio() { if (!studioModal) return; studioModal.style.display = "none"; }
+function saveSplitSettings() {
   splitSettings.defaultPct = clampPct(safeVal("defaultSplitPct"));
   localStorage.setItem("splitSettings", JSON.stringify(splitSettings));
   closeStudio();
   render();
 }
-function saveMonthOverride(){
+function saveMonthOverride() {
   const m = safeVal("overrideMonth");
   const pct = clampPct(safeVal("overridePct"));
-  if(!m){ alert("Pick a month."); return; }
+  if (!m) { alert("Pick a month."); return; }
   splitSettings.monthOverrides = splitSettings.monthOverrides || {};
   splitSettings.monthOverrides[m] = pct;
   localStorage.setItem("splitSettings", JSON.stringify(splitSettings));
   openStudio();
   render();
 }
-function removeMonthOverride(){
+function removeMonthOverride() {
   const m = safeVal("overrideMonth");
-  if(!m){ alert("Pick a month."); return; }
-  if(splitSettings.monthOverrides && splitSettings.monthOverrides[m] !== undefined){
+  if (!m) { alert("Pick a month."); return; }
+  if (splitSettings.monthOverrides && splitSettings.monthOverrides[m] !== undefined) {
     delete splitSettings.monthOverrides[m];
     localStorage.setItem("splitSettings", JSON.stringify(splitSettings));
     openStudio();
@@ -335,72 +488,77 @@ window.saveMonthOverride = saveMonthOverride;
 window.removeMonthOverride = removeMonthOverride;
 
 // ================= BACKUP / RESTORE =================
-function downloadBackup(){
+function downloadBackup() {
   const payload = {
-    version: 4,
+    version: 5,
     exportedAt: new Date().toISOString(),
     entries,
     payday,
     splitSettings,
     filters,
     filtersUI,
-    rewardsSettings
+    rewardsSettings,
+    clientDiscountOverrides
   };
 
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `globbers-ink-log_backup_${new Date().toISOString().slice(0,10)}.json`;
+  a.download = `globbers-ink-log_backup_${new Date().toISOString().slice(0, 10)}.json`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
-function restoreBackup(){
+function restoreBackup() {
   const input = safeEl("restoreFile");
   const file = input && input.files ? input.files[0] : null;
-  if(!file){ alert("Pick a backup JSON file first."); return; }
-  if(!confirm("Restore backup? This will overwrite your current data.")) return;
+  if (!file) { alert("Pick a backup JSON file first."); return; }
+  if (!confirm("Restore backup? This will overwrite your current data.")) return;
 
   const reader = new FileReader();
-  reader.onload = (e)=>{
-    try{
+  reader.onload = (e) => {
+    try {
       const data = JSON.parse(e.target.result);
-      if(!data || typeof data !== "object") throw new Error("Invalid backup");
-      if(!Array.isArray(data.entries)) throw new Error("Backup missing entries");
+      if (!data || typeof data !== "object") throw new Error("Invalid backup");
+      if (!Array.isArray(data.entries)) throw new Error("Backup missing entries");
 
       entries = data.entries;
 
-      if(typeof data.payday === "number"){
+      if (typeof data.payday === "number") {
         payday = data.payday;
         localStorage.setItem("payday", String(payday));
       }
-      if(data.splitSettings && typeof data.splitSettings === "object"){
+      if (data.splitSettings && typeof data.splitSettings === "object") {
         splitSettings = data.splitSettings;
         localStorage.setItem("splitSettings", JSON.stringify(splitSettings));
       }
-      if(data.filters && typeof data.filters === "object"){
+      if (data.filters && typeof data.filters === "object") {
         filters = data.filters;
         saveFilters();
       }
-      if(data.filtersUI && typeof data.filtersUI === "object"){
+      if (data.filtersUI && typeof data.filtersUI === "object") {
         filtersUI = data.filtersUI;
         saveFiltersUI();
       }
-      if(data.rewardsSettings && typeof data.rewardsSettings === "object"){
+      if (data.rewardsSettings && typeof data.rewardsSettings === "object") {
         rewardsSettings = data.rewardsSettings;
         saveRewardsSettings();
+      }
+      if (data.clientDiscountOverrides && typeof data.clientDiscountOverrides === "object") {
+        clientDiscountOverrides = data.clientDiscountOverrides;
+        saveClientOverrides();
       }
 
       localStorage.setItem("entries", JSON.stringify(entries));
       alert("Backup restored ✅");
       closeStudio();
       render();
-    }catch(err){
+    } catch (err) {
       alert("Couldn’t restore that file. Make sure it’s a real backup JSON.");
-    }finally{
-      if(input) input.value = "";
+    } finally {
+      if (input) input.value = "";
     }
   };
   reader.readAsText(file);
@@ -409,7 +567,7 @@ window.downloadBackup = downloadBackup;
 window.restoreBackup = restoreBackup;
 
 // ================= FILTERS =================
-function hydrateFilterUI(){
+function hydrateFilterUI() {
   const q = safeEl("q");
   const status = safeEl("statusFilter");
   const loc = safeEl("locationFilter");
@@ -417,17 +575,17 @@ function hydrateFilterUI(){
   const to = safeEl("toDate");
   const sort = safeEl("sortFilter");
 
-  if(q) q.value = filters.q || "";
-  if(status) status.value = filters.status || "all";
-  if(from) from.value = filters.from || "";
-  if(to) to.value = filters.to || "";
-  if(sort) sort.value = filters.sort || "newest";
-  if(loc) loc.value = filters.location || "all";
+  if (q) q.value = filters.q || "";
+  if (status) status.value = filters.status || "all";
+  if (from) from.value = filters.from || "";
+  if (to) to.value = filters.to || "";
+  if (sort) sort.value = filters.sort || "newest";
+  if (loc) loc.value = filters.location || "all";
 
   updateFiltersSummary();
   applyFiltersUIState();
 }
-function applyFilters(){
+function applyFilters() {
   filters.q = (safeVal("q") || "").trim();
   filters.status = safeVal("statusFilter") || "all";
   filters.location = safeVal("locationFilter") || "all";
@@ -438,8 +596,8 @@ function applyFilters(){
   updateFiltersSummary();
   render();
 }
-function clearFilters(){
-  filters = { q:"", status:"all", location:"all", from:"", to:"", sort:"newest" };
+function clearFilters() {
+  filters = { q: "", status: "all", location: "all", from: "", to: "", sort: "newest" };
   saveFilters();
   hydrateFilterUI();
   render();
@@ -447,111 +605,113 @@ function clearFilters(){
 window.applyFilters = applyFilters;
 window.clearFilters = clearFilters;
 
-(function wireFilterKeys(){
+(function wireFilterKeys() {
   const q = safeEl("q");
-  if(q){
-    q.addEventListener("keydown",(e)=>{ if(e.key === "Enter") applyFilters(); });
-  }
+  if (q) q.addEventListener("keydown", (e) => { if (e.key === "Enter") applyFilters(); });
 })();
 
-function passesFilters(entry){
-  if(filters.status && filters.status !== "all"){
-    if((entry.status || "unpaid") !== filters.status) return false;
+function passesFilters(entry) {
+  if (filters.status && filters.status !== "all") {
+    if ((entry.status || "unpaid") !== filters.status) return false;
   }
-  if(filters.location && filters.location !== "all"){
-    if((entry.location || "") !== filters.location) return false;
+  if (filters.location && filters.location !== "all") {
+    if ((entry.location || "") !== filters.location) return false;
   }
 
   const d = parseLocalDate(entry.date);
-  if(!d) return false;
+  if (!d) return false;
 
-  if(filters.from){
+  if (filters.from) {
     const from = parseLocalDate(filters.from);
-    if(from && d < from) return false;
+    if (from && d < from) return false;
   }
-  if(filters.to){
+  if (filters.to) {
     const to = parseLocalDate(filters.to);
-    if(to && d > to) return false;
+    if (to && d > to) return false;
   }
 
   const q = normalize(filters.q).trim();
-  if(q){
+  if (q) {
     const hay = [entry.client, entry.description, entry.location].map(normalize).join(" | ");
-    if(!hay.includes(q)) return false;
+    if (!hay.includes(q)) return false;
   }
 
   return true;
 }
 
-function getFilteredEntries(){
+function getFilteredEntries() {
   const list = entries.filter(passesFilters);
-  list.sort((a,b)=> filters.sort === "oldest" ? (a.id - b.id) : (b.id - a.id));
+  list.sort((a, b) => filters.sort === "oldest" ? (a.id - b.id) : (b.id - a.id));
   return list;
 }
 
 // ================= APPOINTMENTS SCREEN =================
-function openAppointments(){
+function openAppointments() {
   const modal = safeEl("appointmentsModal");
-  if(!modal) return;
+  if (!modal) return;
 
   const q = safeEl("apptQ");
   const mode = safeEl("apptMode");
-  if(q) q.value = "";
-  if(mode) mode.value = "upcoming";
+  if (q) q.value = "";
+  if (mode) mode.value = "upcoming";
 
   buildAppointmentsList();
   modal.style.display = "flex";
 }
-function closeAppointments(){
+function closeAppointments() {
   const modal = safeEl("appointmentsModal");
-  if(!modal) return;
+  if (!modal) return;
   modal.style.display = "none";
 }
-function buildAppointmentsList(){
+function buildAppointmentsList() {
   const listEl = safeEl("appointmentsList");
-  if(!listEl) return;
+  if (!listEl) return;
 
   const q = normalize(safeVal("apptQ")).trim();
   const mode = safeVal("apptMode") || "upcoming";
 
   const today = new Date();
-  today.setHours(0,0,0,0);
+  today.setHours(0, 0, 0, 0);
 
   let booked = entries
     .filter(e => (e.status || "").toLowerCase() === "booked")
     .filter(e => {
       const d = parseLocalDate(e.date);
-      if(!d) return false;
-      if(mode === "upcoming" && d < today) return false;
+      if (!d) return false;
+      if (mode === "upcoming" && d < today) return false;
       return true;
     });
 
-  if(q){
-    booked = booked.filter(e=>{
+  if (q) {
+    booked = booked.filter(e => {
       const hay = [e.client, e.description, e.location].map(normalize).join(" | ");
       return hay.includes(q);
     });
   }
 
-  booked.sort((a,b)=>{
+  booked.sort((a, b) => {
     const da = parseLocalDate(a.date) || new Date(0);
     const db = parseLocalDate(b.date) || new Date(0);
-    if(da.getTime() !== db.getTime()) return da - db;
-    return (a.id||0) - (b.id||0);
+    if (da.getTime() !== db.getTime()) return da - db;
+    return (a.id || 0) - (b.id || 0);
   });
 
-  if(!booked.length){
+  if (!booked.length) {
     listEl.innerHTML = `<div class="summary-box"><div style="opacity:.75;">No booked appointments found.</div></div>`;
     return;
   }
 
-  listEl.innerHTML = booked.map(e=>{
+  listEl.innerHTML = booked.map(e => {
     const dep = depositAmount(e);
     const depLine = dep > 0
       ? `<span class="pill gold">Deposit: <b style="color:var(--gold)">${money(dep)}</b></span>`
       : `<span class="pill blue">No deposit set</span>`;
+
     const row2 = [e.location, e.description].filter(Boolean).join(" • ");
     const badge = badgeHtmlForClient(e.client);
+
+    const d = getDiscountForClient(e.client);
+    const discPill = d ? `<span class="pill gold">Discount: <b style="color:var(--gold)">${discountToText(d).replace(/\s*$begin:math:text$\(set\|auto\)$end:math:text$/, "")}</b></span>` : "";
 
     return `
       <div class="appt-card" onclick="openBookedFromAppointments(${e.id})">
@@ -564,83 +724,81 @@ function buildAppointmentsList(){
           <div class="appt-date">${e.date}</div>
         </div>
         <div class="appt-sub">
-          <div>${depLine}</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            ${depLine}
+            ${discPill}
+          </div>
           ${row2 ? `<div style="opacity:.92;">${row2}</div>` : ``}
         </div>
       </div>
     `;
   }).join("");
 }
-function openBookedFromAppointments(id){
+function openBookedFromAppointments(id) {
   closeAppointments();
   viewEntry(id);
 }
-(function wireAppointmentsInputs(){
+(function wireAppointmentsInputs() {
   const q = safeEl("apptQ");
   const mode = safeEl("apptMode");
-  if(q){
-    q.addEventListener("input", ()=> buildAppointmentsList());
-    q.addEventListener("keydown",(e)=>{ if(e.key==="Enter") buildAppointmentsList(); });
+  if (q) {
+    q.addEventListener("input", () => buildAppointmentsList());
+    q.addEventListener("keydown", (e) => { if (e.key === "Enter") buildAppointmentsList(); });
   }
-  if(mode){
-    mode.addEventListener("change", ()=> buildAppointmentsList());
-  }
+  if (mode) mode.addEventListener("change", () => buildAppointmentsList());
 })();
 window.openAppointments = openAppointments;
 window.closeAppointments = closeAppointments;
 window.openBookedFromAppointments = openBookedFromAppointments;
 
 // ================= PAYDAY WINDOW + EXPORT =================
-function getWeekWindowFromDate(anchorDate){
+function getWeekWindowFromDate(anchorDate) {
   const now = new Date(anchorDate);
   const currentDay = now.getDay();
   const diffToPayday = (currentDay - payday + 7) % 7;
 
   const start = new Date(now);
   start.setDate(now.getDate() - diffToPayday);
-  start.setHours(0,0,0,0);
+  start.setHours(0, 0, 0, 0);
 
   const end = new Date(start);
   end.setDate(start.getDate() + 6);
-  end.setHours(23,59,59,999);
+  end.setHours(23, 59, 59, 999);
 
   return { start, end };
 }
 
-function openExport(){
-  if(!exportModal) return;
+function openExport() {
+  if (!exportModal) return;
 
   const paydaySelect = safeEl("paydaySelect");
-  if(paydaySelect) paydaySelect.value = String(payday);
+  if (paydaySelect) paydaySelect.value = String(payday);
 
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  const end = new Date(now.getFullYear(), now.getMonth()+1, 0);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
   const exportStart = safeEl("exportStart");
   const exportEnd = safeEl("exportEnd");
-  if(exportStart) exportStart.value = formatYYYYMMDD(start);
-  if(exportEnd) exportEnd.value = formatYYYYMMDD(end);
+  if (exportStart) exportStart.value = formatYYYYMMDD(start);
+  if (exportEnd) exportEnd.value = formatYYYYMMDD(end);
 
   const w = getWeekWindowFromDate(now);
   payPeriodAnchor = new Date(w.start);
   updatePayPeriodUI();
 
   const summaryOut = safeEl("summaryOut");
-  if(summaryOut) summaryOut.innerHTML = "";
+  if (summaryOut) summaryOut.innerHTML = "";
 
   exportModal.style.display = "flex";
 }
-function closeExport(){
-  if(!exportModal) return;
-  exportModal.style.display = "none";
-}
-(function initPaydaySelect(){
+function closeExport() { if (!exportModal) return; exportModal.style.display = "none"; }
+(function initPaydaySelect() {
   const paydaySelect = safeEl("paydaySelect");
-  if(!paydaySelect) return;
+  if (!paydaySelect) return;
 
   paydaySelect.value = String(payday);
-  paydaySelect.addEventListener("change", function(){
+  paydaySelect.addEventListener("change", function () {
     payday = Number(this.value);
     localStorage.setItem("payday", String(payday));
 
@@ -652,25 +810,25 @@ function closeExport(){
     render();
   });
 })();
-function updatePayPeriodUI(){
+function updatePayPeriodUI() {
   const ppStart = safeEl("ppStart");
   const ppEnd = safeEl("ppEnd");
-  if(!ppStart || !ppEnd) return;
+  if (!ppStart || !ppEnd) return;
 
   const anchor = payPeriodAnchor ? new Date(payPeriodAnchor) : new Date();
   const w = getWeekWindowFromDate(anchor);
   ppStart.value = formatYYYYMMDD(w.start);
   ppEnd.value = formatYYYYMMDD(w.end);
 }
-function prevPayPeriod(){
-  if(!payPeriodAnchor) payPeriodAnchor = new Date();
+function prevPayPeriod() {
+  if (!payPeriodAnchor) payPeriodAnchor = new Date();
   const d = new Date(payPeriodAnchor);
   d.setDate(d.getDate() - 7);
   payPeriodAnchor = d;
   updatePayPeriodUI();
 }
-function nextPayPeriod(){
-  if(!payPeriodAnchor) payPeriodAnchor = new Date();
+function nextPayPeriod() {
+  if (!payPeriodAnchor) payPeriodAnchor = new Date();
   const d = new Date(payPeriodAnchor);
   d.setDate(d.getDate() + 7);
   payPeriodAnchor = d;
@@ -682,48 +840,48 @@ window.prevPayPeriod = prevPayPeriod;
 window.nextPayPeriod = nextPayPeriod;
 
 // ================= MAIN FORM =================
-function openForm(){
+function openForm() {
   editingId = null;
   const title = safeEl("formTitle");
-  if(title) title.textContent = "Add Entry";
+  if (title) title.textContent = "Add Entry";
 
   if (!formModal) return;
-  formModal.style.display="flex";
+  formModal.style.display = "flex";
 
   const dateEl = safeEl("date");
-  if(dateEl) dateEl.value = new Date().toISOString().split("T")[0];
+  if (dateEl) dateEl.value = new Date().toISOString().split("T")[0];
 
   const statusEl = safeEl("status");
-  if(statusEl) statusEl.value = "unpaid";
+  if (statusEl) statusEl.value = "unpaid";
 
-  if(prefillClient){
-    const c = safeEl("client"); if(c) c.value = prefillClient.client || "";
-    const ct = safeEl("contact"); if(ct) ct.value = prefillClient.contact || "";
-    const s = safeEl("social"); if(s) s.value = prefillClient.social || "";
+  if (prefillClient) {
+    const c = safeEl("client"); if (c) c.value = prefillClient.client || "";
+    const ct = safeEl("contact"); if (ct) ct.value = prefillClient.contact || "";
+    const s = safeEl("social"); if (s) s.value = prefillClient.social || "";
     prefillClient = null;
   }
 }
-function resetForm(){
+function resetForm() {
   const modal = safeEl("formModal");
-  if(!modal) return;
+  if (!modal) return;
 
-  modal.querySelectorAll("input, textarea, select").forEach(el=>{
-    if(el.type === "file") el.value = "";
+  modal.querySelectorAll("input, textarea, select").forEach(el => {
+    if (el.type === "file") el.value = "";
     else el.value = "";
   });
 
   const sessions = safeEl("sessions");
-  if(sessions) sessions.innerHTML="";
+  if (sessions) sessions.innerHTML = "";
 }
-function closeForm(){
+function closeForm() {
   if (!formModal) return;
-  formModal.style.display="none";
+  formModal.style.display = "none";
   resetForm();
   editingId = null;
 }
-function addSession(){
+function addSession() {
   const container = safeEl("sessions");
-  if(!container) return;
+  if (!container) return;
 
   const row = document.createElement("div");
   row.className = "row";
@@ -738,8 +896,8 @@ window.closeForm = closeForm;
 window.addSession = addSession;
 
 // ================= QUICK ADD: BAMMER =================
-function openBammerQuick(){
-  if(!bammerModal) return;
+function openBammerQuick() {
+  if (!bammerModal) return;
   safeEl("bDate").value = new Date().toISOString().split("T")[0];
   safeEl("bClient").value = prefillClient?.client || "";
   safeEl("bDesc").value = "";
@@ -749,15 +907,12 @@ function openBammerQuick(){
   prefillClient = null;
   bammerModal.style.display = "flex";
 }
-function closeBammerQuick(){
-  if(!bammerModal) return;
-  bammerModal.style.display = "none";
-}
-function saveBammer(){
+function closeBammerQuick() { if (!bammerModal) return; bammerModal.style.display = "none"; }
+function saveBammer() {
   const date = safeVal("bDate");
   const client = (safeVal("bClient") || "").trim();
   const total = Number(safeVal("bTotal") || 0);
-  if(!date || !client){ alert("Date + Client required."); return; }
+  if (!date || !client) { alert("Date + Client required."); return; }
 
   const before = getClientProgressSnapshot(client);
 
@@ -790,8 +945,8 @@ window.closeBammerQuick = closeBammerQuick;
 window.saveBammer = saveBammer;
 
 // ================= QUICK ADD: DEPOSIT ONLY =================
-function openDepositQuick(){
-  if(!depositModal) return;
+function openDepositQuick() {
+  if (!depositModal) return;
   safeEl("dDate").value = new Date().toISOString().split("T")[0];
   safeEl("dClient").value = prefillClient?.client || "";
   safeEl("dContact").value = prefillClient?.contact || "";
@@ -803,16 +958,13 @@ function openDepositQuick(){
   prefillClient = null;
   depositModal.style.display = "flex";
 }
-function closeDepositQuick(){
-  if(!depositModal) return;
-  depositModal.style.display = "none";
-}
-function saveDepositOnly(){
+function closeDepositQuick() { if (!depositModal) return; depositModal.style.display = "none"; }
+function saveDepositOnly() {
   const date = safeVal("dDate");
   const client = (safeVal("dClient") || "").trim();
   const dep = Number(safeVal("dDeposit") || 0);
-  if(!date || !client){ alert("Date + Client required."); return; }
-  if(!(dep > 0)){ alert("Deposit amount must be > 0."); return; }
+  if (!date || !client) { alert("Date + Client required."); return; }
+  if (!(dep > 0)) { alert("Deposit amount must be > 0."); return; }
 
   const total = Number(safeVal("dTotal") || 0);
 
@@ -842,15 +994,15 @@ window.closeDepositQuick = closeDepositQuick;
 window.saveDepositOnly = saveDepositOnly;
 
 // ================= EDIT HISTORY + EDIT FORM FILL =================
-function diffFields(oldEntry, newEntry){
-  const fields = ["date","client","contact","social","description","location","notes","total","status"];
+function diffFields(oldEntry, newEntry) {
+  const fields = ["date", "client", "contact", "social", "description", "location", "notes", "total", "status"];
   const changes = [];
 
-  for(const f of fields){
+  for (const f of fields) {
     const oldV = (oldEntry[f] ?? "");
     const newV = (newEntry[f] ?? "");
-    if(String(oldV) !== String(newV)){
-      changes.push({ field:f, oldValue:oldV, newValue:newV });
+    if (String(oldV) !== String(newV)) {
+      changes.push({ field: f, oldValue: oldV, newValue: newV });
     }
   }
 
@@ -859,33 +1011,33 @@ function diffFields(oldEntry, newEntry){
   const oldDep = depositAmount(oldEntry);
   const newDep = depositAmount(newEntry);
 
-  if(oldPaid !== newPaid || oldDep !== newDep){
+  if (oldPaid !== newPaid || oldDep !== newDep) {
     changes.push({
-      field:"payments",
-      oldValue:`paidSoFar=${oldPaid}, deposit=${oldDep}`,
-      newValue:`paidSoFar=${newPaid}, deposit=${newDep}`
+      field: "payments",
+      oldValue: `paidSoFar=${oldPaid}, deposit=${oldDep}`,
+      newValue: `paidSoFar=${newPaid}, deposit=${newDep}`
     });
   }
 
   const oldHas = !!oldEntry.image;
   const newHas = !!newEntry.image;
-  if(oldHas !== newHas){
-    changes.push({ field:"image", oldValue: oldHas ? "has image" : "no image", newValue: newHas ? "has image" : "no image" });
+  if (oldHas !== newHas) {
+    changes.push({ field: "image", oldValue: oldHas ? "has image" : "no image", newValue: newHas ? "has image" : "no image" });
   }
 
   return changes;
 }
 
-function fillFormForEdit(entry){
+function fillFormForEdit(entry) {
   editingId = entry.id;
 
   const title = safeEl("formTitle");
-  if(title) title.textContent = "Edit Entry";
+  if (title) title.textContent = "Edit Entry";
 
-  if(!formModal) return;
+  if (!formModal) return;
   formModal.style.display = "flex";
 
-  const set = (id, val) => { const el = safeEl(id); if(el) el.value = (val ?? ""); };
+  const set = (id, val) => { const el = safeEl(id); if (el) el.value = (val ?? ""); };
 
   set("date", entry.date);
   set("client", entry.client);
@@ -898,115 +1050,26 @@ function fillFormForEdit(entry){
   set("status", entry.status || "unpaid");
 
   const sessions = safeEl("sessions");
-  if(sessions) sessions.innerHTML = "";
+  if (sessions) sessions.innerHTML = "";
 
   set("deposit", depositAmount(entry));
 
   const sessionPays = paymentsArray(entry).filter(p => p.kind !== "deposit");
-  sessionPays.forEach(p=>{
+  sessionPays.forEach(p => {
     addSession();
     const amounts = document.querySelectorAll(".session-amount");
     const notes = document.querySelectorAll(".session-note");
     const idx = amounts.length - 1;
-    if(amounts[idx]) amounts[idx].value = Number(p.amount || 0);
-    if(notes[idx]) notes[idx].value = p.note || "";
+    if (amounts[idx]) amounts[idx].value = Number(p.amount || 0);
+    if (notes[idx]) notes[idx].value = p.note || "";
   });
 }
 
-// ================= CLIENT REWARDS =================
-function clientKey(name){ return normalize(String(name||"")).trim(); }
-
-function getClientEntries(name){
-  const key = clientKey(name);
-  return entries
-    .filter(e => clientKey(e.client) === key)
-    .slice()
-    .sort((a,b)=> b.id - a.id);
-}
-function getClientTattooCount(name){
-  return getClientEntries(name).filter(isTattooEntry).length;
-}
-function getBestLevelForCount(count){
-  const levels = Array.isArray(rewardsSettings.levels) ? rewardsSettings.levels : [];
-  const sorted = levels
-    .filter(l => Number(l.minCount||0) > 0)
-    .slice()
-    .sort((a,b)=> Number(a.minCount) - Number(b.minCount));
-  let best = null;
-  for(const l of sorted){
-    if(count >= Number(l.minCount||0)) best = l;
-  }
-  return best;
-}
-function getBestDiscountForCount(count){
-  const tiers = Array.isArray(rewardsSettings.discounts) ? rewardsSettings.discounts : [];
-  const sorted = tiers
-    .filter(t => Number(t.minCount||0) > 0)
-    .slice()
-    .sort((a,b)=> Number(a.minCount) - Number(b.minCount));
-  let best = null;
-  for(const t of sorted){
-    if(count >= Number(t.minCount||0)) best = t;
-  }
-  return best;
-}
-function getClientNetTotal(name){
-  return getClientEntries(name).reduce((sum,e)=> sum + totalForTotalsNet(e), 0);
-}
-function getClientProgressSnapshot(name){
-  const cnt = getClientTattooCount(name);
-  const level = getBestLevelForCount(cnt);
-  const disc = getBestDiscountForCount(cnt);
-  return {
-    tattooCount: cnt,
-    levelId: level ? level.id : "",
-    levelName: level ? level.name : "",
-    levelPng: level ? (level.pngDataUrl || "") : "",
-    discountId: disc ? disc.id : "",
-    discountLabel: disc ? disc.label : "",
-    discountPct: disc ? Number(disc.percent||0) : 0
-  };
-}
-function maybeNotifyClientProgress(name, before, after){
-  if(!before || !after) return;
-
-  const total = money(getClientNetTotal(name));
-
-  if(before.levelId !== after.levelId && after.levelId){
-    pushToast({
-      title: `New Badge — ${after.levelName}`,
-      sub: `${name} hit ${after.tattooCount} tattoos.`,
-      mini: `Total: ${total}`,
-      imgDataUrl: after.levelPng || "",
-      actionLabel: "View Client",
-      actionFn: ()=> openClientProfile(name)
-    });
-  }
-
-  if(before.discountId !== after.discountId && after.discountId){
-    pushToast({
-      title: `Discount Unlocked`,
-      sub: `${name}: ${after.discountLabel} (${after.discountPct}% off)`,
-      mini: `Total: ${total}`,
-      imgDataUrl: after.levelPng || "",
-      actionLabel: "View Client",
-      actionFn: ()=> openClientProfile(name)
-    });
-  }
-}
-
-function badgeHtmlForClient(name){
-  const snap = getClientProgressSnapshot(name);
-  if(!snap.levelId) return "";
-  const img = snap.levelPng ? `<img src="${snap.levelPng}" alt="badge">` : "";
-  return `<span class="client-badge" title="Badge level">${img}${snap.levelName} (${snap.tattooCount})</span>`;
-}
-
 // ================= SAVE ENTRY (ADD/EDIT) =================
-function saveEntry(){
+function saveEntry() {
   const dateVal = safeVal("date");
   const clientVal = (safeVal("client") || "").trim();
-  if(!dateVal || !clientVal){
+  if (!dateVal || !clientVal) {
     alert("Date and Client Name are required.");
     return;
   }
@@ -1016,13 +1079,13 @@ function saveEntry(){
   const payments = [];
 
   const depositVal = Number(safeVal("deposit") || 0);
-  if(depositVal > 0) payments.push({ amount: depositVal, kind: "deposit" });
+  if (depositVal > 0) payments.push({ amount: depositVal, kind: "deposit" });
 
   const sessionAmounts = document.querySelectorAll(".session-amount");
   const sessionNotes = document.querySelectorAll(".session-note");
-  sessionAmounts.forEach((input, i)=>{
+  sessionAmounts.forEach((input, i) => {
     const val = Number(input.value || 0);
-    if(val > 0){
+    if (val > 0) {
       payments.push({
         amount: val,
         kind: "session",
@@ -1047,19 +1110,19 @@ function saveEntry(){
   const imageEl = safeEl("image");
   const file = imageEl && imageEl.files ? imageEl.files[0] : null;
 
-  const applyAndSave = (newImageDataUrlOrNull)=>{
-    if(editingId){
-      const idx = entries.findIndex(e=>e.id===editingId);
-      if(idx === -1){ closeForm(); return; }
+  const applyAndSave = (newImageDataUrlOrNull) => {
+    if (editingId) {
+      const idx = entries.findIndex(e => e.id === editingId);
+      if (idx === -1) { closeForm(); return; }
 
       const old = entries[idx];
       const next = Object.assign({}, old, base);
       next.image = newImageDataUrlOrNull ? newImageDataUrlOrNull : (old.image || null);
 
       const ts = new Date().toISOString();
-      if(!Array.isArray(next.editHistory)) next.editHistory = [];
+      if (!Array.isArray(next.editHistory)) next.editHistory = [];
       const changes = diffFields(old, next);
-      next.editHistory.push({ timestamp: ts, changes: changes.length ? changes : [{ field:"(no changes)", oldValue:"", newValue:"" }] });
+      next.editHistory.push({ timestamp: ts, changes: changes.length ? changes : [{ field: "(no changes)", oldValue: "", newValue: "" }] });
       next.updatedAt = ts;
 
       entries[idx] = next;
@@ -1084,9 +1147,9 @@ function saveEntry(){
     }
   };
 
-  if(file){
+  if (file) {
     const reader = new FileReader();
-    reader.onload = (e)=> applyAndSave(e.target.result);
+    reader.onload = (e) => applyAndSave(e.target.result);
     reader.readAsDataURL(file);
   } else {
     applyAndSave(null);
@@ -1095,27 +1158,33 @@ function saveEntry(){
 window.saveEntry = saveEntry;
 
 // ================= CLIENT PROFILES =================
-function guessLatestField(list, field){
-  for(const e of list){
+function guessLatestField(list, field) {
+  for (const e of list) {
     const v = (e[field] || "").trim();
-    if(v) return v;
+    if (v) return v;
   }
   return "";
 }
 
-function openClientProfile(name){
-  if(!clientModal || !clientBox) return;
+function setClientDiscountOverride(name, tierId) {
+  const key = clientKey(name);
+  clientDiscountOverrides[key] = { tierId: String(tierId || "") };
+  saveClientOverrides();
+}
+
+function openClientProfile(name) {
+  if (!clientModal || !clientBox) return;
   const list = getClientEntries(name);
-  if(!list.length){ alert("No entries found for that client."); return; }
+  if (!list.length) { alert("No entries found for that client."); return; }
 
   const displayName = list[0].client;
 
   let total = 0;
-  const statusCounts = { booked:0, paid:0, partial:0, unpaid:0, no_show:0 };
-  list.forEach(e=>{
+  const statusCounts = { booked: 0, paid: 0, partial: 0, unpaid: 0, no_show: 0 };
+  list.forEach(e => {
     total += totalForTotalsNet(e);
     const s = (e.status || "unpaid").toLowerCase();
-    if(statusCounts[s] !== undefined) statusCounts[s]++;
+    if (statusCounts[s] !== undefined) statusCounts[s]++;
   });
 
   const lastDate = list[0].date;
@@ -1123,21 +1192,55 @@ function openClientProfile(name){
   const social = guessLatestField(list, "social");
 
   const snap = getClientProgressSnapshot(displayName);
-  const discountLine = snap.discountId
-    ? `<div>Discount: <strong>${snap.discountLabel}</strong> (${snap.discountPct}% off)</div>`
-    : `<div style="opacity:.75;">Discount: —</div>`;
-
   const badge = badgeHtmlForClient(displayName);
+
+  const upcoming = getUpcomingBookedForClient(displayName);
+  const upcomingBanner = upcoming.length
+    ? `
+      <div class="summary-box" style="border-color: rgba(42,91,215,.65);">
+        <div style="font-weight:900;color:var(--gold);">Upcoming appointment reminder</div>
+        <div class="hint">This client has BOOKED appointment(s). Don’t forget to apply the discount on the total if needed.</div>
+        <div style="margin-top:8px;">
+          ${upcoming.slice(0, 3).map(a => {
+            const dep = depositAmount(a);
+            return `<div>• <b style="color:var(--gold)">${a.date}</b> ${dep > 0 ? `— Deposit ${money(dep)}` : ""}</div>`;
+          }).join("")}
+          ${upcoming.length > 3 ? `<div class="hint" style="margin-top:6px;">+${upcoming.length - 3} more…</div>` : ``}
+        </div>
+      </div>
+    `
+    : "";
+
+  const tiers = (Array.isArray(rewardsSettings.discounts) ? rewardsSettings.discounts : []).map(normalizeDiscountTier);
+  const key = clientKey(displayName);
+  const overrideId = (clientDiscountOverrides[key] && clientDiscountOverrides[key].tierId) ? clientDiscountOverrides[key].tierId : "";
 
   clientBox.innerHTML = `
     <div class="modal-title">Client — ${displayName}</div>
 
-    <div class="summary-box" style="margin-top:0;">
+    ${upcomingBanner}
+
+    <div class="summary-box" style="margin-top:${upcoming.length ? "10px" : "0"};">
       <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between;">
         <div>${badge || `<span class="hint">No badge yet</span>`}</div>
         <div class="hint">Tattoo count: <b style="color:var(--gold)">${snap.tattooCount}</b></div>
       </div>
-      <div style="margin-top:10px;">${discountLine}</div>
+
+      <div style="margin-top:10px;">
+        <div style="font-weight:900;color:var(--gold);">Discount to apply</div>
+        <div class="hint">Pick one for this client (override). Leave “Auto” to use your tier rules.</div>
+        <select id="clientDiscountSelect">
+          <option value="">Auto (by tiers)</option>
+          <option value="__none__" ${overrideId === "__none__" ? "selected" : ""}>None</option>
+          ${tiers.map(t => {
+            const label = t.type === "free" ? `FREE` : t.type === "static" ? `${money(t.value)} off` : `${Number(t.value || 0)}% off`;
+            const txt = `${t.label} — ${label} (min ${t.minCount})`;
+            const sel = overrideId === t.id ? "selected" : "";
+            return `<option value="${t.id}" ${sel}>${txt}</option>`;
+          }).join("")}
+        </select>
+        <div class="hint" style="margin-top:6px;">Current: <b style="color:var(--gold)">${snap.discountText}</b></div>
+      </div>
     </div>
 
     <div class="summary-grid">
@@ -1170,13 +1273,13 @@ function openClientProfile(name){
 
     <div class="summary-box">
       <div style="font-weight:900;color:var(--gold);">History</div>
-      ${list.slice(0, 30).map(e=>{
+      ${list.slice(0, 30).map(e => {
         const paidLine = money(paidForPreview(e));
         const row2 = [e.location, e.description].filter(Boolean).join(" • ");
         return `
           <div class="client-entry" onclick="openEntryFromClient(${e.id})">
             <div class="top">
-              <div><strong>${String(e.status||"").toUpperCase()}</strong> — Paid: ${paidLine}</div>
+              <div><strong>${String(e.status || "").toUpperCase()}</strong> — Paid: ${paidLine}</div>
               <div class="date">${e.date}</div>
             </div>
             <div class="desc">${row2 || ""}</div>
@@ -1191,14 +1294,33 @@ function openClientProfile(name){
     </div>
   `;
 
+  // wire select
+  const sel = safeEl("clientDiscountSelect");
+  if (sel) {
+    // set selected state correctly
+    if (overrideId === "") sel.value = "";
+    else sel.value = overrideId;
+
+    sel.addEventListener("change", () => {
+      const v = sel.value;
+      if (v === "__none__") setClientDiscountOverride(displayName, "__none__");
+      else if (!v) setClientDiscountOverride(displayName, ""); // auto
+      else setClientDiscountOverride(displayName, v);
+
+      // refresh the modal so “Current:” updates
+      openClientProfile(displayName);
+    });
+  }
+
   prefillClient = { client: displayName, contact, social };
   clientModal.style.display = "flex";
 }
-function closeClient(){ if(!clientModal) return; clientModal.style.display = "none"; }
-function openEntryFromClient(id){ closeClient(); viewEntry(id); }
-function repeatClientFull(){ if(!prefillClient) return; closeClient(); openForm(); }
-function repeatClientBammer(){ if(!prefillClient) return; closeClient(); openBammerQuick(); }
-function repeatClientDeposit(){ if(!prefillClient) return; closeClient(); openDepositQuick(); }
+
+function closeClient() { if (!clientModal) return; clientModal.style.display = "none"; }
+function openEntryFromClient(id) { closeClient(); viewEntry(id); }
+function repeatClientFull() { if (!prefillClient) return; closeClient(); openForm(); }
+function repeatClientBammer() { if (!prefillClient) return; closeClient(); openBammerQuick(); }
+function repeatClientDeposit() { if (!prefillClient) return; closeClient(); openDepositQuick(); }
 
 window.openClientProfile = openClientProfile;
 window.closeClient = closeClient;
@@ -1208,9 +1330,9 @@ window.repeatClientBammer = repeatClientBammer;
 window.repeatClientDeposit = repeatClientDeposit;
 
 // ================= VIEW / EDIT / DELETE =================
-function viewEntry(id){
-  const entry = entries.find(e=>e.id===id);
-  if(!entry || !viewBox) return;
+function viewEntry(id) {
+  const entry = entries.find(e => e.id === id);
+  if (!entry || !viewBox) return;
 
   viewingId = id;
 
@@ -1223,12 +1345,12 @@ function viewEntry(id){
   const showConvert = isDepositOnlyEntry(entry);
 
   let historyHtml = "<p style='opacity:.7;'>No edits yet.</p>";
-  if(Array.isArray(entry.editHistory) && entry.editHistory.length){
+  if (Array.isArray(entry.editHistory) && entry.editHistory.length) {
     historyHtml = entry.editHistory
       .slice()
       .reverse()
-      .map(h=>{
-        const list = (h.changes || []).map(c=>{
+      .map(h => {
+        const list = (h.changes || []).map(c => {
           return `<li><strong>${c.field}:</strong> "${String(c.oldValue)}" → "${String(c.newValue)}"</li>`;
         }).join("");
         return `<div style="margin-top:10px;">
@@ -1239,6 +1361,8 @@ function viewEntry(id){
   }
 
   const badge = badgeHtmlForClient(entry.client);
+  const disc = getDiscountForClient(entry.client);
+  const discLine = disc ? `<p><strong>Discount to apply:</strong> ${discountToText(disc)}</p>` : "";
 
   viewBox.innerHTML = `
     <div class="modal-title">
@@ -1252,6 +1376,7 @@ function viewEntry(id){
         <p><strong>Status:</strong> <span class="status ${entry.status}">${entry.status}</span></p>
         <p><strong>Total Price:</strong> ${money(entry.total)}</p>
         ${showDepositLine ? `<p><strong>Deposit:</strong> ${money(dep)}</p>` : ``}
+        ${discLine}
       </div>
       <div>
         <p><strong>Location:</strong> ${entry.location || ""}</p>
@@ -1268,7 +1393,7 @@ function viewEntry(id){
     ${showPaymentsSection ? `
       <h4>Payments</h4>
       <ul>
-        ${paymentsArray(entry).filter(p=>Number(p.amount||0)>0).map(p=>{
+        ${paymentsArray(entry).filter(p => Number(p.amount || 0) > 0).map(p => {
           const label = p.kind ? `(${p.kind})` : "";
           const note = p.note ? ` — ${p.note}` : "";
           return `<li>${money(p.amount)} ${label}${note}</li>`;
@@ -1279,7 +1404,7 @@ function viewEntry(id){
         <summary>More details</summary>
         <div style="margin-top:10px;">
           <p><strong>Paid So Far:</strong> ${money(paidSoFar)}</p>
-          ${Number(entry.total||0) > 0 ? `<p><strong>Remaining:</strong> ${money(remaining)}</p>` : ``}
+          ${Number(entry.total || 0) > 0 ? `<p><strong>Remaining:</strong> ${money(remaining)}</p>` : ``}
         </div>
       </details>
     ` : ``}
@@ -1299,35 +1424,35 @@ function viewEntry(id){
     </div>
   `;
 
-  if(viewModal) viewModal.style.display = "flex";
+  if (viewModal) viewModal.style.display = "flex";
 }
-function convertDepositToTattoo(){
-  if(!viewingId) return;
-  const entry = entries.find(e=>e.id===viewingId);
-  if(!entry) return;
+function convertDepositToTattoo() {
+  if (!viewingId) return;
+  const entry = entries.find(e => e.id === viewingId);
+  if (!entry) return;
 
   closeView();
   fillFormForEdit(entry);
 
   const statusEl = safeEl("status");
-  if(statusEl && (!statusEl.value || statusEl.value === "unpaid" || statusEl.value === "booked")) statusEl.value = "partial";
+  if (statusEl && (!statusEl.value || statusEl.value === "unpaid" || statusEl.value === "booked")) statusEl.value = "partial";
 }
-function closeView(){ if(!viewModal) return; viewModal.style.display="none"; viewingId = null; }
-function editFromView(){
-  if(!viewingId) return;
-  const entry = entries.find(e=>e.id===viewingId);
-  if(!entry) return;
+function closeView() { if (!viewModal) return; viewModal.style.display = "none"; viewingId = null; }
+function editFromView() {
+  if (!viewingId) return;
+  const entry = entries.find(e => e.id === viewingId);
+  if (!entry) return;
   closeView();
   fillFormForEdit(entry);
 }
-function deleteFromView(){
-  if(!viewingId) return;
-  const entry = entries.find(e=>e.id===viewingId);
-  if(!entry) return;
+function deleteFromView() {
+  if (!viewingId) return;
+  const entry = entries.find(e => e.id === viewingId);
+  if (!entry) return;
 
-  if(!confirm(`Delete entry for ${entry.client} on ${entry.date}?`)) return;
+  if (!confirm(`Delete entry for ${entry.client} on ${entry.date}?`)) return;
 
-  entries = entries.filter(e=>e.id!==viewingId);
+  entries = entries.filter(e => e.id !== viewingId);
   save();
   closeView();
 }
@@ -1337,59 +1462,59 @@ window.editFromView = editFromView;
 window.deleteFromView = deleteFromView;
 window.convertDepositToTattoo = convertDepositToTattoo;
 
-// ================= STATS (labels no (NET)) =================
-function updateStats(filteredList){
+// ================= STATS =================
+function updateStats(filteredList) {
   const todayEl = safeEl("todayTotal");
   const weekEl = safeEl("weekTotal");
   const monthEl = safeEl("monthTotal");
   const quarterEl = safeEl("quarterTotal");
   const yearEl = safeEl("yearTotal");
-  if(!todayEl) return;
+  if (!todayEl) return;
 
   const now = new Date();
   const todayStr = now.toISOString().split("T")[0];
   const weekWin = getWeekWindowFromDate(now);
   const qNow = currentQuarterIndex(now);
 
-  let today=0, week=0, month=0, quarter=0, year=0;
+  let today = 0, week = 0, month = 0, quarter = 0, year = 0;
 
-  (filteredList || entries).forEach(entry=>{
+  (filteredList || entries).forEach(entry => {
     const d = parseLocalDate(entry.date);
-    if(!d) return;
+    if (!d) return;
 
     const amt = totalForTotalsNet(entry);
 
-    if(entry.date === todayStr) today += amt;
+    if (entry.date === todayStr) today += amt;
 
-    if(d.getFullYear() === now.getFullYear()){
+    if (d.getFullYear() === now.getFullYear()) {
       year += amt;
-      if(currentQuarterIndex(d) === qNow) quarter += amt;
+      if (currentQuarterIndex(d) === qNow) quarter += amt;
     }
 
-    if(d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()){
+    if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) {
       month += amt;
     }
 
-    if(d >= weekWin.start && d <= weekWin.end){
+    if (d >= weekWin.start && d <= weekWin.end) {
       week += amt;
     }
   });
 
   todayEl.innerText = money(today);
-  if(weekEl) weekEl.innerText = money(week);
-  if(monthEl) monthEl.innerText = money(month);
-  if(quarterEl) quarterEl.innerText = money(quarter);
-  if(yearEl) yearEl.innerText = money(year);
+  if (weekEl) weekEl.innerText = money(week);
+  if (monthEl) monthEl.innerText = money(month);
+  if (quarterEl) quarterEl.innerText = money(quarter);
+  if (yearEl) yearEl.innerText = money(year);
 }
 
-// ================= CSV EXPORT + SUMMARY + REWARDS UI =================
-function csvEscape(v){
+// ================= CSV EXPORT + SUMMARY =================
+function csvEscape(v) {
   const s = String(v ?? "");
-  if (/[",\n]/.test(s)) return `"${s.replace(/"/g,'""')}"`;
+  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }
-function downloadCSV(rows, filename){
-  const csv = rows.map(r=>r.map(csvEscape).join(",")).join("\n");
+function downloadCSV(rows, filename) {
+  const csv = rows.map(r => r.map(csvEscape).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
 
@@ -1401,39 +1526,40 @@ function downloadCSV(rows, filename){
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
-function exportCSV(){
+function exportCSV() {
   const startStr = safeVal("exportStart");
   const endStr = safeVal("exportEnd");
   const start = parseLocalDate(startStr);
   const end = parseLocalDate(endStr);
 
-  if(!start || !end){ alert("Pick a start and end date."); return; }
-  if(end < start){ alert("End date must be after start date."); return; }
+  if (!start || !end) { alert("Pick a start and end date."); return; }
+  if (end < start) { alert("End date must be after start date."); return; }
 
   exportRangeCSV(start, end, `ink-log_${startStr}_to_${endStr}.csv`);
 }
-function exportPayPeriodCSV(){
+function exportPayPeriodCSV() {
   const ppStartStr = safeVal("ppStart");
   const ppEndStr = safeVal("ppEnd");
   const start = parseLocalDate(ppStartStr);
   const end = parseLocalDate(ppEndStr);
-  if(!start || !end){ alert("Pay period dates missing."); return; }
+  if (!start || !end) { alert("Pay period dates missing."); return; }
 
   exportRangeCSV(start, end, `pay_period_${ppStartStr}_to_${ppEndStr}.csv`);
 }
-function exportRangeCSV(start, end, filename){
+function exportRangeCSV(start, end, filename) {
   const rows = [];
   rows.push([
-    "date","client","contact","social","description","location",
-    "total_price","paid_so_far","deposit",
-    "split_pct","counted",
-    "remaining","status","notes"
+    "date", "client", "contact", "social", "description", "location",
+    "total_price", "paid_so_far", "deposit",
+    "split_pct", "counted",
+    "remaining", "status", "notes",
+    "discount_to_apply"
   ]);
 
-  entries.forEach(e=>{
+  entries.forEach(e => {
     const d = parseLocalDate(e.date);
-    if(!d) return;
-    if(d < start || d > end) return;
+    if (!d) return;
+    if (d < start || d > end) return;
 
     const paidSoFar = paidAmount(e);
     const dep = depositAmount(e);
@@ -1442,6 +1568,8 @@ function exportRangeCSV(start, end, filename){
 
     const pct = getSplitPctForDate(e.date);
     const counted = totalForTotalsNet(e);
+
+    const disc = getDiscountForClient(e.client);
 
     rows.push([
       e.date,
@@ -1457,7 +1585,8 @@ function exportRangeCSV(start, end, filename){
       counted,
       remaining,
       e.status || "",
-      e.notes || ""
+      e.notes || "",
+      disc ? discountToText(disc).replace(/\s*\((set|auto)\)/, "") : ""
     ]);
   });
 
@@ -1466,42 +1595,42 @@ function exportRangeCSV(start, end, filename){
 window.exportCSV = exportCSV;
 window.exportPayPeriodCSV = exportPayPeriodCSV;
 
-function buildSummary(mode){
+function buildSummary(mode) {
   let start = null;
   let end = null;
   let title = "";
 
-  if(mode === "payperiod"){
+  if (mode === "payperiod") {
     const s = parseLocalDate(safeVal("ppStart"));
     const e = parseLocalDate(safeVal("ppEnd"));
-    if(!s || !e){ alert("Pay period dates missing."); return; }
+    if (!s || !e) { alert("Pay period dates missing."); return; }
     start = s; end = e;
     title = `Pay Period Summary (${safeVal("ppStart")} → ${safeVal("ppEnd")})`;
   } else {
     const s = parseLocalDate(safeVal("exportStart"));
     const e = parseLocalDate(safeVal("exportEnd"));
-    if(!s || !e){ alert("Pick start/end dates."); return; }
-    if(e < s){ alert("End date must be after start date."); return; }
+    if (!s || !e) { alert("Pick start/end dates."); return; }
+    if (e < s) { alert("End date must be after start date."); return; }
     start = s; end = e;
     title = `Date Range Summary (${safeVal("exportStart")} → ${safeVal("exportEnd")})`;
   }
 
-  const filtered = entries.filter(e=>{
+  const filtered = entries.filter(e => {
     const d = parseLocalDate(e.date);
-    if(!d) return false;
+    if (!d) return false;
     return d >= start && d <= end;
   });
 
   const totalCount = filtered.length;
   let totalCounted = 0;
 
-  const statusCounts = { booked:0, paid:0, partial:0, unpaid:0, no_show:0 };
+  const statusCounts = { booked: 0, paid: 0, partial: 0, unpaid: 0, no_show: 0 };
   const clientTotals = {};
   const locationTotals = {};
 
-  filtered.forEach(e=>{
+  filtered.forEach(e => {
     const s = (e.status || "unpaid").toLowerCase();
-    if(statusCounts[s] !== undefined) statusCounts[s]++;
+    if (statusCounts[s] !== undefined) statusCounts[s]++;
 
     const counted = totalForTotalsNet(e);
     totalCounted += counted;
@@ -1513,15 +1642,15 @@ function buildSummary(mode){
     locationTotals[loc] = (locationTotals[loc] || 0) + counted;
   });
 
-  function topN(obj, n){
-    return Object.entries(obj).sort((a,b)=>b[1]-a[1]).slice(0,n);
+  function topN(obj, n) {
+    return Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, n);
   }
 
   const topClients = topN(clientTotals, 5);
   const topLocs = topN(locationTotals, 5);
 
   const out = safeEl("summaryOut");
-  if(!out) return;
+  if (!out) return;
 
   out.innerHTML = `
     <div style="font-weight:900; color: var(--gold); margin-bottom:8px;">${title}</div>
@@ -1546,33 +1675,33 @@ function buildSummary(mode){
     <div class="summary-grid" style="margin-top:10px;">
       <div class="summary-box">
         <div style="font-weight:900;">Top Clients</div>
-        ${topClients.length ? `<ol style="margin:8px 0 0 18px;">${topClients.map(([k,v])=>`<li>${k}: <strong>${money(v)}</strong></li>`).join("")}</ol>` : "<div style='opacity:.75;'>None</div>"}
+        ${topClients.length ? `<ol style="margin:8px 0 0 18px;">${topClients.map(([k, v]) => `<li>${k}: <strong>${money(v)}</strong></li>`).join("")}</ol>` : "<div style='opacity:.75;'>None</div>"}
       </div>
 
       <div class="summary-box">
         <div style="font-weight:900;">Top Locations</div>
-        ${topLocs.length ? `<ol style="margin:8px 0 0 18px;">${topLocs.map(([k,v])=>`<li>${k}: <strong>${money(v)}</strong></li>`).join("")}</ol>` : "<div style='opacity:.75;'>None</div>"}
+        ${topLocs.length ? `<ol style="margin:8px 0 0 18px;">${topLocs.map(([k, v]) => `<li>${k}: <strong>${money(v)}</strong></li>`).join("")}</ol>` : "<div style='opacity:.75;'>None</div>"}
       </div>
     </div>
   `;
 }
 window.buildSummary = buildSummary;
 
-// Rewards modal (same behavior)
-function openRewards(){ if(!rewardsModal) return; buildRewardsUI(); rewardsModal.style.display="flex"; }
-function closeRewards(){ if(!rewardsModal) return; rewardsModal.style.display="none"; }
+// ================= REWARDS MODAL UI (percent/static/free) =================
+function openRewards() { if (!rewardsModal) return; buildRewardsUI(); rewardsModal.style.display = "flex"; }
+function closeRewards() { if (!rewardsModal) return; rewardsModal.style.display = "none"; }
 window.openRewards = openRewards;
 window.closeRewards = closeRewards;
 
-function buildRewardsUI(){
+function buildRewardsUI() {
   const levelsList = safeEl("levelsList");
   const discountsList = safeEl("discountsList");
-  if(!levelsList || !discountsList) return;
+  if (!levelsList || !discountsList) return;
 
   const levels = Array.isArray(rewardsSettings.levels) ? rewardsSettings.levels : [];
   const discounts = Array.isArray(rewardsSettings.discounts) ? rewardsSettings.discounts : [];
 
-  levelsList.innerHTML = levels.map(l=>{
+  levelsList.innerHTML = levels.map(l => {
     const img = l.pngDataUrl ? `<img src="${l.pngDataUrl}" style="width:28px;height:28px;border-radius:8px;border:1px solid rgba(212,175,55,.25);object-fit:cover;background:#16201b;">` : "";
     return `
       <div class="summary-box" data-level="${l.id}" style="margin-top:10px;">
@@ -1584,8 +1713,8 @@ function buildRewardsUI(){
           <button type="button" class="secondarybtn" onclick="removeBadgeLevel('${l.id}')">Remove</button>
         </div>
         <div class="row">
-          <input type="text" id="lvlName_${l.id}" placeholder="Badge name" value="${(l.name||"").replace(/"/g,"&quot;")}">
-          <input type="number" id="lvlMin_${l.id}" placeholder="Min tattoos" value="${Number(l.minCount||0)}">
+          <input type="text" id="lvlName_${l.id}" placeholder="Badge name" value="${(l.name || "").replace(/"/g, "&quot;")}">
+          <input type="number" id="lvlMin_${l.id}" placeholder="Min tattoos" value="${Number(l.minCount || 0)}">
         </div>
         <div class="actions-row" style="margin-top:0;">
           <input type="file" id="lvlFile_${l.id}" accept="image/png,image/*" />
@@ -1596,89 +1725,140 @@ function buildRewardsUI(){
     `;
   }).join("");
 
-  discountsList.innerHTML = discounts.map(d=>{
+  discountsList.innerHTML = discounts.map(d0 => {
+    const d = normalizeDiscountTier(d0);
     return `
       <div class="summary-box" data-disc="${d.id}" style="margin-top:10px;">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
           <div style="font-weight:900;color:var(--gold);">${d.label || "Discount"}</div>
           <button type="button" class="secondarybtn" onclick="removeDiscountTier('${d.id}')">Remove</button>
         </div>
+
         <div class="row">
-          <input type="text" id="discLabel_${d.id}" placeholder="Label (e.g. 10% off)" value="${(d.label||"").replace(/"/g,"&quot;")}">
-          <input type="number" id="discMin_${d.id}" placeholder="Min tattoos" value="${Number(d.minCount||0)}">
+          <input type="text" id="discLabel_${d.id}" placeholder="Label (e.g. VIP Reward)" value="${(d.label || "").replace(/"/g, "&quot;")}">
+          <input type="number" id="discMin_${d.id}" placeholder="Min tattoos" value="${Number(d.minCount || 0)}">
         </div>
-        <input type="number" id="discPct_${d.id}" placeholder="Percent" value="${Number(d.percent||0)}">
+
+        <div class="row">
+          <select id="discType_${d.id}">
+            <option value="percent" ${d.type === "percent" ? "selected" : ""}>Percent off</option>
+            <option value="static" ${d.type === "static" ? "selected" : ""}>Static $ off</option>
+            <option value="free" ${d.type === "free" ? "selected" : ""}>Free</option>
+          </select>
+
+          <input
+            type="number"
+            id="discValue_${d.id}"
+            placeholder="${d.type === "static" ? "Dollars off (e.g. 20)" : "Percent (e.g. 10)"}"
+            value="${d.type === "free" ? 0 : Number(d.value || 0)}"
+            ${d.type === "free" ? "disabled" : ""}
+          >
+        </div>
+
+        <div class="hint">Type controls how you’ll apply it at checkout (reminder). This does not auto-change totals.</div>
       </div>
     `;
   }).join("");
+
+  // wire enable/disable per tier (free disables value)
+  discounts.forEach(d0 => {
+    const d = normalizeDiscountTier(d0);
+    const typeEl = safeEl(`discType_${d.id}`);
+    const valEl = safeEl(`discValue_${d.id}`);
+    if (typeEl && valEl) {
+      typeEl.addEventListener("change", () => {
+        const t = (typeEl.value || "percent").toLowerCase();
+        valEl.disabled = (t === "free");
+        if (t === "free") valEl.value = "0";
+        valEl.placeholder = t === "static" ? "Dollars off (e.g. 20)" : "Percent (e.g. 10)";
+      });
+    }
+  });
 }
 
-function addBadgeLevel(){
+function addBadgeLevel() {
   rewardsSettings.levels = rewardsSettings.levels || [];
   rewardsSettings.levels.push({ id: uid("lvl"), name: "New Badge", minCount: 1, pngDataUrl: "" });
   buildRewardsUI();
 }
-function removeBadgeLevel(id){
-  rewardsSettings.levels = (rewardsSettings.levels || []).filter(l=>l.id !== id);
+function removeBadgeLevel(id) {
+  rewardsSettings.levels = (rewardsSettings.levels || []).filter(l => l.id !== id);
   buildRewardsUI();
 }
-function clearBadgePNG(id){
-  const lvl = (rewardsSettings.levels || []).find(l=>l.id===id);
-  if(lvl) lvl.pngDataUrl = "";
+function clearBadgePNG(id) {
+  const lvl = (rewardsSettings.levels || []).find(l => l.id === id);
+  if (lvl) lvl.pngDataUrl = "";
   buildRewardsUI();
 }
 window.addBadgeLevel = addBadgeLevel;
 window.removeBadgeLevel = removeBadgeLevel;
 window.clearBadgePNG = clearBadgePNG;
 
-function addDiscountTier(){
+function addDiscountTier() {
   rewardsSettings.discounts = rewardsSettings.discounts || [];
-  rewardsSettings.discounts.push({ id: uid("disc"), label: "New Discount", minCount: 1, percent: 5 });
+  rewardsSettings.discounts.push({ id: uid("disc"), label: "New Discount", minCount: 1, type: "percent", value: 5 });
   buildRewardsUI();
 }
-function removeDiscountTier(id){
-  rewardsSettings.discounts = (rewardsSettings.discounts || []).filter(d=>d.id !== id);
+function removeDiscountTier(id) {
+  rewardsSettings.discounts = (rewardsSettings.discounts || []).filter(d => d.id !== id);
+
+  // also remove any client overrides pointing to this tier
+  Object.keys(clientDiscountOverrides || {}).forEach(k => {
+    if (clientDiscountOverrides[k] && clientDiscountOverrides[k].tierId === id) {
+      clientDiscountOverrides[k].tierId = "";
+    }
+  });
+  saveClientOverrides();
+
   buildRewardsUI();
 }
 window.addDiscountTier = addDiscountTier;
 window.removeDiscountTier = removeDiscountTier;
 
-function saveRewards(){
+function saveRewards() {
   const levels = Array.isArray(rewardsSettings.levels) ? rewardsSettings.levels : [];
   const discounts = Array.isArray(rewardsSettings.discounts) ? rewardsSettings.discounts : [];
 
-  levels.forEach(l=>{
+  levels.forEach(l => {
     const nameEl = safeEl(`lvlName_${l.id}`);
     const minEl = safeEl(`lvlMin_${l.id}`);
-    if(nameEl) l.name = (nameEl.value || "").trim() || "Badge";
-    if(minEl) l.minCount = Math.max(0, Number(minEl.value || 0));
+    if (nameEl) l.name = (nameEl.value || "").trim() || "Badge";
+    if (minEl) l.minCount = Math.max(0, Number(minEl.value || 0));
   });
 
-  discounts.forEach(d=>{
+  discounts.forEach(d => {
     const labelEl = safeEl(`discLabel_${d.id}`);
     const minEl = safeEl(`discMin_${d.id}`);
-    const pctEl = safeEl(`discPct_${d.id}`);
-    if(labelEl) d.label = (labelEl.value || "").trim() || "Discount";
-    if(minEl) d.minCount = Math.max(0, Number(minEl.value || 0));
-    if(pctEl) d.percent = Math.max(0, Math.min(100, Number(pctEl.value || 0)));
+    const typeEl = safeEl(`discType_${d.id}`);
+    const valEl = safeEl(`discValue_${d.id}`);
+
+    if (labelEl) d.label = (labelEl.value || "").trim() || "Discount";
+    if (minEl) d.minCount = Math.max(0, Number(minEl.value || 0));
+
+    const t = typeEl ? (typeEl.value || "percent").toLowerCase() : (d.type || "percent");
+    d.type = (t === "percent" || t === "static" || t === "free") ? t : "percent";
+
+    const v = valEl ? Number(valEl.value || 0) : Number(d.value || 0);
+    d.value = d.type === "free" ? 0 : (Number.isFinite(v) ? Math.max(0, v) : 0);
+    if (d.type === "percent") d.value = Math.min(100, d.value);
   });
 
-  const fileReads = levels.map(l=>{
+  const fileReads = levels.map(l => {
     const fileEl = safeEl(`lvlFile_${l.id}`);
     const file = fileEl && fileEl.files ? fileEl.files[0] : null;
-    if(!file) return Promise.resolve();
-    return new Promise((resolve)=>{
+    if (!file) return Promise.resolve();
+    return new Promise((resolve) => {
       const reader = new FileReader();
-      reader.onload = (e)=>{ l.pngDataUrl = e.target.result; resolve(); };
+      reader.onload = (e) => { l.pngDataUrl = e.target.result; resolve(); };
       reader.readAsDataURL(file);
     });
   });
 
-  Promise.all(fileReads).then(()=>{
-    rewardsSettings.levels = (rewardsSettings.levels || []).slice().sort((a,b)=> Number(a.minCount||0) - Number(b.minCount||0));
-    rewardsSettings.discounts = (rewardsSettings.discounts || []).slice().sort((a,b)=> Number(a.minCount||0) - Number(b.minCount||0));
+  Promise.all(fileReads).then(() => {
+    rewardsSettings.levels = (rewardsSettings.levels || []).slice().sort((a, b) => Number(a.minCount || 0) - Number(b.minCount || 0));
+    rewardsSettings.discounts = (rewardsSettings.discounts || []).slice().sort((a, b) => Number(a.minCount || 0) - Number(b.minCount || 0));
     saveRewardsSettings();
-    pushToast({ title:"Rewards saved", sub:"Badges + discounts auto-update as you log entries." });
+    pushToast({ title: "Rewards saved", sub: "Discounts now support Percent / Static / Free + client overrides." });
     closeRewards();
     render();
   });
@@ -1686,7 +1866,7 @@ function saveRewards(){
 window.saveRewards = saveRewards;
 
 // ================= UI BUILDERS =================
-function createAccordion(title, badgeText){
+function createAccordion(title, badgeText) {
   const wrap = document.createElement("div");
   wrap.className = "accordion";
 
@@ -1702,7 +1882,7 @@ function createAccordion(title, badgeText){
   t.textContent = title;
   left.appendChild(t);
 
-  if(badgeText !== undefined && badgeText !== null){
+  if (badgeText !== undefined && badgeText !== null) {
     const b = document.createElement("span");
     b.className = "badge";
     b.textContent = badgeText;
@@ -1719,7 +1899,7 @@ function createAccordion(title, badgeText){
   const content = document.createElement("div");
   content.className = "accordion-content";
 
-  header.addEventListener("click", ()=>{
+  header.addEventListener("click", () => {
     const isOpen = content.style.display === "block";
     content.style.display = isOpen ? "none" : "block";
     chev.textContent = isOpen ? "▾" : "▴";
@@ -1732,71 +1912,71 @@ function createAccordion(title, badgeText){
 }
 
 // ================= RENDER =================
-function render(){
+function render() {
   hydrateFilterUI();
 
   const locationSelect = safeEl("locationFilter");
-  if(locationSelect){
+  if (locationSelect) {
     const current = filters.location || "all";
-    const locs = Array.from(new Set(entries.map(e=>e.location).filter(Boolean))).sort();
+    const locs = Array.from(new Set(entries.map(e => e.location).filter(Boolean))).sort();
     locationSelect.innerHTML =
       `<option value="all">All Locations</option>` +
-      locs.map(l=>`<option value="${l}">${l}</option>`).join("");
+      locs.map(l => `<option value="${l}">${l}</option>`).join("");
     locationSelect.value = current;
   }
 
   const container = safeEl("entries");
-  if(!container) return;
+  if (!container) return;
   container.innerHTML = "";
 
   const list = getFilteredEntries();
 
-  if(list.length === 0){
+  if (list.length === 0) {
     container.innerHTML = "<p style='opacity:.65;'>No entries match your filters.</p>";
     updateStats(list);
     return;
   }
 
   const grouped = {};
-  list.forEach(e=>{
+  list.forEach(e => {
     const d = parseLocalDate(e.date);
-    if(!d) return;
+    if (!d) return;
 
     const y = d.getFullYear();
     const m = d.getMonth();
     const day = d.getDate();
 
-    if(!grouped[y]) grouped[y] = {};
-    if(!grouped[y][m]) grouped[y][m] = {};
-    if(!grouped[y][m][day]) grouped[y][m][day] = [];
+    if (!grouped[y]) grouped[y] = {};
+    if (!grouped[y][m]) grouped[y][m] = {};
+    if (!grouped[y][m][day]) grouped[y][m][day] = [];
     grouped[y][m][day].push(e);
   });
 
-  Object.keys(grouped).sort((a,b)=>Number(b)-Number(a)).forEach(year=>{
+  Object.keys(grouped).sort((a, b) => Number(b) - Number(a)).forEach(year => {
     const yearAmt = Object.values(grouped[year])
-      .flatMap(mo=>Object.values(mo).flat())
-      .reduce((sum,e)=>sum + totalForTotalsNet(e), 0);
+      .flatMap(mo => Object.values(mo).flat())
+      .reduce((sum, e) => sum + totalForTotalsNet(e), 0);
 
     const yearAcc = createAccordion(String(year), money(yearAmt));
     container.appendChild(yearAcc.wrap);
 
-    Object.keys(grouped[year]).sort((a,b)=>Number(b)-Number(a)).forEach(monthIdx=>{
+    Object.keys(grouped[year]).sort((a, b) => Number(b) - Number(a)).forEach(monthIdx => {
       const monthAmt = Object.values(grouped[year][monthIdx])
         .flat()
-        .reduce((sum,e)=>sum + totalForTotalsNet(e), 0);
+        .reduce((sum, e) => sum + totalForTotalsNet(e), 0);
 
       const monthAcc = createAccordion(monthName(Number(year), Number(monthIdx)), money(monthAmt));
       yearAcc.content.appendChild(monthAcc.wrap);
 
-      Object.keys(grouped[year][monthIdx]).sort((a,b)=>Number(b)-Number(a)).forEach(dayNum=>{
+      Object.keys(grouped[year][monthIdx]).sort((a, b) => Number(b) - Number(a)).forEach(dayNum => {
         const dayEntries = grouped[year][monthIdx][dayNum];
-        const dayAmt = dayEntries.reduce((sum,e)=>sum + totalForTotalsNet(e), 0);
+        const dayAmt = dayEntries.reduce((sum, e) => sum + totalForTotalsNet(e), 0);
 
-        const dateLabel = `${year}-${pad2(Number(monthIdx)+1)}-${pad2(dayNum)}`;
+        const dateLabel = `${year}-${pad2(Number(monthIdx) + 1)}-${pad2(dayNum)}`;
         const dayAcc = createAccordion(dateLabel, money(dayAmt));
         monthAcc.content.appendChild(dayAcc.wrap);
 
-        dayEntries.forEach(entry=>{
+        dayEntries.forEach(entry => {
           const paidLine = money(paidForPreview(entry));
           const loc = (entry.location || "").trim();
           const desc = (entry.description || "").trim();
@@ -1820,12 +2000,12 @@ function render(){
             <div class="status ${entry.status}">${entry.status}</div>
           `;
 
-          row.querySelector(".client-link").addEventListener("click",(ev)=>{
+          row.querySelector(".client-link").addEventListener("click", (ev) => {
             ev.stopPropagation();
             openClientProfile(entry.client);
           });
 
-          row.addEventListener("click", ()=>viewEntry(entry.id));
+          row.addEventListener("click", () => viewEntry(entry.id));
 
           dayAcc.content.appendChild(row);
         });
@@ -1835,7 +2015,7 @@ function render(){
 
   updateStats(list);
 
-  if(appointmentsModal && appointmentsModal.style.display === "flex"){
+  if (appointmentsModal && appointmentsModal.style.display === "flex") {
     buildAppointmentsList();
   }
 }
