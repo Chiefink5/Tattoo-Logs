@@ -1,11 +1,13 @@
 /* =========================================================
-   Globber’s Ink Log — app.js (FULL REWRITE, FAB FIX FINAL)
-   - PLUS / Deposit / Bammer buttons: unstoppable (capture + pointerdown)
-   - Safe modals (click outside closes)
-   - Toast notifications: 10s, card style
-   - Filters dropdown toggle
-   - Appointments screen (BOOKED)
-   - Studio screen: payout split + discount builder
+   Globber’s Ink Log — app.js (FULL REWRITE: FAB ONSCREEN + CLICK FIX)
+   - Pins FABs on-screen (bottom-right stack)
+   - Bulletproof FAB taps: pointerdown + click (capture) + touchend fallback
+   - Toast cards: 10s, non-blocking
+   - Filters toggle + basic render
+   - Add/Edit/View/Delete
+   - Quick add: Deposit + Bammer
+   - Appointments (BOOKED upcoming)
+   - Studio: payout split + discount builder
    ========================================================= */
 
 /* ===================== STORAGE KEYS ===================== */
@@ -31,8 +33,8 @@ const DEFAULT_REWARDS = {
     { id: "lvl2", name: "Regular", minCount: 5, pngDataUrl: "" },
     { id: "lvl3", name: "VIP", minCount: 10, pngDataUrl: "" }
   ],
+  // type: percent | static | free
   discounts: [
-    // type: percent | static | free
     { id: "d1", label: "5% off", minCount: 5, minSpend: 0, type: "percent", value: 5 },
     { id: "d2", label: "$20 off", minCount: 10, minSpend: 0, type: "static", value: 20 },
     { id: "d3", label: "Free small", minCount: 20, minSpend: 0, type: "free", value: 0 }
@@ -93,7 +95,7 @@ function clampPct(p) {
 }
 function round2(n) { return Math.round(Number(n || 0) * 100) / 100; }
 
-/* ===================== PAYMENT HELPERS ===================== */
+/* ===================== PAYMENTS ===================== */
 function paymentsArray(entry) { return Array.isArray(entry.payments) ? entry.payments : []; }
 function paidAmount(entry) { return paymentsArray(entry).reduce((sum, p) => sum + Number(p.amount || 0), 0); }
 function depositAmount(entry) {
@@ -105,7 +107,7 @@ function isDepositOnlyEntry(entry) {
 }
 
 /**
- * Totals rule (NOT displayed):
+ * Totals rule (kept internal, NOT displayed anywhere):
  * - PAID    => Total Price
  * - PARTIAL => Paid so far
  * - else    => 0
@@ -124,11 +126,10 @@ function getSplitPctForDate(dateStr) {
   const pct = (override !== undefined && override !== null) ? Number(override) : Number(splitSettings.defaultPct || 100);
   return clampPct(pct);
 }
-function netFromGross(gross, pct) { return Number(gross || 0) * (clampPct(pct) / 100); }
 function totalForTotalsNet(entry) {
   const gross = totalForTotalsGross(entry);
   const pct = getSplitPctForDate(entry.date);
-  return netFromGross(gross, pct);
+  return Number(gross || 0) * (pct / 100);
 }
 
 /**
@@ -146,51 +147,41 @@ function paidForPreview(entry) {
   return 0;
 }
 
-/* ===================== TOASTS ===================== */
+/* ===================== TOASTS (10s, NON-BLOCKING) ===================== */
 const TOAST_MS = 10000;
-
-function ensureToastDoesntBlockClicks() {
-  const root = $("toasts");
-  if (!root) return;
-  // container should not eat clicks
-  root.style.pointerEvents = "none";
-  // each toast should be clickable (close button)
-  root.querySelectorAll(".toast").forEach(t => t.style.pointerEvents = "auto");
-}
 
 function toastCard(opts) {
   const root = $("toasts");
   if (!root) return;
 
-  const { title="Notification", sub="", mini="", imgDataUrl="", icon="✨", tone="gold" } = (opts || {});
+  // container must never block page taps
+  root.style.pointerEvents = "none";
+
+  const { title="Notification", sub="", mini="", icon="✨", tone="gold" } = (opts || {});
   const toneMap = {
-    gold: { border: "rgba(212,175,55,.25)", glow: "rgba(212,175,55,.14)", iconBg: "rgba(212,175,55,.14)", iconRing: "rgba(212,175,55,.35)" },
-    green:{ border: "rgba(42,211,111,.25)", glow: "rgba(42,211,111,.12)", iconBg: "rgba(42,211,111,.14)", iconRing: "rgba(42,211,111,.35)" },
-    blue: { border: "rgba(42,91,215,.30)", glow: "rgba(42,91,215,.10)", iconBg: "rgba(42,91,215,.14)", iconRing: "rgba(42,91,215,.40)" },
-    red:  { border: "rgba(255,60,60,.28)", glow: "rgba(255,60,60,.10)", iconBg: "rgba(255,60,60,.14)", iconRing: "rgba(255,60,60,.38)" }
+    gold: { border: "rgba(212,175,55,.25)", glow: "rgba(212,175,55,.14)" },
+    green:{ border: "rgba(42,211,111,.25)", glow: "rgba(42,211,111,.12)" },
+    blue: { border: "rgba(42,91,215,.30)", glow: "rgba(42,91,215,.10)" },
+    red:  { border: "rgba(255,60,60,.28)", glow: "rgba(255,60,60,.10)" }
   };
   const t = toneMap[tone] || toneMap.gold;
 
   const el = document.createElement("div");
   el.className = "toast";
+  el.style.pointerEvents = "auto";
   el.style.borderColor = t.border;
   el.style.boxShadow = `0 18px 44px rgba(0,0,0,.45), 0 0 0 1px ${t.glow}`;
   el.style.position = "relative";
   el.style.overflow = "hidden";
-  el.style.pointerEvents = "auto";
 
   el.innerHTML = `
     <div style="display:flex; gap:12px; align-items:flex-start;">
       <div style="
         width:44px;height:44px;border-radius:14px;
-        background:${t.iconBg};
-        border:1px solid ${t.iconRing};
-        box-shadow: 0 12px 26px rgba(0,0,0,.28);
+        background: rgba(255,255,255,.06);
+        border:1px solid ${t.border};
         display:flex;align-items:center;justify-content:center; flex:0 0 44px;">
-        ${imgDataUrl
-          ? `<img src="${imgDataUrl}" alt="" style="width:34px;height:34px;border-radius:10px;object-fit:cover;">`
-          : `<div style="font-size:20px; line-height:1;">${escapeHtml(icon)}</div>`
-        }
+        <div style="font-size:20px; line-height:1;">${escapeHtml(icon)}</div>
       </div>
 
       <div style="flex:1; min-width:0;">
@@ -217,7 +208,6 @@ function toastCard(opts) {
   `;
 
   root.appendChild(el);
-  ensureToastDoesntBlockClicks();
 
   const closeBtn = el.querySelector("[data-toast-close]");
   const bar = el.querySelector("[data-toast-bar]");
@@ -240,7 +230,6 @@ function toastCard(opts) {
       bar.style.transform = "scaleX(0)";
     });
   }
-
   setTimeout(remove, TOAST_MS);
 }
 
@@ -295,25 +284,13 @@ function initLogo() {
   });
 }
 
-/* ===================== AUTOMATION (CLIENTS) ===================== */
+/* ===================== CLIENT DB (LIGHT) ===================== */
 function ensureClientsDBShape() {
   if (!clientsDB || typeof clientsDB !== "object") clientsDB = { clients: {} };
   if (!clientsDB.clients || typeof clientsDB.clients !== "object") clientsDB.clients = {};
 }
 function clientKeyFromName(name) { return normalize(name).replace(/\s+/g, " ").trim(); }
 
-function getLevelForCount(count) {
-  const levels = Array.isArray(rewardsSettings.levels) ? rewardsSettings.levels : [];
-  const sorted = [...levels].sort((a, b) => Number(a.minCount || 0) - Number(b.minCount || 0));
-  let chosen = null;
-  for (const lvl of sorted) if (Number(count) >= Number(lvl.minCount || 0)) chosen = lvl;
-  return chosen;
-}
-
-function isDiscountEligible(rule, stats) {
-  return (Number(stats.tattooCount || 0) >= Number(rule.minCount || 0))
-      && (Number(stats.spendGross || 0) >= Number(rule.minSpend || 0));
-}
 function discountLabel(rule) {
   const label = String(rule?.label || "").trim();
   if (label) return label;
@@ -322,105 +299,32 @@ function discountLabel(rule) {
   if (rule?.type === "free") return "Free";
   return "Discount";
 }
-function getDiscountRuleById(id) {
-  const rules = Array.isArray(rewardsSettings.discounts) ? rewardsSettings.discounts : [];
-  return rules.find(r => r.id === id) || null;
-}
-function computeEligibleDiscounts(stats) {
-  const rules = Array.isArray(rewardsSettings.discounts) ? rewardsSettings.discounts : [];
-  const eligible = rules.filter(r => isDiscountEligible(r, stats));
-  // best first
-  eligible.sort((a, b) => {
-    const av = a.type === "free" ? 999999 : (a.type === "percent" ? 1000 + Number(a.value||0) : 500 + Number(a.value||0));
-    const bv = b.type === "free" ? 999999 : (b.type === "percent" ? 1000 + Number(b.value||0) : 500 + Number(b.value||0));
-    return bv - av;
-  });
-  return eligible;
-}
+function saveEntries() { localStorage.setItem(LS.ENTRIES, JSON.stringify(entries)); }
 
-function rebuildClientsDBAndNotify() {
+function rebuildClientsDB() {
   ensureClientsDBShape();
-  const before = JSON.parse(JSON.stringify(clientsDB.clients || {}));
   const map = {};
-
   for (const e of entries) {
     const name = String(e.client || "").trim();
     if (!name) continue;
     const key = clientKeyFromName(name);
-
     map[key] ||= { key, name, tattooCount: 0, spendGross: 0, spendNet: 0 };
-
     if (!isDepositOnlyEntry(e)) map[key].tattooCount += 1;
     map[key].spendGross += totalForTotalsGross(e);
     map[key].spendNet += totalForTotalsNet(e);
   }
-
-  for (const key of Object.keys(map)) {
-    const base = map[key];
-    const prev = clientsDB.clients[key] || {};
-    const selectedDiscountId = prev.selectedDiscountId || null;
-
-    const level = getLevelForCount(base.tattooCount);
-    const eligibleRules = computeEligibleDiscounts(base);
-    const eligibleDiscountIds = eligibleRules.map(r => r.id);
-
-    let finalSelectedId = selectedDiscountId;
-    if (!finalSelectedId && eligibleRules.length) finalSelectedId = eligibleRules[0].id;
-
-    const finalSelectedRule = finalSelectedId ? getDiscountRuleById(finalSelectedId) : null;
-
-    clientsDB.clients[key] = {
-      key,
-      name: base.name,
-      tattooCount: base.tattooCount,
-      spendGross: round2(base.spendGross),
-      spendNet: round2(base.spendNet),
-      levelId: level ? level.id : null,
-      levelName: level ? level.name : "",
-      levelPng: level ? (level.pngDataUrl || "") : "",
-      eligibleDiscountIds,
-      selectedDiscountId: finalSelectedId,
-      selectedDiscount: finalSelectedRule
-        ? { id: finalSelectedRule.id, type: finalSelectedRule.type, value: finalSelectedRule.value, label: discountLabel(finalSelectedRule) }
-        : null
+  for (const k of Object.keys(map)) {
+    clientsDB.clients[k] = {
+      ...clientsDB.clients[k],
+      ...map[k],
+      spendGross: round2(map[k].spendGross),
+      spendNet: round2(map[k].spendNet)
     };
   }
-
-  // notifications: new badge / new discount eligibility
-  for (const key of Object.keys(clientsDB.clients)) {
-    const c = clientsDB.clients[key];
-    const prev = before[key] || {};
-
-    if (c.levelId && c.levelId !== (prev.levelId || null)) {
-      toastCard({
-        title: "New badge unlocked",
-        sub: `${c.name} → ${c.levelName}`,
-        mini: `Tattoos: ${c.tattooCount}`,
-        imgDataUrl: c.levelPng || "",
-        icon: "🏅",
-        tone: "gold"
-      });
-    }
-
-    const oldElig = new Set(prev.eligibleDiscountIds || []);
-    const newly = (c.eligibleDiscountIds || []).filter(id => !oldElig.has(id));
-    if (newly.length) {
-      toastCard({
-        title: "Discount unlocked",
-        sub: c.name,
-        mini: newly.map(id => discountLabel(getDiscountRuleById(id))).join(", "),
-        icon: "💸",
-        tone: "green"
-      });
-    }
-  }
-
   localStorage.setItem(LS.CLIENTS, JSON.stringify(clientsDB));
 }
 
-function saveEntries() { localStorage.setItem(LS.ENTRIES, JSON.stringify(entries)); }
-
-/* ===================== FILTERS UI ===================== */
+/* ===================== FILTERS ===================== */
 function applyFiltersUIState() {
   const content = $("filtersContent");
   const chev = $("filtersChev");
@@ -491,7 +395,6 @@ function passesFilters(entry) {
     const hay = [entry.client, entry.description, entry.location].map(normalize).join(" | ");
     if (!hay.includes(q)) return false;
   }
-
   return true;
 }
 function getFilteredEntries() {
@@ -500,7 +403,7 @@ function getFilteredEntries() {
   return list;
 }
 
-/* ===================== ACCORDION BUILDER ===================== */
+/* ===================== ACCORDION ===================== */
 function createAccordion(title, badgeText) {
   const wrap = document.createElement("div");
   wrap.className = "accordion";
@@ -591,7 +494,6 @@ function updateStats(list) {
       year += amt;
       if (currentQuarterIndex(d) === qNow) quarter += amt;
     }
-
     if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) month += amt;
     if (d >= weekWin.start && d <= weekWin.end) week += amt;
   });
@@ -604,13 +506,6 @@ function updateStats(list) {
 }
 
 /* ===================== RENDER ===================== */
-function renderClientMiniBadges(clientName) {
-  const key = clientKeyFromName(clientName);
-  const c = clientsDB.clients[key];
-  if (!c || !c.levelName) return "";
-  return `<span class="client-badge">${c.levelPng ? `<img src="${c.levelPng}" alt="">` : ""}${escapeHtml(c.levelName)}</span>`;
-}
-
 function render() {
   hydrateFilterUI();
 
@@ -629,7 +524,6 @@ function render() {
   container.innerHTML = "";
 
   const list = getFilteredEntries();
-
   if (list.length === 0) {
     container.innerHTML = "<p style='opacity:.65;'>No entries match your filters.</p>";
     updateStats(list);
@@ -677,10 +571,7 @@ function render() {
           row.className = "entry";
           row.innerHTML = `
             <div class="entry-left">
-              <div class="entry-name">
-                <span class="client-link">${escapeHtml(entry.client)}</span>
-                ${renderClientMiniBadges(entry.client)}
-              </div>
+              <div class="entry-name">${escapeHtml(entry.client)}</div>
               <div class="entry-sub">
                 <div class="sub-row"><strong>Paid:</strong> ${paidLine}</div>
                 <div class="sub-row clamp2">${escapeHtml(row2 || "")}</div>
@@ -688,12 +579,6 @@ function render() {
             </div>
             <div class="status ${escapeHtml(entry.status || "unpaid")}">${escapeHtml(entry.status || "unpaid")}</div>
           `;
-
-          row.querySelector(".client-link")?.addEventListener("click", (ev) => {
-            ev.stopPropagation();
-            openClientProfile(entry.client);
-          });
-
           row.addEventListener("click", () => viewEntry(entry.id));
           dayAcc.content.appendChild(row);
         });
@@ -831,7 +716,7 @@ function saveEntry() {
 
   saveEntries();
   closeForm();
-  rebuildClientsDBAndNotify();
+  rebuildClientsDB();
   render();
 }
 
@@ -842,7 +727,6 @@ function viewEntry(id) {
   if (!entry || !box) return;
 
   viewingId = id;
-
   const dep = depositAmount(entry);
 
   box.innerHTML = `
@@ -892,7 +776,7 @@ function deleteEntry(id) {
   entries = entries.filter(e => e.id !== id);
   saveEntries();
   closeView();
-  rebuildClientsDBAndNotify();
+  rebuildClientsDB();
   render();
 }
 
@@ -949,7 +833,7 @@ function openBammerQuick() {
 
     saveEntries();
     closeBammerQuick();
-    rebuildClientsDBAndNotify();
+    rebuildClientsDB();
     render();
   });
 
@@ -1009,7 +893,7 @@ function openDepositQuick() {
 
     saveEntries();
     closeDepositQuick();
-    rebuildClientsDBAndNotify();
+    rebuildClientsDB();
     render();
   });
 
@@ -1017,30 +901,6 @@ function openDepositQuick() {
   showModal("depositModal");
 }
 function closeDepositQuick() { hideModal("depositModal"); }
-
-/* ===================== CLIENT PROFILE (simple) ===================== */
-function openClientProfile(clientName) {
-  const key = clientKeyFromName(clientName);
-  const c = clientsDB.clients[key];
-  const box = $("clientBox");
-  if (!box) return;
-
-  box.innerHTML = `
-    <div class="modal-title">Client Profile</div>
-    <div class="summary-box">
-      <div style="font-weight:900; font-size:18px;">${escapeHtml(c?.name || clientName)}</div>
-      <div style="margin-top:10px; opacity:.9;">Tattoos: <b>${Number(c?.tattooCount || 0)}</b> • Spent: <b>${money(c?.spendGross || 0)}</b></div>
-      ${c?.levelName ? `<div style="margin-top:10px;" class="client-badge">${c.levelPng ? `<img src="${c.levelPng}" alt="">` : ""}${escapeHtml(c.levelName)}</div>` : ``}
-    </div>
-    <div class="actions-row" style="margin-top:14px;">
-      <button type="button" class="secondarybtn" id="btnCloseClient">Close</button>
-    </div>
-  `;
-
-  $("btnCloseClient")?.addEventListener("click", closeClient);
-  showModal("clientModal");
-}
-function closeClient() { hideModal("clientModal"); }
 
 /* ===================== APPOINTMENTS ===================== */
 function openAppointments() {
@@ -1094,12 +954,10 @@ function openAppointments() {
 }
 function closeAppointments(){ hideModal("appointmentsModal"); }
 
-/* ===================== STUDIO (split + discounts) ===================== */
+/* ===================== STUDIO ===================== */
 function openStudio() {
   const box = $("studioBox");
   if (!box) return;
-
-  const rules = Array.isArray(rewardsSettings.discounts) ? rewardsSettings.discounts : [];
 
   box.innerHTML = `
     <div class="modal-title">Studio</div>
@@ -1131,7 +989,7 @@ function openStudio() {
     splitSettings.defaultPct = clampPct($("defaultSplitPct")?.value || 100);
     localStorage.setItem(LS.SPLIT, JSON.stringify(splitSettings));
     toastCard({ title: "Studio saved", sub: "Split updated", mini: `${splitSettings.defaultPct}%`, icon: "🏦", tone: "blue" });
-    rebuildClientsDBAndNotify();
+    rebuildClientsDB();
     render();
   });
 
@@ -1228,7 +1086,6 @@ function saveDiscountBuilder() {
 
     let val = el.value;
     if (field === "minCount" || field === "minSpend" || field === "value") val = Number(val || 0);
-
     rule[field] = val;
   });
 
@@ -1245,7 +1102,7 @@ function saveDiscountBuilder() {
   localStorage.setItem(LS.REWARDS, JSON.stringify(rewardsSettings));
 
   toastCard({ title: "Discounts saved", sub: `${rules.length} discount(s)`, icon: "💾", tone: "gold" });
-  rebuildClientsDBAndNotify();
+  rebuildClientsDB();
   render();
 }
 
@@ -1255,7 +1112,7 @@ function openExport() {
   if (!box) return;
   box.innerHTML = `
     <div class="modal-title">Export</div>
-    <div class="summary-box"><div style="opacity:.85;">Export polish is next (pay period + csv + summary).</div></div>
+    <div class="summary-box"><div style="opacity:.85;">Export polish next (pay period + csv + summary).</div></div>
     <div class="actions-row" style="margin-top:14px;">
       <button type="button" class="secondarybtn" id="btnCloseExport">Close</button>
     </div>
@@ -1265,29 +1122,45 @@ function openExport() {
 }
 function closeExport(){ hideModal("exportModal"); }
 
-/* ===================== FAB FIX (THE IMPORTANT PART) ===================== */
-function hardenFabLayers() {
-  const fabEls = [
-    $("fabAdd"), $("fabDeposit"), $("fabBammer"),
-    ...Array.from(document.querySelectorAll(".fab")),
-    ...Array.from(document.querySelectorAll("[data-fab]"))
-  ].filter(Boolean);
+/* ===================== FAB: PIN ONSCREEN + CLICK PROOF ===================== */
+/**
+ * This is the “don’t ever move off screen again” fix.
+ * We ONLY pin these 3 IDs if they exist.
+ */
+function pinFab(el, rightPx, bottomPx) {
+  if (!el) return;
+  el.style.position = "fixed";
+  el.style.right = `${rightPx}px`;
+  el.style.bottom = `${bottomPx}px`;
+  el.style.left = "auto";
+  el.style.top = "auto";
+  el.style.zIndex = "999999";
+  el.style.pointerEvents = "auto";
+  // make inner icons not steal the tap
+  el.querySelectorAll("*").forEach(child => (child.style.pointerEvents = "none"));
+}
 
-  fabEls.forEach(el => {
-    el.style.position = el.style.position || "fixed";
+function hardenFABs() {
+  const add = $("fabAdd");
+  const dep = $("fabDeposit");
+  const bam = $("fabBammer");
+
+  // If you only have the green “menu” button visible, still pin it.
+  // (This keeps whatever you’re using as the add/menu FAB from drifting.)
+  if (add) pinFab(add, 18, 22);
+  if (dep) pinFab(dep, 18, 96);
+  if (bam) pinFab(bam, 18, 170);
+
+  // if your HTML uses class-based FABs too, keep them clickable but don’t reposition them
+  document.querySelectorAll(".fab, [data-fab]").forEach(el => {
     el.style.zIndex = "999999";
     el.style.pointerEvents = "auto";
-    // prevent inner icons from stealing the event target
-    el.querySelectorAll("*").forEach(child => child.style.pointerEvents = "none");
+    el.querySelectorAll("*").forEach(child => (child.style.pointerEvents = "none"));
   });
-
-  ensureToastDoesntBlockClicks();
 }
 
 function detectFabActionFromTarget(target) {
-  const el = target?.closest?.(
-    "#fabAdd, #fabDeposit, #fabBammer, .fab.main, .fab.small, [data-fab='add'], [data-fab='deposit'], [data-fab='bammer']"
-  );
+  const el = target?.closest?.("#fabAdd, #fabDeposit, #fabBammer, [data-fab='add'], [data-fab='deposit'], [data-fab='bammer'], .fab.main, .fab.small");
   if (!el) return null;
 
   if (el.id === "fabAdd" || el.dataset.fab === "add" || el.classList.contains("main")) return "add";
@@ -1297,8 +1170,7 @@ function detectFabActionFromTarget(target) {
   if (el.classList.contains("small")) {
     const smalls = Array.from(document.querySelectorAll(".fab.small"));
     const idx = smalls.indexOf(el);
-    if (idx === 0) return "deposit";
-    return "bammer";
+    return idx === 0 ? "deposit" : "bammer";
   }
   return null;
 }
@@ -1309,7 +1181,6 @@ function runFabAction(action) {
   if (action === "bammer") openBammerQuick();
 }
 
-// capture-phase pointerdown = fixes “click never fires” on some mobile + overlays
 function installFabDelegation() {
   const handler = (e) => {
     const action = detectFabActionFromTarget(e.target);
@@ -1319,6 +1190,7 @@ function installFabDelegation() {
     runFabAction(action);
   };
 
+  // capture-phase so overlays/icons can’t block it
   document.addEventListener("pointerdown", handler, true);
   document.addEventListener("click", handler, true);
   document.addEventListener("touchend", handler, { capture: true, passive: false });
@@ -1334,26 +1206,23 @@ function init() {
   wireModalClickOff("depositModal","depositBox",closeDepositQuick);
   wireModalClickOff("appointmentsModal","appointmentsBox",closeAppointments);
   wireModalClickOff("studioModal","studioBox",closeStudio);
-  wireModalClickOff("clientModal","clientBox",closeClient);
 
   initLogo();
-
   $("q")?.addEventListener("keydown", (e) => { if (e.key === "Enter") applyFilters(); });
 
   installFabDelegation();
 
-  // keep reinforcing layering (some UIs re-render header/fab)
-  hardenFabLayers();
-  setTimeout(hardenFabLayers, 200);
-  setTimeout(hardenFabLayers, 800);
+  // lock FABs on-screen (and re-lock after initial layout)
+  hardenFABs();
+  setTimeout(hardenFABs, 150);
+  setTimeout(hardenFABs, 800);
 
-  rebuildClientsDBAndNotify();
+  rebuildClientsDB();
   render();
 }
-
 document.addEventListener("DOMContentLoaded", init);
 
-/* ===================== WINDOW EXPORTS (for index.html buttons) ===================== */
+/* ===================== WINDOW EXPORTS ===================== */
 window.openForm = () => openForm(null);
 window.openDepositQuick = openDepositQuick;
 window.openBammerQuick = openBammerQuick;
@@ -1366,4 +1235,3 @@ window.applyFilters = applyFilters;
 window.clearFilters = clearFilters;
 
 window.viewEntry = viewEntry;
-window.openClientProfile = openClientProfile;
