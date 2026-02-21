@@ -23,15 +23,26 @@ let filters = JSON.parse(localStorage.getItem("filters") || "null") || {
 // Rewards (badge levels + discount tiers)
 let rewardsSettings = JSON.parse(localStorage.getItem("rewardsSettings") || "null") || {
   levels: [
-    // { id, name, minCount, pngDataUrl }
     { id: "lvl1", name: "Rookie", minCount: 1, pngDataUrl: "" },
     { id: "lvl2", name: "Regular", minCount: 5, pngDataUrl: "" },
     { id: "lvl3", name: "VIP", minCount: 10, pngDataUrl: "" }
   ],
   discounts: [
-    // { id, label, minCount, percent }
     { id: "d1", label: "5% off", minCount: 5, percent: 5 },
     { id: "d2", label: "10% off", minCount: 10, percent: 10 }
+  ]
+};
+
+// Bills / Rent sinking funds
+let billsSettings = JSON.parse(localStorage.getItem("billsSettings") || "null") || {
+  rent: {
+    amount: 0,
+    targetDay: 15,
+    savedSoFar: 0,
+    monthMode: "auto" // auto | this | next
+  },
+  bills: [
+    // { id, name, amount, dueDay, savedSoFar }
   ]
 };
 
@@ -87,28 +98,78 @@ function isDepositOnlyEntry(entry){
   return depositAmount(entry) > 0 && !hasSessions(entry);
 }
 function isTattooEntry(entry){
-  // Counts toward badge/discount progression: anything that isn't deposit-only
-  // (Bammers, full tattoos, sessions, etc. all count)
   return !isDepositOnlyEntry(entry);
 }
 
 function currentQuarterIndex(dateObj){ return Math.floor(dateObj.getMonth() / 3); }
+
+function startOfDay(d){
+  const x = new Date(d);
+  x.setHours(0,0,0,0);
+  return x;
+}
+function addMonths(date, count){
+  const d = new Date(date);
+  const y = d.getFullYear();
+  const m = d.getMonth();
+  const day = d.getDate();
+  const out = new Date(y, m + count, 1);
+  const maxDay = new Date(out.getFullYear(), out.getMonth() + 1, 0).getDate();
+  out.setDate(Math.min(day, maxDay));
+  out.setHours(0,0,0,0);
+  return out;
+}
+function clampDayForMonth(year, monthIndex, day){
+  const maxDay = new Date(year, monthIndex + 1, 0).getDate();
+  return Math.max(1, Math.min(maxDay, Number(day || 1)));
+}
+function daysInclusive(fromDate, toDate){
+  const a = startOfDay(fromDate);
+  const b = startOfDay(toDate);
+  const ms = b.getTime() - a.getTime();
+  const diff = Math.floor(ms / (24*60*60*1000));
+  return Math.max(1, diff + 1);
+}
+function nextDueDateForDay(dueDay, monthMode){
+  const now = startOfDay(new Date());
+  const y = now.getFullYear();
+  const m = now.getMonth();
+
+  const dayThis = clampDayForMonth(y, m, dueDay);
+  const candidateThis = new Date(y, m, dayThis);
+  candidateThis.setHours(0,0,0,0);
+
+  if(monthMode === "this") return candidateThis;
+  if(monthMode === "next"){
+    const next = addMonths(candidateThis, 1);
+    const dayNext = clampDayForMonth(next.getFullYear(), next.getMonth(), dueDay);
+    const dt = new Date(next.getFullYear(), next.getMonth(), dayNext);
+    dt.setHours(0,0,0,0);
+    return dt;
+  }
+
+  if(candidateThis >= now) return candidateThis;
+
+  const next = addMonths(candidateThis, 1);
+  const dayNext = clampDayForMonth(next.getFullYear(), next.getMonth(), dueDay);
+  const dt = new Date(next.getFullYear(), next.getMonth(), dayNext);
+  dt.setHours(0,0,0,0);
+  return dt;
+}
 
 // ---- Totals logic (gross) ----
 function totalForTotalsGross(entry){
   const status = (entry.status || "unpaid").toLowerCase();
   if(status === "paid") return Number(entry.total || 0);
   if(status === "partial") return paidAmount(entry);
-  // booked/unpaid/no_show -> 0
   return 0;
 }
 
-// Preview Paid line (what you see on the card)
 function paidForPreview(entry){
   const status = (entry.status || "unpaid").toLowerCase();
   if(status === "paid") return Number(entry.total || 0);
   if(status === "partial") return paidAmount(entry);
-  if(status === "booked") return depositAmount(entry); // so you can see deposit at a glance
+  if(status === "booked") return depositAmount(entry);
   return 0;
 }
 
@@ -140,6 +201,9 @@ function saveFilters(){
 }
 function saveRewardsSettings(){
   localStorage.setItem("rewardsSettings", JSON.stringify(rewardsSettings));
+}
+function saveBillsSettings(){
+  localStorage.setItem("billsSettings", JSON.stringify(billsSettings));
 }
 
 // ================= TOASTS =================
@@ -209,6 +273,8 @@ const clientModal = safeEl("clientModal");
 const clientBox = safeEl("clientBox");
 const rewardsModal = safeEl("rewardsModal");
 const rewardsBox = safeEl("rewardsBox");
+const billsModal = safeEl("billsModal");
+const billsBox = safeEl("billsBox");
 
 function wireModal(modal, box, closer){
   if(!modal || !box) return;
@@ -223,6 +289,7 @@ wireModal(depositModal, depositBox, closeDepositQuick);
 wireModal(settingsModal, settingsBox, closeSettings);
 wireModal(clientModal, clientBox, closeClient);
 wireModal(rewardsModal, rewardsBox, closeRewards);
+wireModal(billsModal, billsBox, closeBills);
 
 // ================= LOGO =================
 function initLogo(){
@@ -297,7 +364,7 @@ function saveSplitSettings(){
   render();
 }
 function saveMonthOverride(){
-  const m = safeVal("overrideMonth"); // YYYY-MM
+  const m = safeVal("overrideMonth");
   const pct = clampPct(safeVal("overridePct"));
   if(!m){ alert("Pick a month."); return; }
   splitSettings.monthOverrides = splitSettings.monthOverrides || {};
@@ -322,6 +389,169 @@ window.saveSplitSettings = saveSplitSettings;
 window.saveMonthOverride = saveMonthOverride;
 window.removeMonthOverride = removeMonthOverride;
 
+// ================= BILLS & RENT (SINKING FUNDS) =================
+function openBills(){
+  if(!billsModal) return;
+
+  const rent = billsSettings.rent || { amount:0, targetDay:15, savedSoFar:0, monthMode:"auto" };
+
+  const rentAmount = safeEl("rentAmount");
+  const rentTargetDay = safeEl("rentTargetDay");
+  const rentSavedSoFar = safeEl("rentSavedSoFar");
+  const rentMonthMode = safeEl("rentMonthMode");
+
+  if(rentAmount) rentAmount.value = String(Number(rent.amount || 0) || "");
+  if(rentTargetDay) rentTargetDay.value = String(Number(rent.targetDay || 15) || 15);
+  if(rentSavedSoFar) rentSavedSoFar.value = String(Number(rent.savedSoFar || 0) || "");
+  if(rentMonthMode) rentMonthMode.value = rent.monthMode || "auto";
+
+  buildBillsUI();
+  billsModal.style.display = "flex";
+}
+function closeBills(){
+  if(!billsModal) return;
+  billsModal.style.display = "none";
+}
+function addBill(){
+  billsSettings.bills = billsSettings.bills || [];
+  billsSettings.bills.push({ id: uid("bill"), name:"New Bill", amount:0, dueDay:15, savedSoFar:0 });
+  buildBillsUI();
+}
+function removeBill(id){
+  billsSettings.bills = (billsSettings.bills || []).filter(b => b.id !== id);
+  buildBillsUI();
+}
+function saveBills(){
+  const rentAmount = Number(safeVal("rentAmount") || 0);
+  const rentTargetDay = Number(safeVal("rentTargetDay") || 15);
+  const rentSavedSoFar = Number(safeVal("rentSavedSoFar") || 0);
+  const rentMonthMode = safeVal("rentMonthMode") || "auto";
+
+  billsSettings.rent = {
+    amount: Math.max(0, rentAmount),
+    targetDay: Math.max(1, Math.min(28, rentTargetDay || 15)),
+    savedSoFar: Math.max(0, rentSavedSoFar),
+    monthMode: (rentMonthMode === "this" || rentMonthMode === "next") ? rentMonthMode : "auto"
+  };
+
+  const bills = Array.isArray(billsSettings.bills) ? billsSettings.bills : [];
+  bills.forEach(b=>{
+    const nameEl = safeEl(`billName_${b.id}`);
+    const amtEl = safeEl(`billAmt_${b.id}`);
+    const dueEl = safeEl(`billDue_${b.id}`);
+    const savedEl = safeEl(`billSaved_${b.id}`);
+
+    b.name = (nameEl ? nameEl.value : b.name) || "Bill";
+    b.amount = Math.max(0, Number(amtEl ? amtEl.value : b.amount) || 0);
+    b.dueDay = Math.max(1, Math.min(28, Number(dueEl ? dueEl.value : b.dueDay) || 1));
+    b.savedSoFar = Math.max(0, Number(savedEl ? savedEl.value : b.savedSoFar) || 0);
+  });
+
+  saveBillsSettings();
+  buildBillsUI();
+  pushToast({ title:"Bills saved", sub:"Daily set-aside targets updated." });
+}
+function calcSinkingTarget(amount, savedSoFar, dueDay, monthMode){
+  const now = startOfDay(new Date());
+  const due = nextDueDateForDay(dueDay, monthMode || "auto");
+  const daysLeft = daysInclusive(now, due);
+  const remaining = Math.max(0, Number(amount || 0) - Number(savedSoFar || 0));
+  const perDay = remaining / Math.max(1, daysLeft);
+  return { due, daysLeft, remaining, perDay };
+}
+function buildBillsUI(){
+  const listEl = safeEl("billsList");
+  const outEl = safeEl("billsTodayOut");
+  if(!listEl || !outEl) return;
+
+  const bills = Array.isArray(billsSettings.bills) ? billsSettings.bills : [];
+  const rent = billsSettings.rent || { amount:0, targetDay:15, savedSoFar:0, monthMode:"auto" };
+
+  listEl.innerHTML = bills.map(b=>{
+    return `
+      <div class="summary-box" style="margin-top:10px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+          <div style="font-weight:900;color:var(--gold);">Bill</div>
+          <button type="button" class="secondarybtn" onclick="removeBill('${b.id}')">Remove</button>
+        </div>
+        <div class="row">
+          <input id="billName_${b.id}" type="text" placeholder="Bill name (e.g. Car note)" value="${String(b.name||"").replace(/"/g,"&quot;")}">
+          <input id="billAmt_${b.id}" type="number" min="0" step="0.01" placeholder="Amount" value="${Number(b.amount||0) || ""}">
+        </div>
+        <div class="row">
+          <input id="billDue_${b.id}" type="number" min="1" max="28" step="1" placeholder="Due day (1-28)" value="${Number(b.dueDay||15)}">
+          <input id="billSaved_${b.id}" type="number" min="0" step="0.01" placeholder="Saved so far" value="${Number(b.savedSoFar||0) || ""}">
+        </div>
+        <div class="hint">Tip: set due day <= 28 for consistency across months.</div>
+      </div>
+    `;
+  }).join("");
+
+  const rentCalc = calcSinkingTarget(rent.amount, rent.savedSoFar, rent.targetDay, rent.monthMode || "auto");
+
+  const rentLine = (Number(rent.amount||0) > 0)
+    ? `
+      <div class="summary-box" style="margin-top:10px;">
+        <div style="font-weight:900;">Rent</div>
+        <div>Due: <strong>${formatYYYYMMDD(rentCalc.due)}</strong> (${rentCalc.daysLeft} days)</div>
+        <div>Remaining: <strong>${money(rentCalc.remaining)}</strong></div>
+        <div>Daily set-aside: <strong style="color:var(--gold);">${money(rentCalc.perDay)}</strong></div>
+      </div>
+    `
+    : `
+      <div class="summary-box" style="margin-top:10px;">
+        <div style="opacity:.8;">Rent not set yet.</div>
+      </div>
+    `;
+
+  const billCalcs = bills.map(b=>{
+    const calc = calcSinkingTarget(b.amount, b.savedSoFar, b.dueDay, "auto");
+    return { bill:b, calc };
+  });
+
+  const billsLines = billCalcs.length
+    ? billCalcs.map(({ bill, calc })=>{
+        const name = (bill.name || "Bill").trim() || "Bill";
+        return `
+          <div class="summary-box" style="margin-top:10px;">
+            <div style="font-weight:900;">${name}</div>
+            <div>Due: <strong>${formatYYYYMMDD(calc.due)}</strong> (${calc.daysLeft} days)</div>
+            <div>Remaining: <strong>${money(calc.remaining)}</strong></div>
+            <div>Daily set-aside: <strong style="color:var(--gold);">${money(calc.perDay)}</strong></div>
+          </div>
+        `;
+      }).join("")
+    : `<div class="summary-box" style="margin-top:10px; opacity:.85;">No bills added yet.</div>`;
+
+  const todayTarget = (Number(rent.amount||0) > 0 ? rentCalc.perDay : 0) + billCalcs.reduce((s,x)=> s + x.calc.perDay, 0);
+
+  outEl.innerHTML = `
+    <div class="summary-grid">
+      <div class="summary-box" style="margin-top:0;">
+        <div style="font-weight:900;">Today set aside</div>
+        <div style="font-size:1.2rem;color:var(--gold);font-weight:900;">${money(todayTarget)}</div>
+        <div class="hint">This is the sum of today’s required set-asides across rent + bills.</div>
+      </div>
+      <div class="summary-box" style="margin-top:0;">
+        <div style="font-weight:900;">What this means</div>
+        <div class="hint" style="opacity:.95;">
+          If you save this amount daily starting today, you’ll hit each bill’s target by its due date (assuming “saved so far” is accurate).
+        </div>
+      </div>
+    </div>
+
+    ${rentLine}
+
+    <div style="margin-top:10px;font-weight:900;color:var(--gold);">Bills</div>
+    ${billsLines}
+  `;
+}
+window.openBills = openBills;
+window.closeBills = closeBills;
+window.addBill = addBill;
+window.removeBill = removeBill;
+window.saveBills = saveBills;
+
 // ================= BACKUP / RESTORE =================
 function downloadBackup(){
   const payload = {
@@ -331,7 +561,8 @@ function downloadBackup(){
     payday,
     splitSettings,
     filters,
-    rewardsSettings
+    rewardsSettings,
+    billsSettings
   };
 
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
@@ -381,6 +612,11 @@ function restoreBackup(){
       if(data.rewardsSettings && typeof data.rewardsSettings === "object"){
         rewardsSettings = data.rewardsSettings;
         saveRewardsSettings();
+      }
+
+      if(data.billsSettings && typeof data.billsSettings === "object"){
+        billsSettings = data.billsSettings;
+        saveBillsSettings();
       }
 
       localStorage.setItem("entries", JSON.stringify(entries));
@@ -587,7 +823,6 @@ function openForm(){
   const statusEl = safeEl("status");
   if(statusEl) statusEl.value = "unpaid";
 
-  // Apply prefill if set (repeat client)
   if(prefillClient){
     const c = safeEl("client"); if(c) c.value = prefillClient.client || "";
     const ct = safeEl("contact"); if(ct) ct.value = prefillClient.contact || "";
@@ -707,7 +942,6 @@ function saveDepositOnly(){
   if(!date || !client){ alert("Date + Client required."); return; }
   if(!(dep > 0)){ alert("Deposit amount must be > 0."); return; }
 
-  // Deposit-only does NOT affect badge/discount count, so no progress toasts here.
   const total = Number(safeVal("dTotal") || 0);
 
   entries.push({
@@ -873,7 +1107,6 @@ function maybeNotifyClientProgress(name, before, after){
 
   const net = money(getClientNetTotal(name));
 
-  // Badge upgrade
   if(before.levelId !== after.levelId && after.levelId){
     pushToast({
       title: `New Badge Unlocked — ${after.levelName}`,
@@ -885,7 +1118,6 @@ function maybeNotifyClientProgress(name, before, after){
     });
   }
 
-  // Discount upgrade
   if(before.discountId !== after.discountId && after.discountId){
     pushToast({
       title: `Discount Tier Unlocked`,
@@ -965,7 +1197,6 @@ function saveEntry(){
       save();
       closeForm();
 
-      // Progress notifications (only if tattoo count potentially changed)
       const after = getClientProgressSnapshot(clientVal);
       maybeNotifyClientProgress(clientVal, before, after);
     } else {
@@ -1105,7 +1336,6 @@ function openClientProfile(name){
     </div>
   `;
 
-  // stash prefill target so buttons can use it
   prefillClient = { client: displayName, contact, social };
 
   clientModal.style.display = "flex";
@@ -1610,11 +1840,9 @@ window.addDiscountTier = addDiscountTier;
 window.removeDiscountTier = removeDiscountTier;
 
 function saveRewards(){
-  // Pull edits from inputs + read any badge PNG files
   const levels = Array.isArray(rewardsSettings.levels) ? rewardsSettings.levels : [];
   const discounts = Array.isArray(rewardsSettings.discounts) ? rewardsSettings.discounts : [];
 
-  // Update text/number fields first
   levels.forEach(l=>{
     const nameEl = safeEl(`lvlName_${l.id}`);
     const minEl = safeEl(`lvlMin_${l.id}`);
@@ -1631,7 +1859,6 @@ function saveRewards(){
     if(pctEl) d.percent = Math.max(0, Math.min(100, Number(pctEl.value || 0)));
   });
 
-  // Now load PNG files (async) then save
   const fileReads = levels.map(l=>{
     const fileEl = safeEl(`lvlFile_${l.id}`);
     const file = fileEl && fileEl.files ? fileEl.files[0] : null;
@@ -1644,7 +1871,6 @@ function saveRewards(){
   });
 
   Promise.all(fileReads).then(()=>{
-    // Clean ordering: sort by minCount ascending
     rewardsSettings.levels = (rewardsSettings.levels || []).slice().sort((a,b)=> Number(a.minCount||0) - Number(b.minCount||0));
     rewardsSettings.discounts = (rewardsSettings.discounts || []).slice().sort((a,b)=> Number(a.minCount||0) - Number(b.minCount||0));
     saveRewardsSettings();
@@ -1790,13 +2016,11 @@ function render(){
             <div class="status ${entry.status}">${entry.status}</div>
           `;
 
-          // Click client name -> profile
           row.querySelector(".client-link").addEventListener("click",(ev)=>{
             ev.stopPropagation();
             openClientProfile(entry.client);
           });
 
-          // Click card -> entry view
           row.addEventListener("click", ()=>viewEntry(entry.id));
 
           dayAcc.content.appendChild(row);
