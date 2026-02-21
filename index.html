@@ -448,6 +448,7 @@
       overflow:hidden;
     }
 
+    /* Toast notifications */
     #toasts{
       position:fixed;
       right:14px;
@@ -568,6 +569,7 @@
     <div class="fab" title="Add Entry" onclick="openForm()">+</div>
   </div>
 
+  <!-- ADD/EDIT ENTRY MODAL -->
   <div class="modal" id="formModal">
     <div class="modal-box" id="formBox">
       <div class="modal-title" id="formTitle">Add Entry</div>
@@ -614,6 +616,7 @@
     </div>
   </div>
 
+  <!-- QUICK ADD: BAMMER -->
   <div class="modal" id="bammerModal">
     <div class="modal-box" id="bammerBox">
       <div class="modal-title">Quick Add — Bammer</div>
@@ -646,6 +649,7 @@
     </div>
   </div>
 
+  <!-- QUICK ADD: DEPOSIT ONLY -->
   <div class="modal" id="depositModal">
     <div class="modal-box" id="depositBox">
       <div class="modal-title">Quick Add — Deposit Only</div>
@@ -678,14 +682,17 @@
     </div>
   </div>
 
+  <!-- VIEW ENTRY MODAL -->
   <div class="modal" id="viewModal">
     <div class="modal-box" id="viewBox"></div>
   </div>
 
+  <!-- CLIENT PROFILE MODAL -->
   <div class="modal" id="clientModal">
     <div class="modal-box" id="clientBox"></div>
   </div>
 
+  <!-- SETTINGS MODAL -->
   <div class="modal" id="settingsModal">
     <div class="modal-box" id="settingsBox">
       <div class="modal-title">Settings</div>
@@ -739,6 +746,7 @@
     </div>
   </div>
 
+  <!-- REWARDS MODAL -->
   <div class="modal" id="rewardsModal">
     <div class="modal-box" id="rewardsBox">
       <div class="modal-title">Client Rewards Setup</div>
@@ -774,50 +782,7 @@
     </div>
   </div>
 
-  <div class="modal" id="billsModal">
-    <div class="modal-box" id="billsBox">
-      <div class="modal-title">Bills & Rent</div>
-
-      <div class="summary-box" style="margin-top:0;">
-        <div style="font-weight:900;color:var(--gold);">Rent sinking fund</div>
-        <div class="hint">Set your rent + the day you want to be “safe” by. The system calculates the daily set-aside from today.</div>
-        <div class="row">
-          <input id="rentAmount" type="number" min="0" step="0.01" placeholder="Rent amount (e.g. 1450)">
-          <input id="rentTargetDay" type="number" min="1" max="28" step="1" placeholder="Safe-by day (default 15)">
-        </div>
-        <div class="row">
-          <input id="rentSavedSoFar" type="number" min="0" step="0.01" placeholder="Saved so far (optional)">
-          <select id="rentMonthMode">
-            <option value="auto">Target this month (or next if passed)</option>
-            <option value="this">Force this month</option>
-            <option value="next">Force next month</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="summary-box">
-        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;">
-          <div style="font-weight:900;color:var(--gold);">Bills sinking funds</div>
-          <div class="actions-row" style="margin-top:0;">
-            <button type="button" onclick="addBill()">+ Add Bill</button>
-          </div>
-        </div>
-        <div class="hint">Each bill can have its own due day + “saved so far.” Daily set-aside is calculated per bill.</div>
-        <div id="billsList" style="margin-top:10px;"></div>
-      </div>
-
-      <div class="summary-box">
-        <div style="font-weight:900;color:var(--gold);">Today’s set-aside targets</div>
-        <div id="billsTodayOut" style="margin-top:8px;opacity:.95;"></div>
-      </div>
-
-      <div class="actions-row">
-        <button type="button" onclick="saveBills()">Save</button>
-        <button type="button" class="secondarybtn" onclick="closeBills()">Close</button>
-      </div>
-    </div>
-  </div>
-
+  <!-- EXPORT MODAL -->
   <div class="modal" id="exportModal">
     <div class="modal-box" id="exportBox">
       <div class="modal-title">Export</div>
@@ -878,8 +843,48 @@
     </div>
   </div>
 
+  <!-- BILLS MODAL -->
+  <div class="modal" id="billsModal">
+    <div class="modal-box" id="billsBox">
+      <div class="modal-title">Bills & Rent</div>
+
+      <div class="summary-box" style="margin-top:0;">
+        <div style="font-weight:900;color:var(--gold);">Rent sinking fund</div>
+        <div class="hint">Rent is due on the <b>1st</b>. Every month. No exceptions.</div>
+        <div class="row">
+          <input id="rentAmount" type="number" min="0" step="0.01" placeholder="Rent amount (e.g. 1450)">
+          <input id="rentSavedSoFar" type="number" min="0" step="0.01" placeholder="Saved so far (optional)">
+        </div>
+      </div>
+
+      <div class="summary-box">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;">
+          <div style="font-weight:900;color:var(--gold);">Bills sinking funds</div>
+          <div class="actions-row" style="margin-top:0;">
+            <button type="button" onclick="addBill()">+ Add Bill</button>
+          </div>
+        </div>
+        <div class="hint">Bills use real due dates so targets adjust automatically.</div>
+        <div id="billsList" style="margin-top:10px;"></div>
+      </div>
+
+      <div class="summary-box">
+        <div style="font-weight:900;color:var(--gold);">Today’s target</div>
+        <div id="billsTodayOut" style="margin-top:8px;opacity:.95;"></div>
+        <div id="billsQuote" class="hint" style="margin-top:10px; opacity:.95;"></div>
+      </div>
+
+      <div class="actions-row">
+        <button type="button" onclick="saveBills()">Save</button>
+        <button type="button" class="secondarybtn" onclick="closeBills()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toasts -->
   <div id="toasts"></div>
 
   <script src="app.js"></script>
+  <script src="bills.js"></script>
 </body>
 </html>
