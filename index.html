@@ -187,7 +187,7 @@
         calc(14px + env(safe-area-inset-left));
     }
 
-    /* ===== FILTERBAR (unchanged, but spacing) ===== */
+    /* ===== FILTERBAR ===== */
     .filterbar{
       background:rgba(0,0,0,.12);
       border:1px solid rgba(31,111,80,.55);
@@ -251,7 +251,7 @@
     }
     .dangerbtn{ background:var(--danger); }
 
-    /* ===== ACCORDION + ENTRIES (mostly your existing) ===== */
+    /* ===== ACCORDION + ENTRIES ===== */
     .accordion{
       background:rgba(0,0,0,.12);
       border:1px solid rgba(31,111,80,.55);
@@ -386,7 +386,7 @@
     .no_show{background:var(--danger);}
     .booked{background:var(--booked);}
 
-    /* ===== MODALS (your existing) ===== */
+    /* ===== MODALS ===== */
     .modal{
       position:fixed;
       inset:0;
@@ -445,6 +445,13 @@
     @media(max-width:640px){ .row{grid-template-columns:1fr;} }
 
     .actions-row{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:12px;
+    }
+    /* app.js uses actionsRow in some templates — support both */
+    .actionsRow{
       display:flex;
       gap:10px;
       flex-wrap:wrap;
@@ -512,7 +519,20 @@
       overflow:hidden;
     }
 
-    /* Toasts (unchanged) */
+    /* ===== FIELD TITLES (labels above inputs) ===== */
+    .field{ width:100%; }
+    .field label{
+      display:block;
+      font-weight:900;
+      color:rgba(255,255,255,.88);
+      margin:6px 0 6px;
+      letter-spacing:.01em;
+    }
+    .field input, .field select, .field textarea{
+      margin:0;
+    }
+
+    /* Toasts */
     #toasts{
       position:fixed;
       right:14px;
@@ -613,29 +633,47 @@
   <div class="container">
     <div class="filterbar">
       <div class="row">
-        <input id="q" type="text" placeholder="Search (client, description, location)">
+        <div class="field">
+          <label>Search</label>
+          <input id="q" type="text" placeholder="">
+        </div>
 
-        <select id="statusFilter">
-          <option value="all">All Status</option>
-          <option value="booked">Booked</option>
-          <option value="paid">Paid</option>
-          <option value="partial">Partial</option>
-          <option value="unpaid">Unpaid</option>
-          <option value="no_show">No Show</option>
-        </select>
+        <div class="field">
+          <label>Status</label>
+          <select id="statusFilter">
+            <option value="all">All Status</option>
+            <option value="booked">Booked</option>
+            <option value="paid">Paid</option>
+            <option value="partial">Partial</option>
+            <option value="unpaid">Unpaid</option>
+            <option value="no_show">No Show</option>
+          </select>
+        </div>
 
-        <select id="locationFilter">
-          <option value="all">All Locations</option>
-        </select>
+        <div class="field">
+          <label>Location</label>
+          <select id="locationFilter">
+            <option value="all">All Locations</option>
+          </select>
+        </div>
       </div>
 
       <div class="row2">
-        <input id="fromDate" type="date">
-        <input id="toDate" type="date">
-        <select id="sortFilter">
-          <option value="newest">Sort: Newest</option>
-          <option value="oldest">Sort: Oldest</option>
-        </select>
+        <div class="field">
+          <label>From Date</label>
+          <input id="fromDate" type="date">
+        </div>
+        <div class="field">
+          <label>To Date</label>
+          <input id="toDate" type="date">
+        </div>
+        <div class="field">
+          <label>Sort</label>
+          <select id="sortFilter">
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+          </select>
+        </div>
       </div>
 
       <div class="filter-actions">
@@ -655,40 +693,75 @@
     <div class="modal-box" id="formBox">
       <div class="modal-title" id="formTitle">Add Entry</div>
 
-      <input type="date" id="date">
-      <input type="text" id="client" placeholder="Client Name">
-
-      <div class="row">
-        <input type="text" id="contact" placeholder="Client Contact">
-        <input type="text" id="social" placeholder="Client Social">
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="date">
       </div>
 
-      <textarea id="description" placeholder="Tattoo Description"></textarea>
-
-      <select id="location">
-        <option value="">Location</option>
-        <option>Arm</option><option>Leg</option><option>Back</option><option>Chest</option>
-        <option>Hand</option><option>Foot</option><option>Neck</option>
-      </select>
-
-      <div class="row">
-        <input type="number" id="total" placeholder="Total Price">
-        <input type="number" id="deposit" placeholder="Deposit (optional)">
+      <div class="field">
+        <label>Client Name</label>
+        <input type="text" id="client" placeholder="">
       </div>
 
-      <select id="status">
-        <option value="booked">Booked</option>
-        <option value="unpaid">Unpaid</option>
-        <option value="partial">Partial</option>
-        <option value="paid">Paid</option>
-        <option value="no_show">No Show</option>
-      </select>
+      <div class="row">
+        <div class="field">
+          <label>Client Contact</label>
+          <input type="text" id="contact" placeholder="">
+        </div>
+        <div class="field">
+          <label>Client Social</label>
+          <input type="text" id="social" placeholder="">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Tattoo Description</label>
+        <textarea id="description" placeholder=""></textarea>
+      </div>
+
+      <div class="field">
+        <label>Location</label>
+        <select id="location">
+          <option value="">Select…</option>
+          <option>Arm</option><option>Leg</option><option>Back</option><option>Chest</option>
+          <option>Hand</option><option>Foot</option><option>Neck</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>Total Price</label>
+          <input type="number" id="total" min="0" step="0.01" placeholder="">
+        </div>
+        <div class="field">
+          <label>Deposit</label>
+          <input type="number" id="deposit" min="0" step="0.01" placeholder="">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Status</label>
+        <select id="status">
+          <option value="booked">Booked</option>
+          <option value="unpaid">Unpaid</option>
+          <option value="partial">Partial</option>
+          <option value="paid">Paid</option>
+          <option value="no_show">No Show</option>
+        </select>
+      </div>
 
       <div id="sessions"></div>
       <button type="button" class="secondarybtn" onclick="addSession()">+ Additional Session</button>
 
-      <textarea id="notes" placeholder="Notes"></textarea>
-      <input type="file" id="image" accept="image/*">
+      <div class="field">
+        <label>Notes</label>
+        <textarea id="notes" placeholder=""></textarea>
+      </div>
+
+      <div class="field">
+        <label>Reference Image</label>
+        <input type="file" id="image" accept="image/*">
+      </div>
 
       <div class="actions-row">
         <button type="button" onclick="saveEntry()">Save</button>
@@ -702,26 +775,46 @@
     <div class="modal-box" id="bammerBox">
       <div class="modal-title">Quick Add — Bammer</div>
 
-      <input type="date" id="bDate">
-      <input type="text" id="bClient" placeholder="Client Name">
-      <textarea id="bDesc" placeholder="Tattoo Description (quick)"></textarea>
-
-      <div class="row">
-        <select id="bLocation">
-          <option value="">Location</option>
-          <option>Arm</option><option>Leg</option><option>Back</option><option>Chest</option>
-          <option>Hand</option><option>Foot</option><option>Neck</option>
-        </select>
-        <input type="number" id="bTotal" placeholder="Total Price">
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="bDate">
       </div>
 
-      <select id="bStatus">
-        <option value="paid">Paid</option>
-        <option value="partial">Partial</option>
-        <option value="unpaid">Unpaid</option>
-        <option value="booked">Booked</option>
-        <option value="no_show">No Show</option>
-      </select>
+      <div class="field">
+        <label>Client Name</label>
+        <input type="text" id="bClient" placeholder="">
+      </div>
+
+      <div class="field">
+        <label>Tattoo Description</label>
+        <textarea id="bDesc" placeholder=""></textarea>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>Location</label>
+          <select id="bLocation">
+            <option value="">Select…</option>
+            <option>Arm</option><option>Leg</option><option>Back</option><option>Chest</option>
+            <option>Hand</option><option>Foot</option><option>Neck</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Total Price</label>
+          <input type="number" id="bTotal" min="0" step="0.01" placeholder="">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Status</label>
+        <select id="bStatus">
+          <option value="paid">Paid</option>
+          <option value="partial">Partial</option>
+          <option value="unpaid">Unpaid</option>
+          <option value="booked">Booked</option>
+          <option value="no_show">No Show</option>
+        </select>
+      </div>
 
       <div class="actions-row">
         <button type="button" onclick="saveBammer()">Save Bammer</button>
@@ -735,26 +828,51 @@
     <div class="modal-box" id="depositBox">
       <div class="modal-title">Quick Add — Deposit Only</div>
 
-      <input type="date" id="dDate">
-      <input type="text" id="dClient" placeholder="Client Name">
-
-      <div class="row">
-        <input type="text" id="dContact" placeholder="Client Contact (optional)">
-        <input type="text" id="dSocial" placeholder="Client Social (optional)">
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="dDate">
       </div>
 
-      <textarea id="dDesc" placeholder="What’s the deposit for? (optional)"></textarea>
-
-      <div class="row">
-        <input type="number" id="dDeposit" placeholder="Deposit Amount">
-        <input type="number" id="dTotal" placeholder="Total Price (optional)">
+      <div class="field">
+        <label>Client Name</label>
+        <input type="text" id="dClient" placeholder="">
       </div>
 
-      <select id="dLocation">
-        <option value="">Location</option>
-        <option>Arm</option><option>Leg</option><option>Back</option><option>Chest</option>
-        <option>Hand</option><option>Foot</option><option>Neck</option>
-      </select>
+      <div class="row">
+        <div class="field">
+          <label>Client Contact</label>
+          <input type="text" id="dContact" placeholder="">
+        </div>
+        <div class="field">
+          <label>Client Social</label>
+          <input type="text" id="dSocial" placeholder="">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Deposit For</label>
+        <textarea id="dDesc" placeholder=""></textarea>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>Deposit Amount</label>
+          <input type="number" id="dDeposit" min="0" step="0.01" placeholder="">
+        </div>
+        <div class="field">
+          <label>Total Price</label>
+          <input type="number" id="dTotal" min="0" step="0.01" placeholder="">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Location</label>
+        <select id="dLocation">
+          <option value="">Select…</option>
+          <option>Arm</option><option>Leg</option><option>Back</option><option>Chest</option>
+          <option>Hand</option><option>Foot</option><option>Neck</option>
+        </select>
+      </div>
 
       <div class="actions-row">
         <button type="button" onclick="saveDepositOnly()">Save Deposit</button>
@@ -781,16 +899,28 @@
       <div class="summary-box" style="margin-top:0;">
         <div style="font-weight:900;color:var(--gold);">Payout Split</div>
         <div class="hint">Used for totals unless a month override exists.</div>
-        <input id="defaultSplitPct" type="number" min="0" max="100" step="1" placeholder="e.g. 60">
+
+        <div class="field" style="margin-top:10px;">
+          <label>Default Split %</label>
+          <input id="defaultSplitPct" type="number" min="0" max="100" step="1" placeholder="">
+        </div>
       </div>
 
       <div class="summary-box">
         <div style="font-weight:900;color:var(--gold);">Monthly override</div>
         <div class="hint">Set a different % for a specific month.</div>
-        <div class="row">
-          <input id="overrideMonth" type="month">
-          <input id="overridePct" type="number" min="0" max="100" step="1" placeholder="e.g. 65">
+
+        <div class="row" style="margin-top:10px;">
+          <div class="field">
+            <label>Override Month</label>
+            <input id="overrideMonth" type="month">
+          </div>
+          <div class="field">
+            <label>Override %</label>
+            <input id="overridePct" type="number" min="0" max="100" step="1" placeholder="">
+          </div>
         </div>
+
         <div class="actions-row">
           <button type="button" onclick="saveMonthOverride()">Save Override</button>
           <button type="button" class="secondarybtn" onclick="removeMonthOverride()">Remove Override</button>
@@ -813,8 +943,12 @@
           <button type="button" onclick="downloadBackup()">Download Backup (JSON)</button>
         </div>
         <hr>
+
         <div class="hint">Restore from a backup JSON file.</div>
-        <input id="restoreFile" type="file" accept="application/json">
+        <div class="field" style="margin-top:10px;">
+          <label>Restore File (JSON)</label>
+          <input id="restoreFile" type="file" accept="application/json">
+        </div>
         <div class="actions-row">
           <button type="button" class="dangerbtn" onclick="restoreBackup()">Restore Backup</button>
         </div>
@@ -862,6 +996,7 @@
       </div>
     </div>
   </div>
+
   <!-- BILLS MODAL -->
   <div class="modal" id="billsModal">
     <div class="modal-box" id="billsBox">
@@ -927,7 +1062,7 @@
       </div>
     </div>
   </div>
-  
+
   <!-- EXPORT MODAL -->
   <div class="modal" id="exportModal">
     <div class="modal-box" id="exportBox">
@@ -945,19 +1080,27 @@
 
       <hr>
 
-      <label class="hint">Payday (week starts on this day)</label>
-      <select id="paydaySelect">
-        <option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option>
-        <option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option>
-        <option value="6">Saturday</option>
-      </select>
+      <div class="field">
+        <label>Payday (week starts)</label>
+        <select id="paydaySelect">
+          <option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option>
+          <option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option>
+          <option value="6">Saturday</option>
+        </select>
+      </div>
 
       <hr>
 
       <h4 style="margin:0;">Pay Period (Payday Week)</h4>
-      <div class="row">
-        <input type="date" id="ppStart" disabled>
-        <input type="date" id="ppEnd" disabled>
+      <div class="row" style="margin-top:10px;">
+        <div class="field">
+          <label>Pay Period Start</label>
+          <input type="date" id="ppStart" disabled>
+        </div>
+        <div class="field">
+          <label>Pay Period End</label>
+          <input type="date" id="ppEnd" disabled>
+        </div>
       </div>
       <div class="actions-row">
         <button type="button" class="secondarybtn" onclick="prevPayPeriod()">◀ Prev</button>
@@ -968,9 +1111,15 @@
       <hr>
 
       <h4 style="margin:0;">CSV Date Range</h4>
-      <div class="row">
-        <input type="date" id="exportStart">
-        <input type="date" id="exportEnd">
+      <div class="row" style="margin-top:10px;">
+        <div class="field">
+          <label>Export Start</label>
+          <input type="date" id="exportStart">
+        </div>
+        <div class="field">
+          <label>Export End</label>
+          <input type="date" id="exportEnd">
+        </div>
       </div>
 
       <div class="actions-row">
