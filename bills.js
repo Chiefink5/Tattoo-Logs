@@ -1,218 +1,236 @@
-// ================= BILLS STATE =================
+(function(){
+  const InkBills = {};
+  window.InkBills = InkBills;
 
-let billsState = JSON.parse(localStorage.getItem("billsState") || "null") || {
-  rentAmount: 0,
-  rentSaved: 0,
-  bills: [] // { id, name, amount, saved, dueDate }
-};
+  const STORAGE_KEY = "billsState_v1";
 
-function saveBillsState(){
-  localStorage.setItem("billsState", JSON.stringify(billsState));
-}
+  function getEl(id){ return document.getElementById(id); }
+  function num(v){ const n = Number(v || 0); return Number.isFinite(n) ? n : 0; }
 
-// ================= MODAL =================
+  function today0(){
+    const d = new Date();
+    d.setHours(0,0,0,0);
+    return d;
+  }
 
-const billsModal = document.getElementById("billsModal");
-const billsBox = document.getElementById("billsBox");
+  function parseDate(str){
+    if(!str) return null;
+    const d = new Date(str);
+    if(Number.isNaN(d.getTime())) return null;
+    d.setHours(0,0,0,0);
+    return d;
+  }
 
-function openBills(){
-  if(!billsModal) return;
-  hydrateBillsUI();
-  calculateBillsTargets();
-  billsModal.style.display = "flex";
-}
+  function fmtMoney(n){
+    const v = num(n);
+    return "$" + v.toFixed(2).replace(/\.00$/,"");
+  }
 
-function closeBills(){
-  if(!billsModal) return;
-  billsModal.style.display = "none";
-}
+  function daysBetweenInclusive(start, end){
+    const ms = end.getTime() - start.getTime();
+    const days = Math.ceil(ms / (1000*60*60*24));
+    return Math.max(1, days);
+  }
 
-window.openBills = openBills;
-window.closeBills = closeBills;
+  function roundUpNearest10(n){
+    const v = num(n);
+    if(v <= 0) return 0;
+    return Math.ceil(v / 10) * 10;
+  }
 
-// Click-off close
-if(billsModal && billsBox){
-  billsModal.addEventListener("click", (e)=>{
-    if(e.target === billsModal) closeBills();
-  });
-  billsBox.addEventListener("click",(e)=> e.stopPropagation());
-}
+  function uid(){ return "bill_" + Date.now() + "_" + Math.random().toString(16).slice(2); }
 
-// ================= UTIL =================
+  const quotes = [
+    "The grind doesn’t stop. Why should you?",
+    "Stack it now so you don’t stress later.",
+    "Rent don’t care about excuses. Get it handled.",
+    "Bread first. Everything else after.",
+    "Discipline today = freedom tomorrow.",
+    "You’re not broke. You’re building. Keep going.",
+    "Every day you save is a day you win.",
+    "Move like rent is watching — because it is.",
+    "No panic later if you stack now.",
+    "Handle business. Then flex."
+  ];
 
-function todayDate(){
-  const d = new Date();
-  d.setHours(0,0,0,0);
-  return d;
-}
+  function pickQuote(){
+    const seed = Date.now();
+    const idx = Math.floor((seed / 1000) % quotes.length);
+    return quotes[idx];
+  }
 
-function parseDate(str){
-  if(!str) return null;
-  const d = new Date(str);
-  d.setHours(0,0,0,0);
-  return d;
-}
+  let state = loadState();
 
-function daysBetween(a,b){
-  return Math.max(1, Math.ceil((b - a) / (1000*60*60*24)));
-}
+  function loadState(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(!raw) return { rentAmount:0, rentSaved:0, bills:[] };
+      const parsed = JSON.parse(raw);
+      if(!parsed || typeof parsed !== "object") throw new Error("bad");
+      if(!Array.isArray(parsed.bills)) parsed.bills = [];
+      parsed.rentAmount = num(parsed.rentAmount);
+      parsed.rentSaved = num(parsed.rentSaved);
+      parsed.bills = parsed.bills.map(b=>({
+        id: String(b.id || uid()),
+        name: String(b.name || "Bill"),
+        amount: num(b.amount),
+        saved: num(b.saved),
+        dueDate: String(b.dueDate || "")
+      }));
+      return parsed;
+    }catch(e){
+      return { rentAmount:0, rentSaved:0, bills:[] };
+    }
+  }
 
-function roundUp10(n){
-  if(n <= 0) return 0;
-  return Math.ceil(n / 10) * 10;
-}
+  function saveState(){
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
 
-function money(n){
-  const v = Number(n || 0);
-  return "$" + v.toFixed(2).replace(/\.00$/,"");
-}
+  function renderBillsList(){
+    const list = getEl("billsList");
+    if(!list) return;
 
-// ================= UI HYDRATION =================
+    list.innerHTML = state.bills.map(b=>{
+      const name = (b.name || "").replace(/"/g,"&quot;");
+      return `
+        <div class="summary-box" style="margin-top:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+            <div style="font-weight:900;color:var(--gold);">${name || "Bill"}</div>
+            <button type="button" class="secondarybtn" onclick="InkBills.removeBill('${b.id}')">Remove</button>
+          </div>
 
-function hydrateBillsUI(){
-  const rentAmountEl = document.getElementById("rentAmount");
-  const rentSavedEl = document.getElementById("rentSavedSoFar");
-  const billsList = document.getElementById("billsList");
+          <div class="row">
+            <input type="text" value="${name}" placeholder="Bill name" oninput="InkBills.updateBill('${b.id}','name',this.value)">
+            <input type="number" min="0" step="0.01" value="${num(b.amount)}" placeholder="Amount" oninput="InkBills.updateBill('${b.id}','amount',this.value)">
+          </div>
 
-  if(rentAmountEl) rentAmountEl.value = billsState.rentAmount || "";
-  if(rentSavedEl) rentSavedEl.value = billsState.rentSaved || "";
-
-  if(!billsList) return;
-
-  billsList.innerHTML = billsState.bills.map(b=>{
-    return `
-      <div class="summary-box" data-id="${b.id}">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <strong>${b.name}</strong>
-          <button type="button" class="secondarybtn" onclick="removeBill('${b.id}')">Remove</button>
+          <div class="row">
+            <input type="number" min="0" step="0.01" value="${num(b.saved)}" placeholder="Saved so far" oninput="InkBills.updateBill('${b.id}','saved',this.value)">
+            <input type="date" value="${b.dueDate || ""}" oninput="InkBills.updateBill('${b.id}','dueDate',this.value)">
+          </div>
         </div>
-        <div class="row">
-          <input type="text" value="${b.name}" onchange="updateBillField('${b.id}','name',this.value)">
-          <input type="number" value="${b.amount}" onchange="updateBillField('${b.id}','amount',this.value)">
-        </div>
-        <div class="row">
-          <input type="number" placeholder="Saved so far" value="${b.saved || 0}" onchange="updateBillField('${b.id}','saved',this.value)">
-          <input type="date" value="${b.dueDate || ""}" onchange="updateBillField('${b.id}','dueDate',this.value)">
-        </div>
+      `;
+    }).join("");
+  }
+
+  function calcDailyTarget(){
+    const t = today0();
+    let sumDaily = 0;
+
+    // RENT: due on the 1st next month (always)
+    const rentRemaining = Math.max(0, num(state.rentAmount) - num(state.rentSaved));
+    if(rentRemaining > 0){
+      const due = new Date(t.getFullYear(), t.getMonth() + 1, 1);
+      due.setHours(0,0,0,0);
+      const days = daysBetweenInclusive(t, due);
+      sumDaily += (rentRemaining / days);
+    }
+
+    // BILLS: due date driven
+    for(const b of state.bills){
+      const remaining = Math.max(0, num(b.amount) - num(b.saved));
+      if(!(remaining > 0)) continue;
+
+      const due = parseDate(b.dueDate);
+      if(!due) continue;
+      if(due <= t) continue;
+
+      const days = daysBetweenInclusive(t, due);
+      sumDaily += (remaining / days);
+    }
+
+    return sumDaily;
+  }
+
+  function renderTarget(){
+    const out = getEl("billsTodayOut");
+    const quoteEl = getEl("billsQuote");
+    if(!out || !quoteEl) return;
+
+    const daily = calcDailyTarget();
+    const rounded = roundUpNearest10(daily);
+
+    out.innerHTML = `
+      <div style="font-size:18px;">
+        Save at least: <span style="font-weight:1000;color:var(--gold);font-size:22px;">${fmtMoney(rounded)}</span>
       </div>
     `;
-  }).join("");
-}
 
-// ================= BILL CRUD =================
-
-function addBill(){
-  billsState.bills.push({
-    id: "bill_" + Date.now(),
-    name: "New Bill",
-    amount: 0,
-    saved: 0,
-    dueDate: ""
-  });
-  saveBillsState();
-  hydrateBillsUI();
-}
-
-function removeBill(id){
-  billsState.bills = billsState.bills.filter(b=>b.id !== id);
-  saveBillsState();
-  hydrateBillsUI();
-  calculateBillsTargets();
-}
-
-function updateBillField(id, field, value){
-  const bill = billsState.bills.find(b=>b.id === id);
-  if(!bill) return;
-
-  if(field === "amount" || field === "saved"){
-    bill[field] = Number(value || 0);
-  } else {
-    bill[field] = value;
+    quoteEl.textContent = pickQuote();
   }
 
-  saveBillsState();
-  calculateBillsTargets();
-}
-
-window.addBill = addBill;
-window.removeBill = removeBill;
-window.updateBillField = updateBillField;
-
-// ================= SAVE =================
-
-function saveBills(){
-  const rentAmountEl = document.getElementById("rentAmount");
-  const rentSavedEl = document.getElementById("rentSavedSoFar");
-
-  billsState.rentAmount = Number(rentAmountEl?.value || 0);
-  billsState.rentSaved = Number(rentSavedEl?.value || 0);
-
-  saveBillsState();
-  calculateBillsTargets();
-}
-
-window.saveBills = saveBills;
-
-// ================= CALC ENGINE =================
-
-function calculateBillsTargets(){
-  const output = document.getElementById("billsTodayOut");
-  const quoteEl = document.getElementById("billsQuote");
-  if(!output) return;
-
-  const today = todayDate();
-  let totalTodayRequired = 0;
-
-  // RENT (due 1st next occurrence)
-  const rentRemaining = Math.max(0, billsState.rentAmount - billsState.rentSaved);
-
-  if(rentRemaining > 0){
-    const nextRent = new Date(today.getFullYear(), today.getMonth()+1, 1);
-    const days = daysBetween(today, nextRent);
-    totalTodayRequired += rentRemaining / days;
+  function hydrateUI(){
+    const rentAmount = getEl("rentAmount");
+    const rentSaved = getEl("rentSavedSoFar");
+    if(rentAmount) rentAmount.value = state.rentAmount ? String(state.rentAmount) : "";
+    if(rentSaved) rentSaved.value = state.rentSaved ? String(state.rentSaved) : "";
+    renderBillsList();
+    renderTarget();
   }
 
-  // BILLS
-  billsState.bills.forEach(b=>{
-    const remaining = Math.max(0, Number(b.amount||0) - Number(b.saved||0));
-    const due = parseDate(b.dueDate);
+  InkBills.openBills = function(){
+    const modal = getEl("billsModal");
+    if(!modal) return;
+    hydrateUI();
+    modal.style.display = "flex";
+    // force quote refresh every open
+    renderTarget();
+  };
 
-    if(remaining > 0 && due && due > today){
-      const days = daysBetween(today, due);
-      totalTodayRequired += remaining / days;
+  InkBills.closeBills = function(){
+    const modal = getEl("billsModal");
+    if(!modal) return;
+    modal.style.display = "none";
+  };
+
+  InkBills.saveBills = function(){
+    const rentAmount = getEl("rentAmount");
+    const rentSaved = getEl("rentSavedSoFar");
+    state.rentAmount = num(rentAmount ? rentAmount.value : 0);
+    state.rentSaved = num(rentSaved ? rentSaved.value : 0);
+    saveState();
+    renderTarget();
+  };
+
+  InkBills.addBill = function(){
+    state.bills.push({ id: uid(), name:"New Bill", amount:0, saved:0, dueDate:"" });
+    saveState();
+    renderBillsList();
+    renderTarget();
+  };
+
+  InkBills.removeBill = function(id){
+    state.bills = state.bills.filter(b=>b.id !== id);
+    saveState();
+    renderBillsList();
+    renderTarget();
+  };
+
+  InkBills.updateBill = function(id, field, value){
+    const b = state.bills.find(x=>x.id === id);
+    if(!b) return;
+
+    if(field === "amount" || field === "saved"){
+      b[field] = num(value);
+    }else{
+      b[field] = String(value || "");
     }
-  });
 
-  const rounded = roundUp10(totalTodayRequired);
+    saveState();
+    renderTarget();
+  };
 
-  output.innerHTML = `
-    <div style="font-size:18px;">
-      Save at least: <strong style="color:var(--gold);font-size:22px;">${money(rounded)}</strong>
-    </div>
-  `;
+  // click-off close wiring (kept inside module)
+  (function wire(){
+    const modal = getEl("billsModal");
+    const box = getEl("billsBox");
+    if(modal && box){
+      modal.addEventListener("click",(e)=>{ if(e.target === modal) InkBills.closeBills(); });
+      box.addEventListener("click",(e)=> e.stopPropagation());
+    }
+  })();
 
-  renderGrindQuote();
-}
-
-// ================= GRIND QUOTES =================
-
-const grindQuotes = [
-  "The grind doesn’t stop. Why should you?",
-  "You didn’t come this far to coast.",
-  "Every dollar stacked is stress removed.",
-  "Discipline today = freedom tomorrow.",
-  "Build the life your younger self needed.",
-  "Stack now. Relax later.",
-  "Pressure makes diamonds.",
-  "Rent doesn’t care about excuses.",
-  "Hustle in silence. Pay in full.",
-  "Bread first. Everything else after."
-];
-
-function renderGrindQuote(){
-  const quoteEl = document.getElementById("billsQuote");
-  if(!quoteEl) return;
-
-  const index = new Date().getDate() % grindQuotes.length;
-  quoteEl.textContent = grindQuotes[index];
-}
+  // Backwards-compat shim (if you had old onclicks)
+  window.openBills = InkBills.openBills;
+})();

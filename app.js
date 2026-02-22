@@ -8,7 +8,7 @@ let payPeriodAnchor = null;
 
 let splitSettings = JSON.parse(localStorage.getItem("splitSettings") || "null") || {
   defaultPct: 100,
-  monthOverrides: {} // { "YYYY-MM": pct }
+  monthOverrides: {}
 };
 
 let filters = JSON.parse(localStorage.getItem("filters") || "null") || {
@@ -20,7 +20,6 @@ let filters = JSON.parse(localStorage.getItem("filters") || "null") || {
   sort: "newest"
 };
 
-// Rewards (badge levels + discount tiers)
 let rewardsSettings = JSON.parse(localStorage.getItem("rewardsSettings") || "null") || {
   levels: [
     { id: "lvl1", name: "Rookie", minCount: 1, pngDataUrl: "" },
@@ -33,23 +32,7 @@ let rewardsSettings = JSON.parse(localStorage.getItem("rewardsSettings") || "nul
   ]
 };
 
-// Bills / Rent sinking funds
-let billsSettings = JSON.parse(localStorage.getItem("billsSettings") || "null") || {
-  rent: {
-    amount: 0,
-    targetDay: 15,
-    savedSoFar: 0,
-    monthMode: "auto" // auto | this | next
-  },
-  bills: [
-    // { id, name, amount, dueDay, savedSoFar }
-  ]
-};
-
-// Prefill targets (repeat client)
-let prefillClient = null; // { client, contact, social }
-
-// Toast de-dupe
+let prefillClient = null;
 let toastQueue = [];
 let toastTimer = null;
 
@@ -100,62 +83,7 @@ function isDepositOnlyEntry(entry){
 function isTattooEntry(entry){
   return !isDepositOnlyEntry(entry);
 }
-
 function currentQuarterIndex(dateObj){ return Math.floor(dateObj.getMonth() / 3); }
-
-function startOfDay(d){
-  const x = new Date(d);
-  x.setHours(0,0,0,0);
-  return x;
-}
-function addMonths(date, count){
-  const d = new Date(date);
-  const y = d.getFullYear();
-  const m = d.getMonth();
-  const day = d.getDate();
-  const out = new Date(y, m + count, 1);
-  const maxDay = new Date(out.getFullYear(), out.getMonth() + 1, 0).getDate();
-  out.setDate(Math.min(day, maxDay));
-  out.setHours(0,0,0,0);
-  return out;
-}
-function clampDayForMonth(year, monthIndex, day){
-  const maxDay = new Date(year, monthIndex + 1, 0).getDate();
-  return Math.max(1, Math.min(maxDay, Number(day || 1)));
-}
-function daysInclusive(fromDate, toDate){
-  const a = startOfDay(fromDate);
-  const b = startOfDay(toDate);
-  const ms = b.getTime() - a.getTime();
-  const diff = Math.floor(ms / (24*60*60*1000));
-  return Math.max(1, diff + 1);
-}
-function nextDueDateForDay(dueDay, monthMode){
-  const now = startOfDay(new Date());
-  const y = now.getFullYear();
-  const m = now.getMonth();
-
-  const dayThis = clampDayForMonth(y, m, dueDay);
-  const candidateThis = new Date(y, m, dayThis);
-  candidateThis.setHours(0,0,0,0);
-
-  if(monthMode === "this") return candidateThis;
-  if(monthMode === "next"){
-    const next = addMonths(candidateThis, 1);
-    const dayNext = clampDayForMonth(next.getFullYear(), next.getMonth(), dueDay);
-    const dt = new Date(next.getFullYear(), next.getMonth(), dayNext);
-    dt.setHours(0,0,0,0);
-    return dt;
-  }
-
-  if(candidateThis >= now) return candidateThis;
-
-  const next = addMonths(candidateThis, 1);
-  const dayNext = clampDayForMonth(next.getFullYear(), next.getMonth(), dueDay);
-  const dt = new Date(next.getFullYear(), next.getMonth(), dayNext);
-  dt.setHours(0,0,0,0);
-  return dt;
-}
 
 // ---- Totals logic (gross) ----
 function totalForTotalsGross(entry){
@@ -165,6 +93,7 @@ function totalForTotalsGross(entry){
   return 0;
 }
 
+// Preview Paid line (card)
 function paidForPreview(entry){
   const status = (entry.status || "unpaid").toLowerCase();
   if(status === "paid") return Number(entry.total || 0);
@@ -196,22 +125,13 @@ function save(){
   localStorage.setItem("entries", JSON.stringify(entries));
   render();
 }
-function saveFilters(){
-  localStorage.setItem("filters", JSON.stringify(filters));
-}
-function saveRewardsSettings(){
-  localStorage.setItem("rewardsSettings", JSON.stringify(rewardsSettings));
-}
-function saveBillsSettings(){
-  localStorage.setItem("billsSettings", JSON.stringify(billsSettings));
-}
+function saveFilters(){ localStorage.setItem("filters", JSON.stringify(filters)); }
+function saveRewardsSettings(){ localStorage.setItem("rewardsSettings", JSON.stringify(rewardsSettings)); }
 
 // ================= TOASTS =================
 function pushToast(toast){
   toastQueue.push(toast);
-  if(!toastTimer) {
-    toastTimer = setInterval(flushToast, 250);
-  }
+  if(!toastTimer) toastTimer = setInterval(flushToast, 250);
 }
 function flushToast(){
   if(!toastQueue.length){
@@ -219,8 +139,7 @@ function flushToast(){
     toastTimer = null;
     return;
   }
-  const t = toastQueue.shift();
-  showToast(t);
+  showToast(toastQueue.shift());
 }
 function showToast({ title, sub, mini, imgDataUrl, actionLabel, actionFn }){
   const wrap = safeEl("toasts");
@@ -252,7 +171,6 @@ function showToast({ title, sub, mini, imgDataUrl, actionLabel, actionFn }){
   }
 
   wrap.appendChild(el);
-
   setTimeout(()=>{ el.remove(); }, 5500);
 }
 
@@ -273,8 +191,6 @@ const clientModal = safeEl("clientModal");
 const clientBox = safeEl("clientBox");
 const rewardsModal = safeEl("rewardsModal");
 const rewardsBox = safeEl("rewardsBox");
-const billsModal = safeEl("billsModal");
-const billsBox = safeEl("billsBox");
 
 function wireModal(modal, box, closer){
   if(!modal || !box) return;
@@ -289,12 +205,12 @@ wireModal(depositModal, depositBox, closeDepositQuick);
 wireModal(settingsModal, settingsBox, closeSettings);
 wireModal(clientModal, clientBox, closeClient);
 wireModal(rewardsModal, rewardsBox, closeRewards);
-wireModal(billsModal, billsBox, closeBills);
 
 // ================= LOGO =================
 function initLogo(){
   const img = safeEl("logoImg");
   const input = safeEl("logoInput");
+  const wrap = safeEl("logoWrap");
   if(!img || !input) return;
 
   const saved = localStorage.getItem("logoDataUrl");
@@ -309,7 +225,9 @@ function initLogo(){
     `);
   }
 
-  img.addEventListener("click", ()=> input.click());
+  const clickTarget = wrap || img;
+  clickTarget.addEventListener("click", ()=> input.click());
+
   input.addEventListener("change", ()=>{
     const file = input.files && input.files[0];
     if(!file) return;
@@ -352,10 +270,7 @@ function openSettings(){
 
   settingsModal.style.display = "flex";
 }
-function closeSettings(){
-  if(!settingsModal) return;
-  settingsModal.style.display = "none";
-}
+function closeSettings(){ if(settingsModal) settingsModal.style.display = "none"; }
 function saveSplitSettings(){
   splitSettings.defaultPct = clampPct(safeVal("defaultSplitPct"));
   localStorage.setItem("splitSettings", JSON.stringify(splitSettings));
@@ -389,169 +304,6 @@ window.saveSplitSettings = saveSplitSettings;
 window.saveMonthOverride = saveMonthOverride;
 window.removeMonthOverride = removeMonthOverride;
 
-// ================= BILLS & RENT (SINKING FUNDS) =================
-function openBills(){
-  if(!billsModal) return;
-
-  const rent = billsSettings.rent || { amount:0, targetDay:15, savedSoFar:0, monthMode:"auto" };
-
-  const rentAmount = safeEl("rentAmount");
-  const rentTargetDay = safeEl("rentTargetDay");
-  const rentSavedSoFar = safeEl("rentSavedSoFar");
-  const rentMonthMode = safeEl("rentMonthMode");
-
-  if(rentAmount) rentAmount.value = String(Number(rent.amount || 0) || "");
-  if(rentTargetDay) rentTargetDay.value = String(Number(rent.targetDay || 15) || 15);
-  if(rentSavedSoFar) rentSavedSoFar.value = String(Number(rent.savedSoFar || 0) || "");
-  if(rentMonthMode) rentMonthMode.value = rent.monthMode || "auto";
-
-  buildBillsUI();
-  billsModal.style.display = "flex";
-}
-function closeBills(){
-  if(!billsModal) return;
-  billsModal.style.display = "none";
-}
-function addBill(){
-  billsSettings.bills = billsSettings.bills || [];
-  billsSettings.bills.push({ id: uid("bill"), name:"New Bill", amount:0, dueDay:15, savedSoFar:0 });
-  buildBillsUI();
-}
-function removeBill(id){
-  billsSettings.bills = (billsSettings.bills || []).filter(b => b.id !== id);
-  buildBillsUI();
-}
-function saveBills(){
-  const rentAmount = Number(safeVal("rentAmount") || 0);
-  const rentTargetDay = Number(safeVal("rentTargetDay") || 15);
-  const rentSavedSoFar = Number(safeVal("rentSavedSoFar") || 0);
-  const rentMonthMode = safeVal("rentMonthMode") || "auto";
-
-  billsSettings.rent = {
-    amount: Math.max(0, rentAmount),
-    targetDay: Math.max(1, Math.min(28, rentTargetDay || 15)),
-    savedSoFar: Math.max(0, rentSavedSoFar),
-    monthMode: (rentMonthMode === "this" || rentMonthMode === "next") ? rentMonthMode : "auto"
-  };
-
-  const bills = Array.isArray(billsSettings.bills) ? billsSettings.bills : [];
-  bills.forEach(b=>{
-    const nameEl = safeEl(`billName_${b.id}`);
-    const amtEl = safeEl(`billAmt_${b.id}`);
-    const dueEl = safeEl(`billDue_${b.id}`);
-    const savedEl = safeEl(`billSaved_${b.id}`);
-
-    b.name = (nameEl ? nameEl.value : b.name) || "Bill";
-    b.amount = Math.max(0, Number(amtEl ? amtEl.value : b.amount) || 0);
-    b.dueDay = Math.max(1, Math.min(28, Number(dueEl ? dueEl.value : b.dueDay) || 1));
-    b.savedSoFar = Math.max(0, Number(savedEl ? savedEl.value : b.savedSoFar) || 0);
-  });
-
-  saveBillsSettings();
-  buildBillsUI();
-  pushToast({ title:"Bills saved", sub:"Daily set-aside targets updated." });
-}
-function calcSinkingTarget(amount, savedSoFar, dueDay, monthMode){
-  const now = startOfDay(new Date());
-  const due = nextDueDateForDay(dueDay, monthMode || "auto");
-  const daysLeft = daysInclusive(now, due);
-  const remaining = Math.max(0, Number(amount || 0) - Number(savedSoFar || 0));
-  const perDay = remaining / Math.max(1, daysLeft);
-  return { due, daysLeft, remaining, perDay };
-}
-function buildBillsUI(){
-  const listEl = safeEl("billsList");
-  const outEl = safeEl("billsTodayOut");
-  if(!listEl || !outEl) return;
-
-  const bills = Array.isArray(billsSettings.bills) ? billsSettings.bills : [];
-  const rent = billsSettings.rent || { amount:0, targetDay:15, savedSoFar:0, monthMode:"auto" };
-
-  listEl.innerHTML = bills.map(b=>{
-    return `
-      <div class="summary-box" style="margin-top:10px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-          <div style="font-weight:900;color:var(--gold);">Bill</div>
-          <button type="button" class="secondarybtn" onclick="removeBill('${b.id}')">Remove</button>
-        </div>
-        <div class="row">
-          <input id="billName_${b.id}" type="text" placeholder="Bill name (e.g. Car note)" value="${String(b.name||"").replace(/"/g,"&quot;")}">
-          <input id="billAmt_${b.id}" type="number" min="0" step="0.01" placeholder="Amount" value="${Number(b.amount||0) || ""}">
-        </div>
-        <div class="row">
-          <input id="billDue_${b.id}" type="number" min="1" max="28" step="1" placeholder="Due day (1-28)" value="${Number(b.dueDay||15)}">
-          <input id="billSaved_${b.id}" type="number" min="0" step="0.01" placeholder="Saved so far" value="${Number(b.savedSoFar||0) || ""}">
-        </div>
-        <div class="hint">Tip: set due day <= 28 for consistency across months.</div>
-      </div>
-    `;
-  }).join("");
-
-  const rentCalc = calcSinkingTarget(rent.amount, rent.savedSoFar, rent.targetDay, rent.monthMode || "auto");
-
-  const rentLine = (Number(rent.amount||0) > 0)
-    ? `
-      <div class="summary-box" style="margin-top:10px;">
-        <div style="font-weight:900;">Rent</div>
-        <div>Due: <strong>${formatYYYYMMDD(rentCalc.due)}</strong> (${rentCalc.daysLeft} days)</div>
-        <div>Remaining: <strong>${money(rentCalc.remaining)}</strong></div>
-        <div>Daily set-aside: <strong style="color:var(--gold);">${money(rentCalc.perDay)}</strong></div>
-      </div>
-    `
-    : `
-      <div class="summary-box" style="margin-top:10px;">
-        <div style="opacity:.8;">Rent not set yet.</div>
-      </div>
-    `;
-
-  const billCalcs = bills.map(b=>{
-    const calc = calcSinkingTarget(b.amount, b.savedSoFar, b.dueDay, "auto");
-    return { bill:b, calc };
-  });
-
-  const billsLines = billCalcs.length
-    ? billCalcs.map(({ bill, calc })=>{
-        const name = (bill.name || "Bill").trim() || "Bill";
-        return `
-          <div class="summary-box" style="margin-top:10px;">
-            <div style="font-weight:900;">${name}</div>
-            <div>Due: <strong>${formatYYYYMMDD(calc.due)}</strong> (${calc.daysLeft} days)</div>
-            <div>Remaining: <strong>${money(calc.remaining)}</strong></div>
-            <div>Daily set-aside: <strong style="color:var(--gold);">${money(calc.perDay)}</strong></div>
-          </div>
-        `;
-      }).join("")
-    : `<div class="summary-box" style="margin-top:10px; opacity:.85;">No bills added yet.</div>`;
-
-  const todayTarget = (Number(rent.amount||0) > 0 ? rentCalc.perDay : 0) + billCalcs.reduce((s,x)=> s + x.calc.perDay, 0);
-
-  outEl.innerHTML = `
-    <div class="summary-grid">
-      <div class="summary-box" style="margin-top:0;">
-        <div style="font-weight:900;">Today set aside</div>
-        <div style="font-size:1.2rem;color:var(--gold);font-weight:900;">${money(todayTarget)}</div>
-        <div class="hint">This is the sum of today’s required set-asides across rent + bills.</div>
-      </div>
-      <div class="summary-box" style="margin-top:0;">
-        <div style="font-weight:900;">What this means</div>
-        <div class="hint" style="opacity:.95;">
-          If you save this amount daily starting today, you’ll hit each bill’s target by its due date (assuming “saved so far” is accurate).
-        </div>
-      </div>
-    </div>
-
-    ${rentLine}
-
-    <div style="margin-top:10px;font-weight:900;color:var(--gold);">Bills</div>
-    ${billsLines}
-  `;
-}
-window.openBills = openBills;
-window.closeBills = closeBills;
-window.addBill = addBill;
-window.removeBill = removeBill;
-window.saveBills = saveBills;
-
 // ================= BACKUP / RESTORE =================
 function downloadBackup(){
   const payload = {
@@ -561,8 +313,7 @@ function downloadBackup(){
     payday,
     splitSettings,
     filters,
-    rewardsSettings,
-    billsSettings
+    rewardsSettings
   };
 
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
@@ -575,7 +326,6 @@ function downloadBackup(){
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
-
 function restoreBackup(){
   const input = safeEl("restoreFile");
   const file = input && input.files ? input.files[0] : null;
@@ -614,11 +364,6 @@ function restoreBackup(){
         saveRewardsSettings();
       }
 
-      if(data.billsSettings && typeof data.billsSettings === "object"){
-        billsSettings = data.billsSettings;
-        saveBillsSettings();
-      }
-
       localStorage.setItem("entries", JSON.stringify(entries));
       alert("Backup restored ✅");
       closeSettings();
@@ -631,7 +376,6 @@ function restoreBackup(){
   };
   reader.readAsText(file);
 }
-
 window.downloadBackup = downloadBackup;
 window.restoreBackup = restoreBackup;
 
@@ -650,6 +394,17 @@ function hydrateFilterUI(){
   if(to) to.value = filters.to || "";
   if(sort) sort.value = filters.sort || "newest";
   if(loc) loc.value = filters.location || "all";
+
+  const sum = safeEl("filtersSummary");
+  if(sum){
+    const parts = [];
+    if(filters.q) parts.push(`Search: "${filters.q}"`);
+    if(filters.status && filters.status !== "all") parts.push(`Status: ${filters.status}`);
+    if(filters.location && filters.location !== "all") parts.push(`Loc: ${filters.location}`);
+    if(filters.from) parts.push(`From: ${filters.from}`);
+    if(filters.to) parts.push(`To: ${filters.to}`);
+    sum.textContent = parts.length ? parts.join(" • ") : "All entries";
+  }
 }
 function applyFilters(){
   filters.q = (safeVal("q") || "").trim();
@@ -677,6 +432,19 @@ window.clearFilters = clearFilters;
       if(e.key === "Enter") applyFilters();
     });
   }
+})();
+
+(function wireFiltersAccordion(){
+  const header = safeEl("filtersHeader");
+  const content = safeEl("filtersContent");
+  const chev = safeEl("filtersChev");
+  if(!header || !content) return;
+
+  header.addEventListener("click", ()=>{
+    const open = content.style.display === "block";
+    content.style.display = open ? "none" : "block";
+    if(chev) chev.textContent = open ? "▾" : "▴";
+  });
 })();
 
 function passesFilters(entry){
@@ -707,7 +475,6 @@ function passesFilters(entry){
 
   return true;
 }
-
 function getFilteredEntries(){
   const list = entries.filter(passesFilters);
   list.sort((a,b)=> filters.sort === "oldest" ? (a.id - b.id) : (b.id - a.id));
@@ -756,10 +523,7 @@ function openExport(){
 
   exportModal.style.display = "flex";
 }
-function closeExport(){
-  if(!exportModal) return;
-  exportModal.style.display = "none";
-}
+function closeExport(){ if(exportModal) exportModal.style.display = "none"; }
 
 (function initPaydaySelect(){
   const paydaySelect = safeEl("paydaySelect");
@@ -830,7 +594,6 @@ function openForm(){
     prefillClient = null;
   }
 }
-
 function resetForm(){
   const modal = safeEl("formModal");
   if(!modal) return;
@@ -877,10 +640,7 @@ function openBammerQuick(){
   prefillClient = null;
   bammerModal.style.display = "flex";
 }
-function closeBammerQuick(){
-  if(!bammerModal) return;
-  bammerModal.style.display = "none";
-}
+function closeBammerQuick(){ if(bammerModal) bammerModal.style.display = "none"; }
 function saveBammer(){
   const date = safeVal("bDate");
   const client = (safeVal("bClient") || "").trim();
@@ -931,10 +691,7 @@ function openDepositQuick(){
   prefillClient = null;
   depositModal.style.display = "flex";
 }
-function closeDepositQuick(){
-  if(!depositModal) return;
-  depositModal.style.display = "none";
-}
+function closeDepositQuick(){ if(depositModal) depositModal.style.display = "none"; }
 function saveDepositOnly(){
   const date = safeVal("dDate");
   const client = (safeVal("dClient") || "").trim();
@@ -1051,12 +808,10 @@ function getClientEntries(name){
     .slice()
     .sort((a,b)=> b.id - a.id);
 }
-
 function getClientTattooCount(name){
   const list = getClientEntries(name);
   return list.filter(isTattooEntry).length;
 }
-
 function getBestLevelForCount(count){
   const levels = Array.isArray(rewardsSettings.levels) ? rewardsSettings.levels : [];
   const sorted = levels
@@ -1069,7 +824,6 @@ function getBestLevelForCount(count){
   }
   return best;
 }
-
 function getBestDiscountForCount(count){
   const tiers = Array.isArray(rewardsSettings.discounts) ? rewardsSettings.discounts : [];
   const sorted = tiers
@@ -1082,11 +836,9 @@ function getBestDiscountForCount(count){
   }
   return best;
 }
-
 function getClientNetTotal(name){
   return getClientEntries(name).reduce((sum,e)=> sum + totalForTotalsNet(e), 0);
 }
-
 function getClientProgressSnapshot(name){
   const cnt = getClientTattooCount(name);
   const level = getBestLevelForCount(cnt);
@@ -1101,7 +853,6 @@ function getClientProgressSnapshot(name){
     discountPct: disc ? Number(disc.percent||0) : 0
   };
 }
-
 function maybeNotifyClientProgress(name, before, after){
   if(!before || !after) return;
 
@@ -1142,11 +893,8 @@ function saveEntry(){
   const before = getClientProgressSnapshot(clientVal);
 
   const payments = [];
-
   const depositVal = Number(safeVal("deposit") || 0);
-  if(depositVal > 0){
-    payments.push({ amount: depositVal, kind: "deposit" });
-  }
+  if(depositVal > 0) payments.push({ amount: depositVal, kind: "deposit" });
 
   const sessionAmounts = document.querySelectorAll(".session-amount");
   const sessionNotes = document.querySelectorAll(".session-note");
@@ -1233,14 +981,12 @@ function guessLatestField(list, field){
   }
   return "";
 }
-
 function badgeHtmlForClient(name){
   const snap = getClientProgressSnapshot(name);
   if(!snap.levelId) return "";
   const img = snap.levelPng ? `<img src="${snap.levelPng}" alt="badge">` : "";
   return `<span class="client-badge" title="Badge level">${img}${snap.levelName} (${snap.tattooCount})</span>`;
 }
-
 function openClientProfile(name){
   if(!clientModal || !clientBox) return;
   const list = getClientEntries(name);
@@ -1306,7 +1052,7 @@ function openClientProfile(name){
       <div style="font-weight:900;color:var(--gold);">Saved info</div>
       ${contact ? `<div>Contact: <strong>${contact}</strong></div>` : `<div style="opacity:.75;">Contact: —</div>`}
       ${social ? `<div>Social: <strong>${social}</strong></div>` : `<div style="opacity:.75;">Social: —</div>`}
-      <div class="actions-row">
+      <div class="actionsRow">
         <button type="button" onclick="repeatClientFull()">New Entry (prefill)</button>
         <button type="button" class="secondarybtn" onclick="repeatClientBammer()">Bammer (prefill)</button>
         <button type="button" class="secondarybtn" onclick="repeatClientDeposit()">Deposit (prefill)</button>
@@ -1331,40 +1077,19 @@ function openClientProfile(name){
       ${list.length > 30 ? `<div class="hint" style="margin-top:8px;">Showing newest 30…</div>` : ``}
     </div>
 
-    <div class="actions-row">
+    <div class="actionsRow">
       <button type="button" class="secondarybtn" onclick="closeClient()">Close</button>
     </div>
   `;
 
   prefillClient = { client: displayName, contact, social };
-
   clientModal.style.display = "flex";
 }
-
-function closeClient(){
-  if(!clientModal) return;
-  clientModal.style.display = "none";
-}
-function openEntryFromClient(id){
-  closeClient();
-  viewEntry(id);
-}
-
-function repeatClientFull(){
-  if(!prefillClient) return;
-  closeClient();
-  openForm();
-}
-function repeatClientBammer(){
-  if(!prefillClient) return;
-  closeClient();
-  openBammerQuick();
-}
-function repeatClientDeposit(){
-  if(!prefillClient) return;
-  closeClient();
-  openDepositQuick();
-}
+function closeClient(){ if(clientModal) clientModal.style.display = "none"; }
+function openEntryFromClient(id){ closeClient(); viewEntry(id); }
+function repeatClientFull(){ if(!prefillClient) return; closeClient(); openForm(); }
+function repeatClientBammer(){ if(!prefillClient) return; closeClient(); openBammerQuick(); }
+function repeatClientDeposit(){ if(!prefillClient) return; closeClient(); openDepositQuick(); }
 
 window.openClientProfile = openClientProfile;
 window.closeClient = closeClient;
@@ -1457,14 +1182,14 @@ function viewEntry(id){
       </details>
     ` : ``}
 
-    ${entry.image ? `<img src="${entry.image}" style="width:100%; margin-top:15px; border-radius:12px; border:1px solid rgba(212,175,55,.3);">` : ""}
+    ${entry.image ? `<img src="${entry.image}" style="width:100%; margin-top:15px; border-radius:12px; border:1px solid rgba(214,180,75,.22);">` : ""}
 
     <details style="margin-top:12px;">
       <summary>Edit History</summary>
       ${historyHtml}
     </details>
 
-    <div class="actions-row" style="margin-top:20px;">
+    <div class="actionsRow" style="margin-top:20px;">
       ${showConvert ? `<button type="button" onclick="convertDepositToTattoo()">Convert Deposit → Full Tattoo</button>` : ``}
       <button type="button" onclick="editFromView()">Edit</button>
       <button type="button" class="dangerbtn" onclick="deleteFromView()">Delete</button>
@@ -1474,7 +1199,6 @@ function viewEntry(id){
 
   if(viewModal) viewModal.style.display = "flex";
 }
-
 function convertDepositToTattoo(){
   if(!viewingId) return;
   const entry = entries.find(e=>e.id===viewingId);
@@ -1486,12 +1210,7 @@ function convertDepositToTattoo(){
   const statusEl = safeEl("status");
   if(statusEl && (!statusEl.value || statusEl.value === "unpaid" || statusEl.value === "booked")) statusEl.value = "partial";
 }
-
-function closeView(){
-  if(!viewModal) return;
-  viewModal.style.display="none";
-  viewingId = null;
-}
+function closeView(){ if(viewModal) viewModal.style.display="none"; viewingId = null; }
 function editFromView(){
   if(!viewingId) return;
   const entry = entries.find(e=>e.id===viewingId);
@@ -1511,7 +1230,6 @@ function deleteFromView(){
   save();
   closeView();
 }
-
 window.viewEntry = viewEntry;
 window.closeView = closeView;
 window.editFromView = editFromView;
@@ -1582,7 +1300,6 @@ function downloadCSV(rows, filename){
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
-
 function exportCSV(){
   const startStr = safeVal("exportStart");
   const endStr = safeVal("exportEnd");
@@ -1753,10 +1470,7 @@ function openRewards(){
   buildRewardsUI();
   rewardsModal.style.display = "flex";
 }
-function closeRewards(){
-  if(!rewardsModal) return;
-  rewardsModal.style.display = "none";
-}
+function closeRewards(){ if(rewardsModal) rewardsModal.style.display = "none"; }
 window.openRewards = openRewards;
 window.closeRewards = closeRewards;
 
@@ -1769,7 +1483,7 @@ function buildRewardsUI(){
   const discounts = Array.isArray(rewardsSettings.discounts) ? rewardsSettings.discounts : [];
 
   levelsList.innerHTML = levels.map(l=>{
-    const img = l.pngDataUrl ? `<img src="${l.pngDataUrl}" style="width:28px;height:28px;border-radius:8px;border:1px solid rgba(212,175,55,.25);object-fit:cover;background:#16201b;">` : "";
+    const img = l.pngDataUrl ? `<img src="${l.pngDataUrl}" style="width:28px;height:28px;border-radius:8px;border:1px solid rgba(214,180,75,.22);object-fit:cover;background:rgba(0,0,0,.22);">` : "";
     return `
       <div class="summary-box" data-level="${l.id}" style="margin-top:10px;">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
@@ -1783,7 +1497,7 @@ function buildRewardsUI(){
           <input type="text" id="lvlName_${l.id}" placeholder="Badge name" value="${(l.name||"").replace(/"/g,"&quot;")}">
           <input type="number" id="lvlMin_${l.id}" placeholder="Min tattoos" value="${Number(l.minCount||0)}">
         </div>
-        <div class="actions-row" style="margin-top:0;">
+        <div class="actionsRow" style="margin-top:0;">
           <input type="file" id="lvlFile_${l.id}" accept="image/png,image/*" />
           <button type="button" class="secondarybtn" onclick="clearBadgePNG('${l.id}')">Clear PNG</button>
         </div>
@@ -1892,6 +1606,7 @@ function createAccordion(title, badgeText){
   const left = document.createElement("div");
   left.style.display = "flex";
   left.style.alignItems = "center";
+  left.style.flexWrap = "wrap";
 
   const t = document.createElement("div");
   t.className = "accordion-title";
@@ -2022,7 +1737,6 @@ function render(){
           });
 
           row.addEventListener("click", ()=>viewEntry(entry.id));
-
           dayAcc.content.appendChild(row);
         });
       });

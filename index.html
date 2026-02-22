@@ -9,569 +9,94 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
 
-  <style>
-    :root{
-      --panel:#1a241f;
-      --panel2:#16201b;
-      --emerald:#1f6f50;
-      --gold:#d4af37;
-      --text:#f2f2f2;
-      --danger:#a94442;
-      --muted:rgba(255,255,255,.75);
-      --booked:#2a5bd7;
-    }
-    *{ box-sizing:border-box; }
-    body{
-      margin:0;
-      color:var(--text);
-      background:linear-gradient(160deg,#0e1512,#081a14);
-      font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-    }
-
-    header{
-      padding:16px 18px;
-      border-bottom:2px solid var(--gold);
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:12px;
-    }
-    .brand{
-      display:flex;
-      align-items:center;
-      gap:12px;
-      min-width:0;
-    }
-    .brand-title{
-      font-family:Cinzel, serif;
-      font-weight:800;
-      letter-spacing:.03em;
-      font-size:1.35rem;
-      line-height:1.1;
-      white-space:nowrap;
-      overflow:hidden;
-      text-overflow:ellipsis;
-    }
-
-    #logoImg{
-      width:40px;height:40px;
-      border-radius:12px;
-      border:1px solid rgba(212,175,55,.35);
-      object-fit:cover;
-      background:var(--panel2);
-      cursor:pointer;
-      flex:0 0 auto;
-    }
-    #logoInput{ display:none; }
-
-    .header-actions{
-      display:flex;
-      align-items:center;
-      gap:10px;
-      flex:0 0 auto;
-      flex-wrap:wrap;
-      justify-content:flex-end;
-    }
-    .smallbtn{
-      background:var(--panel2);
-      border:1px solid rgba(212,175,55,.35);
-      color:var(--text);
-      padding:8px 10px;
-      border-radius:10px;
-      cursor:pointer;
-      white-space:nowrap;
-    }
-    .smallbtn:hover{ filter:brightness(1.06); }
-
-    #stats{
-      display:flex;
-      justify-content:space-around;
-      padding:12px 10px;
-      border-bottom:1px solid var(--emerald);
-      gap:10px;
-      flex-wrap:wrap;
-    }
-    #stats strong{ color:var(--gold); font-size:1.05rem; }
-    #splitPill{
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      padding:6px 10px;
-      border-radius:999px;
-      border:1px solid rgba(212,175,55,.35);
-      background:var(--panel2);
-      color:var(--muted);
-      font-size:.85rem;
-      cursor:pointer;
-    }
-    #splitPill b{ color:var(--gold); }
-
-    .container{ padding:16px 18px 90px; }
-
-    .filterbar{
-      background:var(--panel);
-      border:2px solid rgba(31,111,80,.8);
-      border-radius:12px;
-      padding:12px;
-      margin-bottom:14px;
-    }
-    .filterbar .row{
-      display:grid;
-      grid-template-columns: 1.2fr 0.8fr 0.8fr;
-      gap:10px;
-    }
-    @media(max-width:820px){ .filterbar .row{ grid-template-columns:1fr; } }
-
-    .filterbar input, .filterbar select{
-      display:block;
-      margin:0;
-      padding:10px;
-      width:100%;
-      background:#121b17;
-      color:white;
-      border:1px solid var(--emerald);
-      border-radius:10px;
-    }
-    .filterbar .row2{
-      display:grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap:10px;
-      margin-top:10px;
-    }
-    @media(max-width:820px){ .filterbar .row2{ grid-template-columns:1fr; } }
-
-    .filter-actions{
-      display:flex;
-      gap:10px;
-      flex-wrap:wrap;
-      margin-top:10px;
-      align-items:center;
-      justify-content:space-between;
-    }
-
-    .hint{ font-size:.9rem; opacity:.85; color:var(--muted); }
-
-    .accordion{
-      background:var(--panel);
-      border:2px solid var(--emerald);
-      border-radius:12px;
-      margin-bottom:12px;
-      overflow:hidden;
-    }
-    .accordion-header{
-      padding:12px 14px;
-      cursor:pointer;
-      background:var(--panel2);
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      user-select:none;
-      gap:10px;
-    }
-    .accordion-header:hover{ filter:brightness(1.05); }
-    .accordion-title{ font-weight:800; }
-    .badge{
-      font-size:.85rem;
-      color:#111;
-      background:var(--gold);
-      border-radius:999px;
-      padding:2px 10px;
-      margin-left:10px;
-      white-space:nowrap;
-    }
-    .chev{ opacity:.85; margin-left:10px; }
-    .accordion-content{ display:none; padding:10px 12px 12px; }
-
-    .entry{
-      background:#223029;
-      padding:10px 12px;
-      margin:8px 0;
-      border-left:4px solid var(--gold);
-      display:flex;
-      justify-content:space-between;
-      align-items:flex-start;
-      gap:10px;
-      cursor:pointer;
-      border-radius:10px;
-    }
-    .entry:hover{ outline:1px solid rgba(212,175,55,.35); }
-
-    .entry-left{
-      display:flex;
-      flex-direction:column;
-      gap:4px;
-      min-width:0;
-      flex:1 1 auto;
-    }
-    .entry-name{
-      font-weight:900;
-      color:var(--gold);
-      line-height:1.1;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      white-space:nowrap;
-      display:flex;
-      align-items:center;
-      gap:10px;
-      flex-wrap:wrap;
-    }
-    .client-link{
-      color:var(--gold);
-      text-decoration:underline;
-      cursor:pointer;
-      font-weight:900;
-    }
-
-    .client-badge{
-      display:inline-flex;
-      align-items:center;
-      gap:6px;
-      padding:2px 8px;
-      border-radius:999px;
-      border:1px solid rgba(212,175,55,.35);
-      background:rgba(0,0,0,.18);
-      font-size:.78rem;
-      color:rgba(255,255,255,.88);
-      white-space:nowrap;
-      max-width:220px;
-      overflow:hidden;
-      text-overflow:ellipsis;
-    }
-    .client-badge img{
-      width:16px;height:16px;
-      border-radius:4px;
-      object-fit:cover;
-      border:1px solid rgba(212,175,55,.25);
-      background:var(--panel2);
-      flex:0 0 auto;
-    }
-
-    .entry-sub{
-      display:flex;
-      flex-direction:column;
-      gap:2px;
-      font-size:.92rem;
-      opacity:.92;
-      min-width:0;
-    }
-    .sub-row{
-      line-height:1.25;
-      word-break:break-word;
-    }
-    .sub-row.clamp2{
-      display:-webkit-box;
-      -webkit-line-clamp:2;
-      -webkit-box-orient:vertical;
-      overflow:hidden;
-    }
-
-    .status{
-      padding:3px 8px;
-      border-radius:8px;
-      font-size:.8rem;
-      text-transform:uppercase;
-      letter-spacing:.04em;
-      margin-top:2px;
-      white-space:nowrap;
-      flex:0 0 auto;
-    }
-    .paid{background:#2e7d32;}
-    .partial{background:#f9a825; color:#111;}
-    .unpaid{background:#616161;}
-    .no_show{background:var(--danger);}
-    .booked{background:var(--booked);}
-
-    .fab-wrap{
-      position:fixed;
-      right:18px;
-      bottom:18px;
-      display:flex;
-      flex-direction:column;
-      gap:10px;
-      z-index:5000;
-    }
-    .fab{
-      width:64px;height:64px;
-      border-radius:50%;
-      background:var(--emerald);
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      font-size:2rem;
-      color:white;
-      box-shadow:0 0 25px rgba(212,175,55,.4);
-      cursor:pointer;
-    }
-    .fab.small{
-      width:54px;height:54px;
-      font-size:1.35rem;
-      background:#245a46;
-      border:1px solid rgba(212,175,55,.25);
-    }
-    .fab small{ font-size:.65rem; opacity:.95; }
-
-    .modal{
-      position:fixed;
-      inset:0;
-      background:rgba(0,0,0,.9);
-      display:none;
-      align-items:flex-start;
-      justify-content:center;
-      padding:
-        calc(96px + env(safe-area-inset-top))
-        calc(18px + env(safe-area-inset-right))
-        calc(50px + env(safe-area-inset-bottom))
-        calc(18px + env(safe-area-inset-left));
-      overflow:auto;
-      z-index:9999;
-    }
-    .modal-box{
-      background:var(--panel);
-      padding:35px 20px 25px;
-      border:2px solid var(--gold);
-      border-radius:14px;
-      max-width:680px;
-      width:100%;
-      margin:0 auto;
-      box-shadow:0 20px 50px rgba(0,0,0,.6);
-    }
-    .modal-title{
-      font-family:Cinzel, serif;
-      font-size:1.25rem;
-      font-weight:800;
-      color:var(--gold);
-      margin:0 0 14px 0;
-      border-bottom:1px solid rgba(212,175,55,.3);
-      padding-bottom:10px;
-    }
-
-    input, textarea, select{
-      display:block;
-      margin:8px auto;
-      padding:10px;
-      width:100%;
-      background:#121b17;
-      color:white;
-      border:1px solid var(--emerald);
-      border-radius:10px;
-    }
-    textarea{ min-height:90px; }
-
-    button{
-      background:var(--emerald);
-      color:white;
-      border:none;
-      padding:10px 12px;
-      margin-top:10px;
-      cursor:pointer;
-      border-radius:10px;
-    }
-    button:hover{ filter:brightness(1.06); }
-
-    .row{
-      display:grid;
-      grid-template-columns:1fr 1fr;
-      gap:10px;
-    }
-    @media(max-width:640px){ .row{grid-template-columns:1fr;} }
-
-    .actions-row{
-      display:flex;
-      gap:10px;
-      flex-wrap:wrap;
-      margin-top:10px;
-    }
-    .dangerbtn{ background:var(--danger); }
-    .secondarybtn{
-      background:var(--panel2);
-      border:1px solid rgba(31,111,80,.65);
-    }
-
-    hr{
-      border:none;
-      border-top:1px solid rgba(31,111,80,.6);
-      margin:14px 0;
-    }
-
-    details{
-      background:var(--panel2);
-      border:1px solid rgba(212,175,55,.25);
-      padding:10px;
-      border-radius:12px;
-    }
-    details summary{
-      cursor:pointer;
-      font-weight:800;
-      color:var(--gold);
-    }
-
-    .summary-box{
-      margin-top:10px;
-      background:var(--panel2);
-      border:1px solid rgba(212,175,55,.25);
-      padding:12px;
-      border-radius:12px;
-    }
-    .summary-grid{
-      display:grid;
-      grid-template-columns:1fr 1fr;
-      gap:10px;
-    }
-    @media(max-width:640px){ .summary-grid{grid-template-columns:1fr;} }
-
-    .client-entry{
-      background:#223029;
-      border-left:4px solid rgba(212,175,55,.7);
-      padding:10px 12px;
-      border-radius:10px;
-      cursor:pointer;
-      margin-top:8px;
-    }
-    .client-entry:hover{ outline:1px solid rgba(212,175,55,.35); }
-    .client-entry .top{
-      display:flex;
-      justify-content:space-between;
-      gap:10px;
-      align-items:flex-start;
-    }
-    .client-entry .date{
-      color:var(--muted);
-      font-size:.9rem;
-      white-space:nowrap;
-    }
-    .client-entry .desc{
-      opacity:.92;
-      margin-top:6px;
-      display:-webkit-box;
-      -webkit-line-clamp:2;
-      -webkit-box-orient:vertical;
-      overflow:hidden;
-    }
-
-    /* Toast notifications */
-    #toasts{
-      position:fixed;
-      right:14px;
-      bottom:14px;
-      display:flex;
-      flex-direction:column;
-      gap:10px;
-      z-index:20000;
-      max-width:min(420px, calc(100vw - 28px));
-      pointer-events:none;
-    }
-    .toast{
-      pointer-events:auto;
-      background:rgba(18,27,23,.96);
-      border:1px solid rgba(212,175,55,.35);
-      border-left:4px solid var(--gold);
-      border-radius:12px;
-      padding:10px 12px;
-      box-shadow:0 14px 40px rgba(0,0,0,.55);
-      animation:toastIn .18s ease-out;
-    }
-    @keyframes toastIn{
-      from{ transform:translateY(8px); opacity:0; }
-      to{ transform:translateY(0); opacity:1; }
-    }
-    .toast .t-title{ font-weight:900; color:var(--gold); }
-    .toast .t-sub{ opacity:.9; margin-top:4px; font-size:.92rem; }
-    .toast .t-mini{ opacity:.75; margin-top:6px; font-size:.86rem; }
-    .toast .t-row{ display:flex; align-items:center; gap:10px; }
-    .toast .t-row img{
-      width:28px;height:28px;border-radius:8px;object-fit:cover;
-      border:1px solid rgba(212,175,55,.25);
-      background:var(--panel2);
-    }
-    .toast .t-actions{ margin-top:8px; display:flex; gap:10px; flex-wrap:wrap; }
-    .toast .t-actions button{
-      margin-top:0;
-      padding:8px 10px;
-      border-radius:10px;
-      background:var(--panel2);
-      border:1px solid rgba(31,111,80,.65);
-    }
-  </style>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 
 <body>
-  <header>
-    <div class="brand">
-      <img id="logoImg" alt="Logo" title="Tap to upload logo">
-      <input id="logoInput" type="file" accept="image/png,image/*">
-      <div class="brand-title">Globber’s Ink Log</div>
+  <div class="page">
+    <div class="topbar">
+      <div class="brandRow">
+        <div class="brandLeft">
+          <div class="logoWrap" title="Tap to upload logo" id="logoWrap">
+            <img id="logoImg" class="logoImg" alt="Logo">
+            <input id="logoInput" type="file" accept="image/png,image/*" style="display:none;">
+          </div>
+          <div class="brandText">
+            <div class="brandTitle">Globber’s Ink Log</div>
+            <div class="brandActions">
+              <div id="splitPill" class="topBtn" title="Tap to edit split" onclick="openSettings()">
+                Split: <b id="splitPillPct">100%</b> (NET)
+              </div>
+              <button class="topBtn" type="button" onclick="openBills()">Bills</button>
+              <button class="topBtn" type="button" onclick="openExport()">Export</button>
+              <button class="topBtn secondarybtn" type="button" onclick="openRewards()">Rewards</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="statNum" id="todayTotal">$0</div><div class="statLbl">Today (NET)</div></div>
+        <div class="stat"><div class="statNum" id="weekTotal">$0</div><div class="statLbl">Week (NET)</div></div>
+        <div class="stat"><div class="statNum" id="monthTotal">$0</div><div class="statLbl">Month (NET)</div></div>
+        <div class="stat"><div class="statNum" id="quarterTotal">$0</div><div class="statLbl">Quarter (NET)</div></div>
+        <div class="stat"><div class="statNum" id="yearTotal">$0</div><div class="statLbl">Year (NET)</div></div>
+      </div>
     </div>
 
-    <div class="header-actions">
-      <div id="splitPill" title="Tap to edit split" onclick="openSettings()">
-        Split: <b id="splitPillPct">100%</b> (NET)
-      </div>
-      <button class="smallbtn" type="button" onclick="openBills()">Bills</button>
-      <button class="smallbtn" type="button" onclick="openExport()">Export</button>
-    </div>
-  </header>
-
-  <div id="stats">
-    <div><strong id="todayTotal">$0</strong><br><small>Today (NET)</small></div>
-    <div><strong id="weekTotal">$0</strong><br><small>Week (NET)</small></div>
-    <div><strong id="monthTotal">$0</strong><br><small>Month (NET)</small></div>
-    <div><strong id="quarterTotal">$0</strong><br><small>Quarter (NET)</small></div>
-    <div><strong id="yearTotal">$0</strong><br><small>Year (NET)</small></div>
-  </div>
-
-  <div class="container">
-    <div class="filterbar">
-      <div class="row">
-        <input id="q" type="text" placeholder="Search (client, description, location)">
-
-        <select id="statusFilter">
-          <option value="all">All Status</option>
-          <option value="booked">Booked</option>
-          <option value="paid">Paid</option>
-          <option value="partial">Partial</option>
-          <option value="unpaid">Unpaid</option>
-          <option value="no_show">No Show</option>
-        </select>
-
-        <select id="locationFilter">
-          <option value="all">All Locations</option>
-        </select>
+    <div class="filters">
+      <div class="filtersHeader" id="filtersHeader">
+        <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
+          <div class="filtersTitle">Filters</div>
+          <div class="filtersSummary" id="filtersSummary">All entries</div>
+        </div>
+        <div class="filtersChev" id="filtersChev">▾</div>
       </div>
 
-      <div class="row2">
-        <input id="fromDate" type="date">
-        <input id="toDate" type="date">
-        <select id="sortFilter">
-          <option value="newest">Sort: Newest</option>
-          <option value="oldest">Sort: Oldest</option>
-        </select>
-      </div>
+      <div class="filtersContent" id="filtersContent">
+        <div class="row">
+          <input id="q" type="text" placeholder="Search (client, description, location)">
+          <select id="statusFilter">
+            <option value="all">All Status</option>
+            <option value="booked">Booked</option>
+            <option value="paid">Paid</option>
+            <option value="partial">Partial</option>
+            <option value="unpaid">Unpaid</option>
+            <option value="no_show">No Show</option>
+          </select>
+          <select id="locationFilter">
+            <option value="all">All Locations</option>
+          </select>
+        </div>
 
-      <div class="filter-actions">
-        <div class="hint">Filters affect the accordion + totals shown.</div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <div class="row">
+          <input id="fromDate" type="date">
+          <input id="toDate" type="date">
+          <select id="sortFilter">
+            <option value="newest">Sort: Newest</option>
+            <option value="oldest">Sort: Oldest</option>
+          </select>
+        </div>
+
+        <div class="actionsRow">
           <button type="button" class="secondarybtn" onclick="clearFilters()">Clear</button>
           <button type="button" onclick="applyFilters()">Apply</button>
         </div>
       </div>
     </div>
 
-    <div id="entries"></div>
+    <div class="entries" id="entries"></div>
   </div>
 
-  <div class="fab-wrap">
-    <div class="fab small" title="Quick Add: Deposit Only" onclick="openDepositQuick()">
-      <small>DEP</small>
-    </div>
-    <div class="fab small" title="Quick Add: Bammer" onclick="openBammerQuick()">
-      <small>BAM</small>
-    </div>
-    <div class="fab" title="Add Entry" onclick="openForm()">+</div>
+  <div class="fabStack" aria-label="Quick actions">
+    <button class="fab small" type="button" title="Quick Add: Deposit Only" onclick="openDepositQuick()"><span class="fabIcon">DEP</span></button>
+    <button class="fab small" type="button" title="Quick Add: Bammer" onclick="openBammerQuick()"><span class="fabIcon">BAM</span></button>
+    <button class="fab main" type="button" title="Add Entry" onclick="openForm()">+</button>
   </div>
 
   <!-- ADD/EDIT ENTRY MODAL -->
   <div class="modal" id="formModal">
-    <div class="modal-box" id="formBox">
+    <div class="modalBox" id="formBox">
       <div class="modal-title" id="formTitle">Add Entry</div>
 
       <input type="date" id="date">
@@ -609,7 +134,7 @@
       <textarea id="notes" placeholder="Notes"></textarea>
       <input type="file" id="image" accept="image/*">
 
-      <div class="actions-row">
+      <div class="actionsRow">
         <button type="button" onclick="saveEntry()">Save</button>
         <button type="button" class="secondarybtn" onclick="closeForm()">Cancel</button>
       </div>
@@ -618,7 +143,7 @@
 
   <!-- QUICK ADD: BAMMER -->
   <div class="modal" id="bammerModal">
-    <div class="modal-box" id="bammerBox">
+    <div class="modalBox" id="bammerBox">
       <div class="modal-title">Quick Add — Bammer</div>
 
       <input type="date" id="bDate">
@@ -642,7 +167,7 @@
         <option value="no_show">No Show</option>
       </select>
 
-      <div class="actions-row">
+      <div class="actionsRow">
         <button type="button" onclick="saveBammer()">Save Bammer</button>
         <button type="button" class="secondarybtn" onclick="closeBammerQuick()">Cancel</button>
       </div>
@@ -651,7 +176,7 @@
 
   <!-- QUICK ADD: DEPOSIT ONLY -->
   <div class="modal" id="depositModal">
-    <div class="modal-box" id="depositBox">
+    <div class="modalBox" id="depositBox">
       <div class="modal-title">Quick Add — Deposit Only</div>
 
       <input type="date" id="dDate">
@@ -675,7 +200,7 @@
         <option>Hand</option><option>Foot</option><option>Neck</option>
       </select>
 
-      <div class="actions-row">
+      <div class="actionsRow">
         <button type="button" onclick="saveDepositOnly()">Save Deposit</button>
         <button type="button" class="secondarybtn" onclick="closeDepositQuick()">Cancel</button>
       </div>
@@ -684,17 +209,17 @@
 
   <!-- VIEW ENTRY MODAL -->
   <div class="modal" id="viewModal">
-    <div class="modal-box" id="viewBox"></div>
+    <div class="modalBox" id="viewBox"></div>
   </div>
 
   <!-- CLIENT PROFILE MODAL -->
   <div class="modal" id="clientModal">
-    <div class="modal-box" id="clientBox"></div>
+    <div class="modalBox" id="clientBox"></div>
   </div>
 
   <!-- SETTINGS MODAL -->
   <div class="modal" id="settingsModal">
-    <div class="modal-box" id="settingsBox">
+    <div class="modalBox" id="settingsBox">
       <div class="modal-title">Settings</div>
 
       <div class="summary-box" style="margin-top:0;">
@@ -710,7 +235,7 @@
           <input id="overrideMonth" type="month">
           <input id="overridePct" type="number" min="0" max="100" step="1" placeholder="e.g. 65">
         </div>
-        <div class="actions-row">
+        <div class="actionsRow">
           <button type="button" onclick="saveMonthOverride()">Save Override</button>
           <button type="button" class="secondarybtn" onclick="removeMonthOverride()">Remove Override</button>
         </div>
@@ -720,7 +245,7 @@
       <div class="summary-box">
         <div style="font-weight:900;color:var(--gold);">Client Rewards</div>
         <div class="hint">Badges + discounts auto-update when you log tattoos.</div>
-        <div class="actions-row">
+        <div class="actionsRow">
           <button type="button" onclick="openRewards()">Open Rewards Setup</button>
         </div>
       </div>
@@ -728,18 +253,18 @@
       <div class="summary-box">
         <div style="font-weight:900;color:var(--gold);">Backup / Restore</div>
         <div class="hint">Download a backup so you never lose your data.</div>
-        <div class="actions-row">
+        <div class="actionsRow">
           <button type="button" onclick="downloadBackup()">Download Backup (JSON)</button>
         </div>
         <hr>
         <div class="hint">Restore from a backup JSON file.</div>
         <input id="restoreFile" type="file" accept="application/json">
-        <div class="actions-row">
+        <div class="actionsRow">
           <button type="button" class="dangerbtn" onclick="restoreBackup()">Restore Backup</button>
         </div>
       </div>
 
-      <div class="actions-row">
+      <div class="actionsRow">
         <button type="button" onclick="saveSplitSettings()">Save Settings</button>
         <button type="button" class="secondarybtn" onclick="closeSettings()">Close</button>
       </div>
@@ -748,7 +273,7 @@
 
   <!-- REWARDS MODAL -->
   <div class="modal" id="rewardsModal">
-    <div class="modal-box" id="rewardsBox">
+    <div class="modalBox" id="rewardsBox">
       <div class="modal-title">Client Rewards Setup</div>
 
       <details open>
@@ -757,7 +282,7 @@
           Levels are based on <b>tattoo count</b> (non-deposit-only entries). Highest matching tier wins.
         </div>
         <div id="levelsList" style="margin-top:10px;"></div>
-        <div class="actions-row">
+        <div class="actionsRow">
           <button type="button" onclick="addBadgeLevel()">+ Add Badge Level</button>
         </div>
       </details>
@@ -770,12 +295,12 @@
           Discounts are also based on tattoo count. Highest matching tier wins.
         </div>
         <div id="discountsList" style="margin-top:10px;"></div>
-        <div class="actions-row">
+        <div class="actionsRow">
           <button type="button" onclick="addDiscountTier()">+ Add Discount Tier</button>
         </div>
       </details>
 
-      <div class="actions-row">
+      <div class="actionsRow">
         <button type="button" onclick="saveRewards()">Save Rewards</button>
         <button type="button" class="secondarybtn" onclick="closeRewards()">Close</button>
       </div>
@@ -784,13 +309,13 @@
 
   <!-- EXPORT MODAL -->
   <div class="modal" id="exportModal">
-    <div class="modal-box" id="exportBox">
+    <div class="modalBox" id="exportBox">
       <div class="modal-title">Export</div>
 
       <div class="summary-box" style="margin-top:0;">
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;">
           <div style="font-weight:900;color:var(--gold);">Logo</div>
-          <div class="actions-row" style="margin-top:0;">
+          <div class="actionsRow" style="margin-top:0;">
             <button type="button" class="secondarybtn" onclick="removeLogo()">Remove Logo</button>
           </div>
         </div>
@@ -813,7 +338,7 @@
         <input type="date" id="ppStart" disabled>
         <input type="date" id="ppEnd" disabled>
       </div>
-      <div class="actions-row">
+      <div class="actionsRow">
         <button type="button" class="secondarybtn" onclick="prevPayPeriod()">◀ Prev</button>
         <button type="button" class="secondarybtn" onclick="nextPayPeriod()">Next ▶</button>
         <button type="button" onclick="exportPayPeriodCSV()">Export This Pay Period</button>
@@ -827,14 +352,14 @@
         <input type="date" id="exportEnd">
       </div>
 
-      <div class="actions-row">
+      <div class="actionsRow">
         <button type="button" onclick="exportCSV()">Download CSV</button>
         <button type="button" class="secondarybtn" onclick="closeExport()">Close</button>
       </div>
 
       <div class="summary-box">
         <h4 style="margin:0 0 8px 0;">Export Summary</h4>
-        <div class="actions-row">
+        <div class="actionsRow">
           <button type="button" onclick="buildSummary('range')">Summary for Date Range</button>
           <button type="button" class="secondarybtn" onclick="buildSummary('payperiod')">Summary for Pay Period</button>
         </div>
@@ -845,12 +370,12 @@
 
   <!-- BILLS MODAL -->
   <div class="modal" id="billsModal">
-    <div class="modal-box" id="billsBox">
+    <div class="modalBox" id="billsBox">
       <div class="modal-title">Bills & Rent</div>
 
       <div class="summary-box" style="margin-top:0;">
-        <div style="font-weight:900;color:var(--gold);">Rent sinking fund</div>
-        <div class="hint">Rent is due on the <b>1st</b>. Every month. No exceptions.</div>
+        <div style="font-weight:900;color:var(--gold);">Rent</div>
+        <div class="hint">Due on the <b>1st</b>. Every month. No exceptions.</div>
         <div class="row">
           <input id="rentAmount" type="number" min="0" step="0.01" placeholder="Rent amount (e.g. 1450)">
           <input id="rentSavedSoFar" type="number" min="0" step="0.01" placeholder="Saved so far (optional)">
@@ -859,30 +384,28 @@
 
       <div class="summary-box">
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;">
-          <div style="font-weight:900;color:var(--gold);">Bills sinking funds</div>
-          <div class="actions-row" style="margin-top:0;">
-            <button type="button" onclick="addBill()">+ Add Bill</button>
+          <div style="font-weight:900;color:var(--gold);">Bills</div>
+          <div class="actionsRow" style="margin-top:0;">
+            <button type="button" onclick="InkBills.addBill()">+ Add Bill</button>
           </div>
         </div>
-        <div class="hint">Bills use real due dates so targets adjust automatically.</div>
         <div id="billsList" style="margin-top:10px;"></div>
       </div>
 
       <div class="summary-box">
         <div style="font-weight:900;color:var(--gold);">Today’s target</div>
-        <div id="billsTodayOut" style="margin-top:8px;opacity:.95;"></div>
-        <div id="billsQuote" class="hint" style="margin-top:10px; opacity:.95;"></div>
+        <div id="billsTodayOut" style="margin-top:8px;"></div>
+        <div id="billsQuote" style="margin-top:12px; font-weight:900; color:var(--gold); opacity:.92;"></div>
       </div>
 
-      <div class="actions-row">
-        <button type="button" onclick="saveBills()">Save</button>
-        <button type="button" class="secondarybtn" onclick="closeBills()">Close</button>
+      <div class="actionsRow">
+        <button type="button" onclick="InkBills.saveBills()">Save</button>
+        <button type="button" class="secondarybtn" onclick="InkBills.closeBills()">Close</button>
       </div>
     </div>
   </div>
 
-  <!-- Toasts -->
-  <div id="toasts"></div>
+  <div class="toasts" id="toasts"></div>
 
   <script src="app.js"></script>
   <script src="bills.js"></script>
