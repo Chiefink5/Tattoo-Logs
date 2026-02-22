@@ -552,3 +552,77 @@ input:focus, select:focus, textarea:focus{
   .entry-sub{ font-size: 15px; }
   .row > *{ flex: 1 1 100%; max-width: 100%; }
 }
+
+/* ===== Form labels above inputs everywhere ===== */
+.field { width: 100%; min-width: 0; }
+.field label{
+  display:block;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  opacity: .78;
+  margin: 2px 0 6px 2px;
+}
+.field input, .field select, .field textarea{
+  width:100%;
+}
+
+/* ===== Modal scroll safety (Rewards was off-screen) ===== */
+.modal{
+  align-items: center; /* center vertically */
+}
+.modalBox{
+  max-height: 86vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ===== Stronger section breaks ===== */
+.sectionDivider{
+  height: 2px;
+  background: rgba(212,175,55,.22);
+  margin: 14px 0;
+  border-radius: 999px;
+}
+
+/* ===== Logo: plain PNG, no borders/shadows ===== */
+.logoPlain{
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.logoImgPlain{
+  width: 44px;  /* tweak if you want bigger */
+  height: 44px;
+  object-fit: contain;
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+}
+
+/* ===== Center stats pills and make wrapping look intentional ===== */
+.statsCentered{
+  display:flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+.stat{
+  text-align:center;
+  min-width: 120px;
+}
+
+/* ===== Top bar quick actions ===== */
+.quickActionsTop{
+  display:flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+}

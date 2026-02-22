@@ -17,30 +17,42 @@
     <div class="topbar">
       <div class="brandRow">
         <div class="brandLeft">
-          <div class="logoWrap" title="Tap to upload logo" id="logoWrap">
-            <img id="logoImg" class="logoImg" alt="Logo">
+          <div class="logoPlain" title="Tap to upload logo" id="logoWrap">
+            <img id="logoImg" class="logoImgPlain" alt="Logo">
             <input id="logoInput" type="file" accept="image/png,image/*" style="display:none;">
           </div>
+
           <div class="brandText">
             <div class="brandTitle">Globber’s Ink Log</div>
+
+            <!-- Top actions -->
             <div class="brandActions">
-              <div id="splitPill" class="topBtn" title="Tap to edit split" onclick="openSettings()">
-                Split: <b id="splitPillPct">100%</b> (NET)
-              </div>
+              <button class="topBtn" type="button" onclick="openSettings()">
+                Split: <b id="splitPillPct">100%</b>
+              </button>
+
               <button class="topBtn" type="button" onclick="openBills()">Bills</button>
               <button class="topBtn" type="button" onclick="openExport()">Export</button>
               <button class="topBtn secondarybtn" type="button" onclick="openRewards()">Rewards</button>
             </div>
           </div>
         </div>
+
+        <!-- Quick actions moved to top bar -->
+        <div class="quickActionsTop">
+          <button class="topBtn secondarybtn" type="button" onclick="openDepositQuick()">Deposit</button>
+          <button class="topBtn secondarybtn" type="button" onclick="openBammerQuick()">Bammer</button>
+          <button class="topBtn" type="button" onclick="openForm()">+ Entry</button>
+        </div>
       </div>
 
-      <div class="stats">
-        <div class="stat"><div class="statNum" id="todayTotal">$0</div><div class="statLbl">Today (NET)</div></div>
-        <div class="stat"><div class="statNum" id="weekTotal">$0</div><div class="statLbl">Week (NET)</div></div>
-        <div class="stat"><div class="statNum" id="monthTotal">$0</div><div class="statLbl">Month (NET)</div></div>
-        <div class="stat"><div class="statNum" id="quarterTotal">$0</div><div class="statLbl">Quarter (NET)</div></div>
-        <div class="stat"><div class="statNum" id="yearTotal">$0</div><div class="statLbl">Year (NET)</div></div>
+      <!-- Stats centered -->
+      <div class="stats statsCentered">
+        <div class="stat"><div class="statNum" id="todayTotal">$0</div><div class="statLbl">Today</div></div>
+        <div class="stat"><div class="statNum" id="weekTotal">$0</div><div class="statLbl">Week</div></div>
+        <div class="stat"><div class="statNum" id="monthTotal">$0</div><div class="statLbl">Month</div></div>
+        <div class="stat"><div class="statNum" id="quarterTotal">$0</div><div class="statLbl">Quarter</div></div>
+        <div class="stat"><div class="statNum" id="yearTotal">$0</div><div class="statLbl">Year</div></div>
       </div>
     </div>
 
@@ -55,27 +67,49 @@
 
       <div class="filtersContent" id="filtersContent">
         <div class="row">
-          <input id="q" type="text" placeholder="Search (client, description, location)">
-          <select id="statusFilter">
-            <option value="all">All Status</option>
-            <option value="booked">Booked</option>
-            <option value="paid">Paid</option>
-            <option value="partial">Partial</option>
-            <option value="unpaid">Unpaid</option>
-            <option value="no_show">No Show</option>
-          </select>
-          <select id="locationFilter">
-            <option value="all">All Locations</option>
-          </select>
+          <div class="field">
+            <label>Search</label>
+            <input id="q" type="text" />
+          </div>
+
+          <div class="field">
+            <label>Status</label>
+            <select id="statusFilter">
+              <option value="all">All</option>
+              <option value="booked">Booked</option>
+              <option value="paid">Paid</option>
+              <option value="partial">Partial</option>
+              <option value="unpaid">Unpaid</option>
+              <option value="no_show">No Show</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label>Location</label>
+            <select id="locationFilter">
+              <option value="all">All</option>
+            </select>
+          </div>
         </div>
 
         <div class="row">
-          <input id="fromDate" type="date">
-          <input id="toDate" type="date">
-          <select id="sortFilter">
-            <option value="newest">Sort: Newest</option>
-            <option value="oldest">Sort: Oldest</option>
-          </select>
+          <div class="field">
+            <label>From</label>
+            <input id="fromDate" type="date">
+          </div>
+
+          <div class="field">
+            <label>To</label>
+            <input id="toDate" type="date">
+          </div>
+
+          <div class="field">
+            <label>Sort</label>
+            <select id="sortFilter">
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+            </select>
+          </div>
         </div>
 
         <div class="actionsRow">
@@ -88,51 +122,93 @@
     <div class="entries" id="entries"></div>
   </div>
 
-  <div class="fabStack" aria-label="Quick actions">
-    <button class="fab small" type="button" title="Quick Add: Deposit Only" onclick="openDepositQuick()"><span class="fabIcon">DEP</span></button>
-    <button class="fab small" type="button" title="Quick Add: Bammer" onclick="openBammerQuick()"><span class="fabIcon">BAM</span></button>
-    <button class="fab main" type="button" title="Add Entry" onclick="openForm()">+</button>
-  </div>
-
   <!-- ADD/EDIT ENTRY MODAL -->
   <div class="modal" id="formModal">
     <div class="modalBox" id="formBox">
       <div class="modal-title" id="formTitle">Add Entry</div>
 
-      <input type="date" id="date">
-      <input type="text" id="client" placeholder="Client Name">
+      <div class="sectionDivider"></div>
 
       <div class="row">
-        <input type="text" id="contact" placeholder="Client Contact">
-        <input type="text" id="social" placeholder="Client Social">
+        <div class="field">
+          <label>Date</label>
+          <input type="date" id="date">
+        </div>
+
+        <div class="field">
+          <label>Client Name</label>
+          <input type="text" id="client">
+        </div>
       </div>
-
-      <textarea id="description" placeholder="Tattoo Description"></textarea>
-
-      <select id="location">
-        <option value="">Location</option>
-        <option>Arm</option><option>Leg</option><option>Back</option><option>Chest</option>
-        <option>Hand</option><option>Foot</option><option>Neck</option>
-      </select>
 
       <div class="row">
-        <input type="number" id="total" placeholder="Total Price">
-        <input type="number" id="deposit" placeholder="Deposit (optional)">
+        <div class="field">
+          <label>Client Contact</label>
+          <input type="text" id="contact">
+        </div>
+        <div class="field">
+          <label>Client Social</label>
+          <input type="text" id="social">
+        </div>
       </div>
 
-      <select id="status">
-        <option value="booked">Booked</option>
-        <option value="unpaid">Unpaid</option>
-        <option value="partial">Partial</option>
-        <option value="paid">Paid</option>
-        <option value="no_show">No Show</option>
-      </select>
+      <div class="field">
+        <label>Description</label>
+        <textarea id="description"></textarea>
+      </div>
 
-      <div id="sessions"></div>
-      <button type="button" onclick="addSession()">+ Additional Session</button>
+      <div class="row">
+        <div class="field">
+          <label>Location</label>
+          <select id="location">
+            <option value=""></option>
+            <option>Arm</option><option>Leg</option><option>Back</option><option>Chest</option>
+            <option>Hand</option><option>Foot</option><option>Neck</option>
+          </select>
+        </div>
 
-      <textarea id="notes" placeholder="Notes"></textarea>
-      <input type="file" id="image" accept="image/*">
+        <div class="field">
+          <label>Status</label>
+          <select id="status">
+            <option value="booked">Booked</option>
+            <option value="unpaid">Unpaid</option>
+            <option value="partial">Partial</option>
+            <option value="paid">Paid</option>
+            <option value="no_show">No Show</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>Total Price</label>
+          <input type="number" id="total" min="0" step="0.01">
+        </div>
+        <div class="field">
+          <label>Deposit</label>
+          <input type="number" id="deposit" min="0" step="0.01">
+        </div>
+      </div>
+
+      <div class="sectionDivider"></div>
+
+      <div class="field">
+        <label>Sessions</label>
+        <div id="sessions"></div>
+      </div>
+      <button type="button" class="secondarybtn" onclick="addSession()">+ Add Session</button>
+
+      <div class="sectionDivider"></div>
+
+      <div class="field">
+        <label>Notes</label>
+        <textarea id="notes"></textarea>
+      </div>
+
+      <div class="field">
+        <label>Image</label>
+        <input type="file" id="image" accept="image/*">
+      </div>
 
       <div class="actionsRow">
         <button type="button" onclick="saveEntry()">Save</button>
@@ -145,30 +221,52 @@
   <div class="modal" id="bammerModal">
     <div class="modalBox" id="bammerBox">
       <div class="modal-title">Quick Add — Bammer</div>
-
-      <input type="date" id="bDate">
-      <input type="text" id="bClient" placeholder="Client Name">
-      <textarea id="bDesc" placeholder="Tattoo Description (quick)"></textarea>
+      <div class="sectionDivider"></div>
 
       <div class="row">
-        <select id="bLocation">
-          <option value="">Location</option>
-          <option>Arm</option><option>Leg</option><option>Back</option><option>Chest</option>
-          <option>Hand</option><option>Foot</option><option>Neck</option>
-        </select>
-        <input type="number" id="bTotal" placeholder="Total Price">
+        <div class="field">
+          <label>Date</label>
+          <input type="date" id="bDate">
+        </div>
+        <div class="field">
+          <label>Client Name</label>
+          <input type="text" id="bClient">
+        </div>
       </div>
 
-      <select id="bStatus">
-        <option value="paid">Paid</option>
-        <option value="partial">Partial</option>
-        <option value="unpaid">Unpaid</option>
-        <option value="booked">Booked</option>
-        <option value="no_show">No Show</option>
-      </select>
+      <div class="field">
+        <label>Description</label>
+        <textarea id="bDesc"></textarea>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>Location</label>
+          <select id="bLocation">
+            <option value=""></option>
+            <option>Arm</option><option>Leg</option><option>Back</option><option>Chest</option>
+            <option>Hand</option><option>Foot</option><option>Neck</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Total Price</label>
+          <input type="number" id="bTotal" min="0" step="0.01">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Status</label>
+        <select id="bStatus">
+          <option value="paid">Paid</option>
+          <option value="partial">Partial</option>
+          <option value="unpaid">Unpaid</option>
+          <option value="booked">Booked</option>
+          <option value="no_show">No Show</option>
+        </select>
+      </div>
 
       <div class="actionsRow">
-        <button type="button" onclick="saveBammer()">Save Bammer</button>
+        <button type="button" onclick="saveBammer()">Save</button>
         <button type="button" class="secondarybtn" onclick="closeBammerQuick()">Cancel</button>
       </div>
     </div>
@@ -178,62 +276,96 @@
   <div class="modal" id="depositModal">
     <div class="modalBox" id="depositBox">
       <div class="modal-title">Quick Add — Deposit Only</div>
-
-      <input type="date" id="dDate">
-      <input type="text" id="dClient" placeholder="Client Name">
+      <div class="sectionDivider"></div>
 
       <div class="row">
-        <input type="text" id="dContact" placeholder="Client Contact (optional)">
-        <input type="text" id="dSocial" placeholder="Client Social (optional)">
+        <div class="field">
+          <label>Date</label>
+          <input type="date" id="dDate">
+        </div>
+        <div class="field">
+          <label>Client Name</label>
+          <input type="text" id="dClient">
+        </div>
       </div>
-
-      <textarea id="dDesc" placeholder="What’s the deposit for? (optional)"></textarea>
 
       <div class="row">
-        <input type="number" id="dDeposit" placeholder="Deposit Amount">
-        <input type="number" id="dTotal" placeholder="Total Price (optional)">
+        <div class="field">
+          <label>Client Contact</label>
+          <input type="text" id="dContact">
+        </div>
+        <div class="field">
+          <label>Client Social</label>
+          <input type="text" id="dSocial">
+        </div>
       </div>
 
-      <select id="dLocation">
-        <option value="">Location</option>
-        <option>Arm</option><option>Leg</option><option>Back</option><option>Chest</option>
-        <option>Hand</option><option>Foot</option><option>Neck</option>
-      </select>
+      <div class="field">
+        <label>Description</label>
+        <textarea id="dDesc"></textarea>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>Deposit Amount</label>
+          <input type="number" id="dDeposit" min="0" step="0.01">
+        </div>
+        <div class="field">
+          <label>Total Price (optional)</label>
+          <input type="number" id="dTotal" min="0" step="0.01">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Location</label>
+        <select id="dLocation">
+          <option value=""></option>
+          <option>Arm</option><option>Leg</option><option>Back</option><option>Chest</option>
+          <option>Hand</option><option>Foot</option><option>Neck</option>
+        </select>
+      </div>
 
       <div class="actionsRow">
-        <button type="button" onclick="saveDepositOnly()">Save Deposit</button>
+        <button type="button" onclick="saveDepositOnly()">Save</button>
         <button type="button" class="secondarybtn" onclick="closeDepositQuick()">Cancel</button>
       </div>
     </div>
   </div>
 
-  <!-- VIEW ENTRY MODAL -->
-  <div class="modal" id="viewModal">
-    <div class="modalBox" id="viewBox"></div>
-  </div>
+  <!-- VIEW / CLIENT -->
+  <div class="modal" id="viewModal"><div class="modalBox" id="viewBox"></div></div>
+  <div class="modal" id="clientModal"><div class="modalBox" id="clientBox"></div></div>
 
-  <!-- CLIENT PROFILE MODAL -->
-  <div class="modal" id="clientModal">
-    <div class="modalBox" id="clientBox"></div>
-  </div>
-
-  <!-- SETTINGS MODAL -->
+  <!-- SETTINGS -->
   <div class="modal" id="settingsModal">
     <div class="modalBox" id="settingsBox">
       <div class="modal-title">Settings</div>
 
+      <div class="sectionDivider"></div>
+
       <div class="summary-box" style="margin-top:0;">
         <div style="font-weight:900;color:var(--gold);">Payout Split</div>
-        <div class="hint">Used for NET totals unless a month override exists.</div>
-        <input id="defaultSplitPct" type="number" min="0" max="100" step="1" placeholder="e.g. 60">
+        <div class="row">
+          <div class="field">
+            <label>Default Split %</label>
+            <input id="defaultSplitPct" type="number" min="0" max="100" step="1">
+          </div>
+        </div>
       </div>
 
+      <div class="sectionDivider"></div>
+
       <div class="summary-box">
-        <div style="font-weight:900;color:var(--gold);">Monthly override</div>
-        <div class="hint">Set a different % for a specific month.</div>
+        <div style="font-weight:900;color:var(--gold);">Monthly Override</div>
         <div class="row">
-          <input id="overrideMonth" type="month">
-          <input id="overridePct" type="number" min="0" max="100" step="1" placeholder="e.g. 65">
+          <div class="field">
+            <label>Month</label>
+            <input id="overrideMonth" type="month">
+          </div>
+          <div class="field">
+            <label>Split %</label>
+            <input id="overridePct" type="number" min="0" max="100" step="1">
+          </div>
         </div>
         <div class="actionsRow">
           <button type="button" onclick="saveMonthOverride()">Save Override</button>
@@ -242,58 +374,48 @@
         <div id="overrideList" class="hint" style="margin-top:10px;"></div>
       </div>
 
-      <div class="summary-box">
-        <div style="font-weight:900;color:var(--gold);">Client Rewards</div>
-        <div class="hint">Badges + discounts auto-update when you log tattoos.</div>
-        <div class="actionsRow">
-          <button type="button" onclick="openRewards()">Open Rewards Setup</button>
-        </div>
-      </div>
+      <div class="sectionDivider"></div>
 
       <div class="summary-box">
         <div style="font-weight:900;color:var(--gold);">Backup / Restore</div>
-        <div class="hint">Download a backup so you never lose your data.</div>
         <div class="actionsRow">
           <button type="button" onclick="downloadBackup()">Download Backup (JSON)</button>
         </div>
-        <hr>
-        <div class="hint">Restore from a backup JSON file.</div>
-        <input id="restoreFile" type="file" accept="application/json">
+        <div class="sectionDivider"></div>
+        <div class="field">
+          <label>Restore File</label>
+          <input id="restoreFile" type="file" accept="application/json">
+        </div>
         <div class="actionsRow">
           <button type="button" class="dangerbtn" onclick="restoreBackup()">Restore Backup</button>
         </div>
       </div>
 
       <div class="actionsRow">
-        <button type="button" onclick="saveSplitSettings()">Save Settings</button>
+        <button type="button" onclick="saveSplitSettings()">Save</button>
         <button type="button" class="secondarybtn" onclick="closeSettings()">Close</button>
       </div>
     </div>
   </div>
 
-  <!-- REWARDS MODAL -->
+  <!-- REWARDS -->
   <div class="modal" id="rewardsModal">
     <div class="modalBox" id="rewardsBox">
       <div class="modal-title">Client Rewards Setup</div>
+      <div class="sectionDivider"></div>
 
       <details open>
         <summary>Badge Levels</summary>
-        <div class="hint" style="margin-top:8px;">
-          Levels are based on <b>tattoo count</b> (non-deposit-only entries). Highest matching tier wins.
-        </div>
         <div id="levelsList" style="margin-top:10px;"></div>
         <div class="actionsRow">
           <button type="button" onclick="addBadgeLevel()">+ Add Badge Level</button>
         </div>
       </details>
 
-      <hr>
+      <div class="sectionDivider"></div>
 
       <details open>
         <summary>Discount Tiers</summary>
-        <div class="hint" style="margin-top:8px;">
-          Discounts are also based on tattoo count. Highest matching tier wins.
-        </div>
         <div id="discountsList" style="margin-top:10px;"></div>
         <div class="actionsRow">
           <button type="button" onclick="addDiscountTier()">+ Add Discount Tier</button>
@@ -301,86 +423,117 @@
       </details>
 
       <div class="actionsRow">
-        <button type="button" onclick="saveRewards()">Save Rewards</button>
+        <button type="button" onclick="saveRewards()">Save</button>
         <button type="button" class="secondarybtn" onclick="closeRewards()">Close</button>
       </div>
     </div>
   </div>
 
-  <!-- EXPORT MODAL -->
+  <!-- EXPORT -->
   <div class="modal" id="exportModal">
     <div class="modalBox" id="exportBox">
       <div class="modal-title">Export</div>
+      <div class="sectionDivider"></div>
 
-      <div class="summary-box" style="margin-top:0;">
-        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;">
-          <div style="font-weight:900;color:var(--gold);">Logo</div>
-          <div class="actionsRow" style="margin-top:0;">
-            <button type="button" class="secondarybtn" onclick="removeLogo()">Remove Logo</button>
+      <div class="field">
+        <label>Payday</label>
+        <select id="paydaySelect">
+          <option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option>
+          <option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option>
+          <option value="6">Saturday</option>
+        </select>
+      </div>
+
+      <div class="sectionDivider"></div>
+
+      <div class="field">
+        <label>Pay Period</label>
+        <div class="row">
+          <div class="field">
+            <label>Start</label>
+            <input type="date" id="ppStart" disabled>
+          </div>
+          <div class="field">
+            <label>End</label>
+            <input type="date" id="ppEnd" disabled>
           </div>
         </div>
-        <div class="hint">Tap the logo in the header to upload a PNG.</div>
+        <div class="actionsRow">
+          <button type="button" class="secondarybtn" onclick="prevPayPeriod()">◀ Prev</button>
+          <button type="button" class="secondarybtn" onclick="nextPayPeriod()">Next ▶</button>
+          <button type="button" onclick="exportPayPeriodCSV()">Download CSV</button>
+        </div>
       </div>
 
-      <hr>
+      <div class="sectionDivider"></div>
 
-      <label class="hint">Payday (week starts on this day)</label>
-      <select id="paydaySelect">
-        <option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option>
-        <option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option>
-        <option value="6">Saturday</option>
-      </select>
-
-      <hr>
-
-      <h4 style="margin:0;">Pay Period (Payday Week)</h4>
-      <div class="row">
-        <input type="date" id="ppStart" disabled>
-        <input type="date" id="ppEnd" disabled>
-      </div>
-      <div class="actionsRow">
-        <button type="button" class="secondarybtn" onclick="prevPayPeriod()">◀ Prev</button>
-        <button type="button" class="secondarybtn" onclick="nextPayPeriod()">Next ▶</button>
-        <button type="button" onclick="exportPayPeriodCSV()">Export This Pay Period</button>
+      <div class="field">
+        <label>Date Range</label>
+        <div class="row">
+          <div class="field">
+            <label>Start</label>
+            <input type="date" id="exportStart">
+          </div>
+          <div class="field">
+            <label>End</label>
+            <input type="date" id="exportEnd">
+          </div>
+        </div>
+        <div class="actionsRow">
+          <button type="button" onclick="exportCSV()">Download CSV</button>
+          <button type="button" class="secondarybtn" onclick="closeExport()">Close</button>
+        </div>
       </div>
 
-      <hr>
-
-      <h4 style="margin:0;">CSV Date Range</h4>
-      <div class="row">
-        <input type="date" id="exportStart">
-        <input type="date" id="exportEnd">
-      </div>
-
-      <div class="actionsRow">
-        <button type="button" onclick="exportCSV()">Download CSV</button>
-        <button type="button" class="secondarybtn" onclick="closeExport()">Close</button>
-      </div>
+      <div class="sectionDivider"></div>
 
       <div class="summary-box">
-        <h4 style="margin:0 0 8px 0;">Export Summary</h4>
+        <div style="font-weight:900;color:var(--gold);">Summary</div>
         <div class="actionsRow">
-          <button type="button" onclick="buildSummary('range')">Summary for Date Range</button>
-          <button type="button" class="secondarybtn" onclick="buildSummary('payperiod')">Summary for Pay Period</button>
+          <button type="button" onclick="buildSummary('range')">Range Summary</button>
+          <button type="button" class="secondarybtn" onclick="buildSummary('payperiod')">Pay Period Summary</button>
         </div>
-        <div id="summaryOut" style="margin-top:10px; opacity:.95;"></div>
+        <div id="summaryOut" style="margin-top:10px;"></div>
       </div>
     </div>
   </div>
 
-  <!-- BILLS MODAL -->
+  <!-- BILLS -->
   <div class="modal" id="billsModal">
     <div class="modalBox" id="billsBox">
       <div class="modal-title">Bills & Rent</div>
 
+      <div class="sectionDivider"></div>
+
       <div class="summary-box" style="margin-top:0;">
         <div style="font-weight:900;color:var(--gold);">Rent</div>
-        <div class="hint">Due on the <b>1st</b>. Every month. No exceptions.</div>
+        <div class="hint">Due on the 1st. Every month. No exceptions.</div>
+
         <div class="row">
-          <input id="rentAmount" type="number" min="0" step="0.01" placeholder="Rent amount (e.g. 1450)">
-          <input id="rentSavedSoFar" type="number" min="0" step="0.01" placeholder="Saved so far (optional)">
+          <div class="field">
+            <label>Rent Amount</label>
+            <input id="rentAmount" type="number" min="0" step="0.01">
+          </div>
+
+          <div class="field">
+            <label>Saved So Far</label>
+            <input id="rentSavedSoFar" type="number" min="0" step="0.01">
+          </div>
+        </div>
+
+        <!-- Safe-by is back -->
+        <div class="row">
+          <div class="field">
+            <label>Safe By (day of month)</label>
+            <input id="rentSafeByDay" type="number" min="1" max="28" step="1">
+          </div>
+          <div class="hint" style="align-self:flex-end;">
+            Example: 15 means “fund next rent by the 15th.”
+          </div>
         </div>
       </div>
+
+      <div class="sectionDivider"></div>
 
       <div class="summary-box">
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;">
@@ -391,6 +544,8 @@
         </div>
         <div id="billsList" style="margin-top:10px;"></div>
       </div>
+
+      <div class="sectionDivider"></div>
 
       <div class="summary-box">
         <div style="font-weight:900;color:var(--gold);">Today’s target</div>

@@ -8,7 +8,7 @@ let payPeriodAnchor = null;
 
 let splitSettings = JSON.parse(localStorage.getItem("splitSettings") || "null") || {
   defaultPct: 100,
-  monthOverrides: {}
+  monthOverrides: {} // { "YYYY-MM": pct }
 };
 
 let filters = JSON.parse(localStorage.getItem("filters") || "null") || {
@@ -20,6 +20,7 @@ let filters = JSON.parse(localStorage.getItem("filters") || "null") || {
   sort: "newest"
 };
 
+// Rewards (badge levels + discount tiers)
 let rewardsSettings = JSON.parse(localStorage.getItem("rewardsSettings") || "null") || {
   levels: [
     { id: "lvl1", name: "Rookie", minCount: 1, pngDataUrl: "" },
@@ -32,7 +33,10 @@ let rewardsSettings = JSON.parse(localStorage.getItem("rewardsSettings") || "nul
   ]
 };
 
-let prefillClient = null;
+// Prefill targets (repeat client)
+let prefillClient = null; // { client, contact, social }
+
+// Toast de-dupe
 let toastQueue = [];
 let toastTimer = null;
 
@@ -93,7 +97,7 @@ function totalForTotalsGross(entry){
   return 0;
 }
 
-// Preview Paid line (card)
+// Preview Paid line (what you see on the card)
 function paidForPreview(entry){
   const status = (entry.status || "unpaid").toLowerCase();
   if(status === "paid") return Number(entry.total || 0);
@@ -125,13 +129,19 @@ function save(){
   localStorage.setItem("entries", JSON.stringify(entries));
   render();
 }
-function saveFilters(){ localStorage.setItem("filters", JSON.stringify(filters)); }
-function saveRewardsSettings(){ localStorage.setItem("rewardsSettings", JSON.stringify(rewardsSettings)); }
+function saveFilters(){
+  localStorage.setItem("filters", JSON.stringify(filters));
+}
+function saveRewardsSettings(){
+  localStorage.setItem("rewardsSettings", JSON.stringify(rewardsSettings));
+}
 
 // ================= TOASTS =================
 function pushToast(toast){
   toastQueue.push(toast);
-  if(!toastTimer) toastTimer = setInterval(flushToast, 250);
+  if(!toastTimer) {
+    toastTimer = setInterval(flushToast, 250);
+  }
 }
 function flushToast(){
   if(!toastQueue.length){
@@ -139,7 +149,8 @@ function flushToast(){
     toastTimer = null;
     return;
   }
-  showToast(toastQueue.shift());
+  const t = toastQueue.shift();
+  showToast(t);
 }
 function showToast({ title, sub, mini, imgDataUrl, actionLabel, actionFn }){
   const wrap = safeEl("toasts");
@@ -270,7 +281,10 @@ function openSettings(){
 
   settingsModal.style.display = "flex";
 }
-function closeSettings(){ if(settingsModal) settingsModal.style.display = "none"; }
+function closeSettings(){
+  if(!settingsModal) return;
+  settingsModal.style.display = "none";
+}
 function saveSplitSettings(){
   splitSettings.defaultPct = clampPct(safeVal("defaultSplitPct"));
   localStorage.setItem("splitSettings", JSON.stringify(splitSettings));
@@ -326,6 +340,7 @@ function downloadBackup(){
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
 function restoreBackup(){
   const input = safeEl("restoreFile");
   const file = input && input.files ? input.files[0] : null;
@@ -376,8 +391,44 @@ function restoreBackup(){
   };
   reader.readAsText(file);
 }
+
 window.downloadBackup = downloadBackup;
 window.restoreBackup = restoreBackup;
+
+// ================= FILTERS UI (collapsible) =================
+let filtersOpen = false;
+
+function updateFiltersSummary(){
+  const s = safeEl("filtersSummary");
+  if(!s) return;
+
+  const parts = [];
+  const q = (filters.q || "").trim();
+  if(q) parts.push(`Search: "${q}"`);
+  if(filters.status && filters.status !== "all") parts.push(`Status: ${filters.status}`);
+  if(filters.location && filters.location !== "all") parts.push(`Loc: ${filters.location}`);
+  if(filters.from) parts.push(`From: ${filters.from}`);
+  if(filters.to) parts.push(`To: ${filters.to}`);
+  if(filters.sort && filters.sort !== "newest") parts.push(`Sort: ${filters.sort}`);
+
+  s.textContent = parts.length ? parts.join(" • ") : "All entries";
+}
+
+function setFiltersOpen(open){
+  filtersOpen = !!open;
+  const content = safeEl("filtersContent");
+  const chev = safeEl("filtersChev");
+  if(content) content.style.display = filtersOpen ? "block" : "none";
+  if(chev) chev.textContent = filtersOpen ? "▴" : "▾";
+}
+
+(function wireFiltersAccordion(){
+  const header = safeEl("filtersHeader");
+  if(!header) return;
+  header.addEventListener("click", ()=>{
+    setFiltersOpen(!filtersOpen);
+  });
+})();
 
 // ================= FILTERS =================
 function hydrateFilterUI(){
@@ -395,16 +446,7 @@ function hydrateFilterUI(){
   if(sort) sort.value = filters.sort || "newest";
   if(loc) loc.value = filters.location || "all";
 
-  const sum = safeEl("filtersSummary");
-  if(sum){
-    const parts = [];
-    if(filters.q) parts.push(`Search: "${filters.q}"`);
-    if(filters.status && filters.status !== "all") parts.push(`Status: ${filters.status}`);
-    if(filters.location && filters.location !== "all") parts.push(`Loc: ${filters.location}`);
-    if(filters.from) parts.push(`From: ${filters.from}`);
-    if(filters.to) parts.push(`To: ${filters.to}`);
-    sum.textContent = parts.length ? parts.join(" • ") : "All entries";
-  }
+  updateFiltersSummary();
 }
 function applyFilters(){
   filters.q = (safeVal("q") || "").trim();
@@ -414,6 +456,7 @@ function applyFilters(){
   filters.to = safeVal("toDate") || "";
   filters.sort = safeVal("sortFilter") || "newest";
   saveFilters();
+  updateFiltersSummary();
   render();
 }
 function clearFilters(){
@@ -432,19 +475,6 @@ window.clearFilters = clearFilters;
       if(e.key === "Enter") applyFilters();
     });
   }
-})();
-
-(function wireFiltersAccordion(){
-  const header = safeEl("filtersHeader");
-  const content = safeEl("filtersContent");
-  const chev = safeEl("filtersChev");
-  if(!header || !content) return;
-
-  header.addEventListener("click", ()=>{
-    const open = content.style.display === "block";
-    content.style.display = open ? "none" : "block";
-    if(chev) chev.textContent = open ? "▾" : "▴";
-  });
 })();
 
 function passesFilters(entry){
@@ -475,6 +505,7 @@ function passesFilters(entry){
 
   return true;
 }
+
 function getFilteredEntries(){
   const list = entries.filter(passesFilters);
   list.sort((a,b)=> filters.sort === "oldest" ? (a.id - b.id) : (b.id - a.id));
@@ -523,7 +554,10 @@ function openExport(){
 
   exportModal.style.display = "flex";
 }
-function closeExport(){ if(exportModal) exportModal.style.display = "none"; }
+function closeExport(){
+  if(!exportModal) return;
+  exportModal.style.display = "none";
+}
 
 (function initPaydaySelect(){
   const paydaySelect = safeEl("paydaySelect");
@@ -594,6 +628,7 @@ function openForm(){
     prefillClient = null;
   }
 }
+
 function resetForm(){
   const modal = safeEl("formModal");
   if(!modal) return;
@@ -612,6 +647,7 @@ function closeForm(){
   resetForm();
   editingId = null;
 }
+
 function addSession(){
   const container = safeEl("sessions");
   if(!container) return;
@@ -619,11 +655,18 @@ function addSession(){
   const row = document.createElement("div");
   row.className = "row";
   row.innerHTML = `
-    <input type="number" class="session-amount" placeholder="Session Amount">
-    <input type="text" class="session-note" placeholder="Session Note (optional)">
+    <div class="field">
+      <label>Session Amount</label>
+      <input type="number" class="session-amount" min="0" step="0.01">
+    </div>
+    <div class="field">
+      <label>Session Note</label>
+      <input type="text" class="session-note">
+    </div>
   `;
   container.appendChild(row);
 }
+
 window.openForm = openForm;
 window.closeForm = closeForm;
 window.addSession = addSession;
@@ -640,7 +683,10 @@ function openBammerQuick(){
   prefillClient = null;
   bammerModal.style.display = "flex";
 }
-function closeBammerQuick(){ if(bammerModal) bammerModal.style.display = "none"; }
+function closeBammerQuick(){
+  if(!bammerModal) return;
+  bammerModal.style.display = "none";
+}
 function saveBammer(){
   const date = safeVal("bDate");
   const client = (safeVal("bClient") || "").trim();
@@ -691,7 +737,10 @@ function openDepositQuick(){
   prefillClient = null;
   depositModal.style.display = "flex";
 }
-function closeDepositQuick(){ if(depositModal) depositModal.style.display = "none"; }
+function closeDepositQuick(){
+  if(!depositModal) return;
+  depositModal.style.display = "none";
+}
 function saveDepositOnly(){
   const date = safeVal("dDate");
   const client = (safeVal("dClient") || "").trim();
@@ -808,10 +857,12 @@ function getClientEntries(name){
     .slice()
     .sort((a,b)=> b.id - a.id);
 }
+
 function getClientTattooCount(name){
   const list = getClientEntries(name);
   return list.filter(isTattooEntry).length;
 }
+
 function getBestLevelForCount(count){
   const levels = Array.isArray(rewardsSettings.levels) ? rewardsSettings.levels : [];
   const sorted = levels
@@ -824,6 +875,7 @@ function getBestLevelForCount(count){
   }
   return best;
 }
+
 function getBestDiscountForCount(count){
   const tiers = Array.isArray(rewardsSettings.discounts) ? rewardsSettings.discounts : [];
   const sorted = tiers
@@ -836,9 +888,11 @@ function getBestDiscountForCount(count){
   }
   return best;
 }
+
 function getClientNetTotal(name){
   return getClientEntries(name).reduce((sum,e)=> sum + totalForTotalsNet(e), 0);
 }
+
 function getClientProgressSnapshot(name){
   const cnt = getClientTattooCount(name);
   const level = getBestLevelForCount(cnt);
@@ -853,6 +907,7 @@ function getClientProgressSnapshot(name){
     discountPct: disc ? Number(disc.percent||0) : 0
   };
 }
+
 function maybeNotifyClientProgress(name, before, after){
   if(!before || !after) return;
 
@@ -862,7 +917,7 @@ function maybeNotifyClientProgress(name, before, after){
     pushToast({
       title: `New Badge Unlocked — ${after.levelName}`,
       sub: `${name} hit ${after.tattooCount} tattoos.`,
-      mini: `Client NET total: ${net}`,
+      mini: `Client total: ${net}`,
       imgDataUrl: after.levelPng || "",
       actionLabel: "View Client",
       actionFn: ()=> openClientProfile(name)
@@ -873,7 +928,7 @@ function maybeNotifyClientProgress(name, before, after){
     pushToast({
       title: `Discount Tier Unlocked`,
       sub: `${name} is now eligible: ${after.discountLabel} (${after.discountPct}% off)`,
-      mini: `Client NET total: ${net}`,
+      mini: `Client total: ${net}`,
       imgDataUrl: after.levelPng || "",
       actionLabel: "View Client",
       actionFn: ()=> openClientProfile(name)
@@ -893,8 +948,11 @@ function saveEntry(){
   const before = getClientProgressSnapshot(clientVal);
 
   const payments = [];
+
   const depositVal = Number(safeVal("deposit") || 0);
-  if(depositVal > 0) payments.push({ amount: depositVal, kind: "deposit" });
+  if(depositVal > 0){
+    payments.push({ amount: depositVal, kind: "deposit" });
+  }
 
   const sessionAmounts = document.querySelectorAll(".session-amount");
   const sessionNotes = document.querySelectorAll(".session-note");
@@ -981,12 +1039,14 @@ function guessLatestField(list, field){
   }
   return "";
 }
+
 function badgeHtmlForClient(name){
   const snap = getClientProgressSnapshot(name);
   if(!snap.levelId) return "";
   const img = snap.levelPng ? `<img src="${snap.levelPng}" alt="badge">` : "";
   return `<span class="client-badge" title="Badge level">${img}${snap.levelName} (${snap.tattooCount})</span>`;
 }
+
 function openClientProfile(name){
   if(!clientModal || !clientBox) return;
   const list = getClientEntries(name);
@@ -1085,11 +1145,31 @@ function openClientProfile(name){
   prefillClient = { client: displayName, contact, social };
   clientModal.style.display = "flex";
 }
-function closeClient(){ if(clientModal) clientModal.style.display = "none"; }
-function openEntryFromClient(id){ closeClient(); viewEntry(id); }
-function repeatClientFull(){ if(!prefillClient) return; closeClient(); openForm(); }
-function repeatClientBammer(){ if(!prefillClient) return; closeClient(); openBammerQuick(); }
-function repeatClientDeposit(){ if(!prefillClient) return; closeClient(); openDepositQuick(); }
+
+function closeClient(){
+  if(!clientModal) return;
+  clientModal.style.display = "none";
+}
+function openEntryFromClient(id){
+  closeClient();
+  viewEntry(id);
+}
+
+function repeatClientFull(){
+  if(!prefillClient) return;
+  closeClient();
+  openForm();
+}
+function repeatClientBammer(){
+  if(!prefillClient) return;
+  closeClient();
+  openBammerQuick();
+}
+function repeatClientDeposit(){
+  if(!prefillClient) return;
+  closeClient();
+  openDepositQuick();
+}
 
 window.openClientProfile = openClientProfile;
 window.closeClient = closeClient;
@@ -1143,53 +1223,63 @@ function viewEntry(id){
     </div>
 
     <div class="row">
-      <div>
-        <p><strong>Status:</strong> <span class="status ${entry.status}">${entry.status}</span></p>
-        <p><strong>Total Price:</strong> ${money(entry.total)}</p>
-        ${showDepositLine ? `<p><strong>Deposit:</strong> ${money(dep)}</p>` : ``}
+      <div class="summary-box" style="margin-top:0;">
+        <div><strong>Status:</strong> <span class="status ${entry.status}">${entry.status}</span></div>
+        <div style="margin-top:8px;"><strong>Total Price:</strong> ${money(entry.total)}</div>
+        ${showDepositLine ? `<div style="margin-top:8px;"><strong>Deposit:</strong> ${money(dep)}</div>` : ``}
       </div>
-      <div>
-        <p><strong>Location:</strong> ${entry.location || ""}</p>
+
+      <div class="summary-box" style="margin-top:0;">
+        <div><strong>Location:</strong> ${entry.location || ""}</div>
       </div>
     </div>
 
-    <hr>
+    <div class="sectionDivider"></div>
 
-    <p><strong>Description:</strong> ${entry.description || ""}</p>
-    ${entry.contact ? `<p><strong>Contact:</strong> ${entry.contact}</p>` : ``}
-    ${entry.social ? `<p><strong>Social:</strong> ${entry.social}</p>` : ``}
-    ${entry.notes ? `<p><strong>Notes:</strong> ${entry.notes}</p>` : ``}
+    <div class="summary-box" style="margin-top:0;">
+      <div><strong>Description:</strong></div>
+      <div style="margin-top:6px; opacity:.95;">${entry.description || ""}</div>
+      ${entry.contact ? `<div style="margin-top:10px;"><strong>Contact:</strong> ${entry.contact}</div>` : ``}
+      ${entry.social ? `<div style="margin-top:8px;"><strong>Social:</strong> ${entry.social}</div>` : ``}
+      ${entry.notes ? `<div style="margin-top:8px;"><strong>Notes:</strong> ${entry.notes}</div>` : ``}
+    </div>
 
     ${showPaymentsSection ? `
-      <h4>Payments</h4>
-      <ul>
-        ${paymentsArray(entry).filter(p=>Number(p.amount||0)>0).map(p=>{
-          const label = p.kind ? `(${p.kind})` : "";
-          const note = p.note ? ` — ${p.note}` : "";
-          return `<li>${money(p.amount)} ${label}${note}</li>`;
-        }).join("")}
-      </ul>
+      <div class="sectionDivider"></div>
 
-      <details style="margin-top:12px;">
-        <summary>More details</summary>
-        <div style="margin-top:10px;">
-          <p><strong>Paid So Far:</strong> ${money(paidSoFar)}</p>
-          ${Number(entry.total||0) > 0 ? `<p><strong>Remaining:</strong> ${money(remaining)}</p>` : ``}
-          <p><strong>Gross counted:</strong> ${money(grossCounts)}</p>
-          <p><strong>Split for month:</strong> ${pct}%</p>
-          <p><strong>Net counted:</strong> ${money(netCounts)}</p>
-        </div>
-      </details>
+      <div class="summary-box" style="margin-top:0;">
+        <div style="font-weight:900;color:var(--gold);">Payments</div>
+        <ul style="margin:10px 0 0 18px;">
+          ${paymentsArray(entry).filter(p=>Number(p.amount||0)>0).map(p=>{
+            const label = p.kind ? `(${p.kind})` : "";
+            const note = p.note ? ` — ${p.note}` : "";
+            return `<li>${money(p.amount)} ${label}${note}</li>`;
+          }).join("")}
+        </ul>
+
+        <details style="margin-top:12px;">
+          <summary>More details</summary>
+          <div style="margin-top:10px;">
+            <div><strong>Paid So Far:</strong> ${money(paidSoFar)}</div>
+            ${Number(entry.total||0) > 0 ? `<div style="margin-top:6px;"><strong>Remaining:</strong> ${money(remaining)}</div>` : ``}
+            <div style="margin-top:10px;"><strong>Gross counted:</strong> ${money(grossCounts)}</div>
+            <div style="margin-top:6px;"><strong>Split for month:</strong> ${pct}%</div>
+            <div style="margin-top:6px;"><strong>Net counted:</strong> ${money(netCounts)}</div>
+          </div>
+        </details>
+      </div>
     ` : ``}
 
-    ${entry.image ? `<img src="${entry.image}" style="width:100%; margin-top:15px; border-radius:12px; border:1px solid rgba(214,180,75,.22);">` : ""}
+    ${entry.image ? `<img src="${entry.image}" style="width:100%; margin-top:15px; border-radius:12px; border:1px solid rgba(212,175,55,.3);">` : ""}
 
-    <details style="margin-top:12px;">
+    <div class="sectionDivider"></div>
+
+    <details>
       <summary>Edit History</summary>
       ${historyHtml}
     </details>
 
-    <div class="actionsRow" style="margin-top:20px;">
+    <div class="actionsRow" style="margin-top:18px;">
       ${showConvert ? `<button type="button" onclick="convertDepositToTattoo()">Convert Deposit → Full Tattoo</button>` : ``}
       <button type="button" onclick="editFromView()">Edit</button>
       <button type="button" class="dangerbtn" onclick="deleteFromView()">Delete</button>
@@ -1199,6 +1289,7 @@ function viewEntry(id){
 
   if(viewModal) viewModal.style.display = "flex";
 }
+
 function convertDepositToTattoo(){
   if(!viewingId) return;
   const entry = entries.find(e=>e.id===viewingId);
@@ -1210,7 +1301,12 @@ function convertDepositToTattoo(){
   const statusEl = safeEl("status");
   if(statusEl && (!statusEl.value || statusEl.value === "unpaid" || statusEl.value === "booked")) statusEl.value = "partial";
 }
-function closeView(){ if(viewModal) viewModal.style.display="none"; viewingId = null; }
+
+function closeView(){
+  if(!viewModal) return;
+  viewModal.style.display="none";
+  viewingId = null;
+}
 function editFromView(){
   if(!viewingId) return;
   const entry = entries.find(e=>e.id===viewingId);
@@ -1230,6 +1326,7 @@ function deleteFromView(){
   save();
   closeView();
 }
+
 window.viewEntry = viewEntry;
 window.closeView = closeView;
 window.editFromView = editFromView;
@@ -1300,6 +1397,7 @@ function downloadCSV(rows, filename){
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
 function exportCSV(){
   const startStr = safeVal("exportStart");
   const endStr = safeVal("exportEnd");
@@ -1470,7 +1568,10 @@ function openRewards(){
   buildRewardsUI();
   rewardsModal.style.display = "flex";
 }
-function closeRewards(){ if(rewardsModal) rewardsModal.style.display = "none"; }
+function closeRewards(){
+  if(!rewardsModal) return;
+  rewardsModal.style.display = "none";
+}
 window.openRewards = openRewards;
 window.closeRewards = closeRewards;
 
@@ -1483,7 +1584,7 @@ function buildRewardsUI(){
   const discounts = Array.isArray(rewardsSettings.discounts) ? rewardsSettings.discounts : [];
 
   levelsList.innerHTML = levels.map(l=>{
-    const img = l.pngDataUrl ? `<img src="${l.pngDataUrl}" style="width:28px;height:28px;border-radius:8px;border:1px solid rgba(214,180,75,.22);object-fit:cover;background:rgba(0,0,0,.22);">` : "";
+    const img = l.pngDataUrl ? `<img src="${l.pngDataUrl}" style="width:28px;height:28px;border-radius:8px;border:1px solid rgba(212,175,55,.25);object-fit:cover;background:#16201b;">` : "";
     return `
       <div class="summary-box" data-level="${l.id}" style="margin-top:10px;">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
@@ -1493,15 +1594,25 @@ function buildRewardsUI(){
           </div>
           <button type="button" class="secondarybtn" onclick="removeBadgeLevel('${l.id}')">Remove</button>
         </div>
+
         <div class="row">
-          <input type="text" id="lvlName_${l.id}" placeholder="Badge name" value="${(l.name||"").replace(/"/g,"&quot;")}">
-          <input type="number" id="lvlMin_${l.id}" placeholder="Min tattoos" value="${Number(l.minCount||0)}">
+          <div class="field">
+            <label>Badge Name</label>
+            <input type="text" id="lvlName_${l.id}" value="${(l.name||"").replace(/"/g,"&quot;")}">
+          </div>
+          <div class="field">
+            <label>Min Tattoos</label>
+            <input type="number" id="lvlMin_${l.id}" value="${Number(l.minCount||0)}">
+          </div>
         </div>
+
         <div class="actionsRow" style="margin-top:0;">
-          <input type="file" id="lvlFile_${l.id}" accept="image/png,image/*" />
+          <div class="field" style="flex: 2 1 260px; max-width: 520px;">
+            <label>Badge PNG</label>
+            <input type="file" id="lvlFile_${l.id}" accept="image/png,image/*" />
+          </div>
           <button type="button" class="secondarybtn" onclick="clearBadgePNG('${l.id}')">Clear PNG</button>
         </div>
-        <div class="hint">Upload a PNG to show this badge next to client names.</div>
       </div>
     `;
   }).join("");
@@ -1513,11 +1624,25 @@ function buildRewardsUI(){
           <div style="font-weight:900;color:var(--gold);">${d.label || "Discount"}</div>
           <button type="button" class="secondarybtn" onclick="removeDiscountTier('${d.id}')">Remove</button>
         </div>
+
         <div class="row">
-          <input type="text" id="discLabel_${d.id}" placeholder="Label (e.g. 10% off)" value="${(d.label||"").replace(/"/g,"&quot;")}">
-          <input type="number" id="discMin_${d.id}" placeholder="Min tattoos" value="${Number(d.minCount||0)}">
+          <div class="field">
+            <label>Label</label>
+            <input type="text" id="discLabel_${d.id}" value="${(d.label||"").replace(/"/g,"&quot;")}">
+          </div>
+          <div class="field">
+            <label>Min Tattoos</label>
+            <input type="number" id="discMin_${d.id}" value="${Number(d.minCount||0)}">
+          </div>
         </div>
-        <input type="number" id="discPct_${d.id}" placeholder="Percent" value="${Number(d.percent||0)}">
+
+        <div class="row">
+          <div class="field">
+            <label>Percent</label>
+            <input type="number" id="discPct_${d.id}" value="${Number(d.percent||0)}">
+          </div>
+          <div class="field"></div>
+        </div>
       </div>
     `;
   }).join("");
@@ -1606,7 +1731,6 @@ function createAccordion(title, badgeText){
   const left = document.createElement("div");
   left.style.display = "flex";
   left.style.alignItems = "center";
-  left.style.flexWrap = "wrap";
 
   const t = document.createElement("div");
   t.className = "accordion-title";
@@ -1651,7 +1775,7 @@ function render(){
     const current = filters.location || "all";
     const locs = Array.from(new Set(entries.map(e=>e.location).filter(Boolean))).sort();
     locationSelect.innerHTML =
-      `<option value="all">All Locations</option>` +
+      `<option value="all">All</option>` +
       locs.map(l=>`<option value="${l}">${l}</option>`).join("");
     locationSelect.value = current;
   }
@@ -1663,7 +1787,7 @@ function render(){
   const list = getFilteredEntries();
 
   if(list.length === 0){
-    container.innerHTML = "<p style='opacity:.65;'>No entries match your filters.</p>";
+    container.innerHTML = "<p style='opacity:.65; padding: 10px 2px;'>No entries match your filters.</p>";
     updateStats(list);
     return;
   }
@@ -1747,4 +1871,6 @@ function render(){
 }
 
 // ================= INIT =================
+updateFiltersSummary();
+setFiltersOpen(false);
 render();

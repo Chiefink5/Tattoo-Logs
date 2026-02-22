@@ -54,8 +54,7 @@
   ];
 
   function pickQuote(){
-    const seed = Date.now();
-    const idx = Math.floor((seed / 1000) % quotes.length);
+    const idx = Math.floor((Date.now() / 1000) % quotes.length);
     return quotes[idx];
   }
 
@@ -64,12 +63,18 @@
   function loadState(){
     try{
       const raw = localStorage.getItem(STORAGE_KEY);
-      if(!raw) return { rentAmount:0, rentSaved:0, bills:[] };
+      if(!raw) return { rentAmount:0, rentSaved:0, rentSafeByDay:15, bills:[] };
+
       const parsed = JSON.parse(raw);
       if(!parsed || typeof parsed !== "object") throw new Error("bad");
+
       if(!Array.isArray(parsed.bills)) parsed.bills = [];
       parsed.rentAmount = num(parsed.rentAmount);
       parsed.rentSaved = num(parsed.rentSaved);
+
+      // Safe-by day (defaults to 15)
+      parsed.rentSafeByDay = Math.max(1, Math.min(28, Math.floor(num(parsed.rentSafeByDay || 15)) || 15));
+
       parsed.bills = parsed.bills.map(b=>({
         id: String(b.id || uid()),
         name: String(b.name || "Bill"),
@@ -77,9 +82,10 @@
         saved: num(b.saved),
         dueDate: String(b.dueDate || "")
       }));
+
       return parsed;
     }catch(e){
-      return { rentAmount:0, rentSaved:0, bills:[] };
+      return { rentAmount:0, rentSaved:0, rentSafeByDay:15, bills:[] };
     }
   }
 
@@ -87,47 +93,38 @@
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }
 
-  function renderBillsList(){
-    const list = getEl("billsList");
-    if(!list) return;
+  function getRentTargetDate(){
+    // “Safe by X day of month” means: fully fund next rent by that day.
+    // If today is before that day this month -> target is this month day X.
+    // If today is after -> target is next month day X.
+    const t = today0();
+    const day = Math.max(1, Math.min(28, Math.floor(num(state.rentSafeByDay || 15)) || 15));
 
-    list.innerHTML = state.bills.map(b=>{
-      const name = (b.name || "").replace(/"/g,"&quot;");
-      return `
-        <div class="summary-box" style="margin-top:10px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
-            <div style="font-weight:900;color:var(--gold);">${name || "Bill"}</div>
-            <button type="button" class="secondarybtn" onclick="InkBills.removeBill('${b.id}')">Remove</button>
-          </div>
+    const thisMonthTarget = new Date(t.getFullYear(), t.getMonth(), day);
+    thisMonthTarget.setHours(0,0,0,0);
 
-          <div class="row">
-            <input type="text" value="${name}" placeholder="Bill name" oninput="InkBills.updateBill('${b.id}','name',this.value)">
-            <input type="number" min="0" step="0.01" value="${num(b.amount)}" placeholder="Amount" oninput="InkBills.updateBill('${b.id}','amount',this.value)">
-          </div>
+    if(t <= thisMonthTarget) return thisMonthTarget;
 
-          <div class="row">
-            <input type="number" min="0" step="0.01" value="${num(b.saved)}" placeholder="Saved so far" oninput="InkBills.updateBill('${b.id}','saved',this.value)">
-            <input type="date" value="${b.dueDate || ""}" oninput="InkBills.updateBill('${b.id}','dueDate',this.value)">
-          </div>
-        </div>
-      `;
-    }).join("");
+    const nextMonthTarget = new Date(t.getFullYear(), t.getMonth() + 1, day);
+    nextMonthTarget.setHours(0,0,0,0);
+    return nextMonthTarget;
   }
 
   function calcDailyTarget(){
     const t = today0();
     let sumDaily = 0;
 
-    // RENT: due on the 1st next month (always)
+    // RENT: due 1st, but “safe-by” is the funding target
     const rentRemaining = Math.max(0, num(state.rentAmount) - num(state.rentSaved));
     if(rentRemaining > 0){
-      const due = new Date(t.getFullYear(), t.getMonth() + 1, 1);
-      due.setHours(0,0,0,0);
-      const days = daysBetweenInclusive(t, due);
-      sumDaily += (rentRemaining / days);
+      const target = getRentTargetDate();
+      if(target > t){
+        const days = daysBetweenInclusive(t, target);
+        sumDaily += (rentRemaining / days);
+      }
     }
 
-    // BILLS: due date driven
+    // BILLS: per-bill due dates
     for(const b of state.bills){
       const remaining = Math.max(0, num(b.amount) - num(b.saved));
       if(!(remaining > 0)) continue;
@@ -143,6 +140,45 @@
     return sumDaily;
   }
 
+  function renderBillsList(){
+    const list = getEl("billsList");
+    if(!list) return;
+
+    list.innerHTML = state.bills.map(b=>{
+      const nameSafe = (b.name || "").replace(/"/g,"&quot;");
+      return `
+        <div class="summary-box" style="margin-top:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+            <div style="font-weight:900;color:var(--gold);">${nameSafe || "Bill"}</div>
+            <button type="button" class="secondarybtn" onclick="InkBills.removeBill('${b.id}')">Remove</button>
+          </div>
+
+          <div class="row">
+            <div class="field">
+              <label>Bill Name</label>
+              <input type="text" value="${nameSafe}" oninput="InkBills.updateBill('${b.id}','name',this.value)">
+            </div>
+            <div class="field">
+              <label>Amount</label>
+              <input type="number" min="0" step="0.01" value="${num(b.amount)}" oninput="InkBills.updateBill('${b.id}','amount',this.value)">
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="field">
+              <label>Saved So Far</label>
+              <input type="number" min="0" step="0.01" value="${num(b.saved)}" oninput="InkBills.updateBill('${b.id}','saved',this.value)">
+            </div>
+            <div class="field">
+              <label>Due Date</label>
+              <input type="date" value="${b.dueDate || ""}" oninput="InkBills.updateBill('${b.id}','dueDate',this.value)">
+            </div>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
   function renderTarget(){
     const out = getEl("billsTodayOut");
     const quoteEl = getEl("billsQuote");
@@ -153,7 +189,8 @@
 
     out.innerHTML = `
       <div style="font-size:18px;">
-        Save at least: <span style="font-weight:1000;color:var(--gold);font-size:22px;">${fmtMoney(rounded)}</span>
+        Save at least:
+        <span style="font-weight:1000;color:var(--gold);font-size:22px;">${fmtMoney(rounded)}</span>
       </div>
     `;
 
@@ -163,8 +200,12 @@
   function hydrateUI(){
     const rentAmount = getEl("rentAmount");
     const rentSaved = getEl("rentSavedSoFar");
+    const safeBy = getEl("rentSafeByDay");
+
     if(rentAmount) rentAmount.value = state.rentAmount ? String(state.rentAmount) : "";
     if(rentSaved) rentSaved.value = state.rentSaved ? String(state.rentSaved) : "";
+    if(safeBy) safeBy.value = String(state.rentSafeByDay || 15);
+
     renderBillsList();
     renderTarget();
   }
@@ -174,7 +215,6 @@
     if(!modal) return;
     hydrateUI();
     modal.style.display = "flex";
-    // force quote refresh every open
     renderTarget();
   };
 
@@ -187,8 +227,14 @@
   InkBills.saveBills = function(){
     const rentAmount = getEl("rentAmount");
     const rentSaved = getEl("rentSavedSoFar");
+    const safeBy = getEl("rentSafeByDay");
+
     state.rentAmount = num(rentAmount ? rentAmount.value : 0);
     state.rentSaved = num(rentSaved ? rentSaved.value : 0);
+
+    const day = Math.max(1, Math.min(28, Math.floor(num(safeBy ? safeBy.value : 15)) || 15));
+    state.rentSafeByDay = day;
+
     saveState();
     renderTarget();
   };
@@ -221,7 +267,7 @@
     renderTarget();
   };
 
-  // click-off close wiring (kept inside module)
+  // click-off close
   (function wire(){
     const modal = getEl("billsModal");
     const box = getEl("billsBox");
@@ -231,6 +277,6 @@
     }
   })();
 
-  // Backwards-compat shim (if you had old onclicks)
+  // Back-compat
   window.openBills = InkBills.openBills;
 })();
