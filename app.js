@@ -66,6 +66,13 @@ function formatYYYYMMDD(d){
 function formatYYYYMM(d){
   return `${d.getFullYear()}-${pad2(d.getMonth()+1)}`;
 }
+
+// ✅ LOCAL “today” key (midnight local, not UTC)
+function localTodayKey(){
+  const d = new Date();
+  return formatYYYYMMDD(d);
+}
+
 function clampPct(p){
   p = Number(p);
   if(!Number.isFinite(p)) return 100;
@@ -221,7 +228,6 @@ wireModal(rewardsModal, rewardsBox, closeRewards);
 function initLogo(){
   const img = safeEl("logoImg");
   const input = safeEl("logoInput");
-  const wrap = safeEl("logoWrap");
   if(!img || !input) return;
 
   const saved = localStorage.getItem("logoDataUrl");
@@ -236,8 +242,7 @@ function initLogo(){
     `);
   }
 
-  const clickTarget = wrap || img;
-  clickTarget.addEventListener("click", ()=> input.click());
+  img.addEventListener("click", ()=> input.click());
 
   input.addEventListener("change", ()=>{
     const file = input.files && input.files[0];
@@ -395,41 +400,6 @@ function restoreBackup(){
 window.downloadBackup = downloadBackup;
 window.restoreBackup = restoreBackup;
 
-// ================= FILTERS UI (collapsible) =================
-let filtersOpen = false;
-
-function updateFiltersSummary(){
-  const s = safeEl("filtersSummary");
-  if(!s) return;
-
-  const parts = [];
-  const q = (filters.q || "").trim();
-  if(q) parts.push(`Search: "${q}"`);
-  if(filters.status && filters.status !== "all") parts.push(`Status: ${filters.status}`);
-  if(filters.location && filters.location !== "all") parts.push(`Loc: ${filters.location}`);
-  if(filters.from) parts.push(`From: ${filters.from}`);
-  if(filters.to) parts.push(`To: ${filters.to}`);
-  if(filters.sort && filters.sort !== "newest") parts.push(`Sort: ${filters.sort}`);
-
-  s.textContent = parts.length ? parts.join(" • ") : "All entries";
-}
-
-function setFiltersOpen(open){
-  filtersOpen = !!open;
-  const content = safeEl("filtersContent");
-  const chev = safeEl("filtersChev");
-  if(content) content.style.display = filtersOpen ? "block" : "none";
-  if(chev) chev.textContent = filtersOpen ? "▴" : "▾";
-}
-
-(function wireFiltersAccordion(){
-  const header = safeEl("filtersHeader");
-  if(!header) return;
-  header.addEventListener("click", ()=>{
-    setFiltersOpen(!filtersOpen);
-  });
-})();
-
 // ================= FILTERS =================
 function hydrateFilterUI(){
   const q = safeEl("q");
@@ -445,8 +415,6 @@ function hydrateFilterUI(){
   if(to) to.value = filters.to || "";
   if(sort) sort.value = filters.sort || "newest";
   if(loc) loc.value = filters.location || "all";
-
-  updateFiltersSummary();
 }
 function applyFilters(){
   filters.q = (safeVal("q") || "").trim();
@@ -456,7 +424,6 @@ function applyFilters(){
   filters.to = safeVal("toDate") || "";
   filters.sort = safeVal("sortFilter") || "newest";
   saveFilters();
-  updateFiltersSummary();
   render();
 }
 function clearFilters(){
@@ -616,7 +583,7 @@ function openForm(){
   formModal.style.display="flex";
 
   const dateEl = safeEl("date");
-  if(dateEl) dateEl.value = new Date().toISOString().split("T")[0];
+  if(dateEl) dateEl.value = localTodayKey();
 
   const statusEl = safeEl("status");
   if(statusEl) statusEl.value = "unpaid";
@@ -674,7 +641,7 @@ window.addSession = addSession;
 // ================= QUICK ADD: BAMMER =================
 function openBammerQuick(){
   if(!bammerModal) return;
-  safeEl("bDate").value = new Date().toISOString().split("T")[0];
+  safeEl("bDate").value = localTodayKey();
   safeEl("bClient").value = prefillClient?.client || "";
   safeEl("bDesc").value = "";
   safeEl("bLocation").value = "";
@@ -726,7 +693,7 @@ window.saveBammer = saveBammer;
 // ================= QUICK ADD: DEPOSIT ONLY =================
 function openDepositQuick(){
   if(!depositModal) return;
-  safeEl("dDate").value = new Date().toISOString().split("T")[0];
+  safeEl("dDate").value = localTodayKey();
   safeEl("dClient").value = prefillClient?.client || "";
   safeEl("dContact").value = prefillClient?.contact || "";
   safeEl("dSocial").value = prefillClient?.social || "";
@@ -1112,7 +1079,7 @@ function openClientProfile(name){
       <div style="font-weight:900;color:var(--gold);">Saved info</div>
       ${contact ? `<div>Contact: <strong>${contact}</strong></div>` : `<div style="opacity:.75;">Contact: —</div>`}
       ${social ? `<div>Social: <strong>${social}</strong></div>` : `<div style="opacity:.75;">Social: —</div>`}
-      <div class="actionsRow">
+      <div class="actions-row">
         <button type="button" onclick="repeatClientFull()">New Entry (prefill)</button>
         <button type="button" class="secondarybtn" onclick="repeatClientBammer()">Bammer (prefill)</button>
         <button type="button" class="secondarybtn" onclick="repeatClientDeposit()">Deposit (prefill)</button>
@@ -1137,7 +1104,7 @@ function openClientProfile(name){
       ${list.length > 30 ? `<div class="hint" style="margin-top:8px;">Showing newest 30…</div>` : ``}
     </div>
 
-    <div class="actionsRow">
+    <div class="actions-row">
       <button type="button" class="secondarybtn" onclick="closeClient()">Close</button>
     </div>
   `;
@@ -1279,7 +1246,7 @@ function viewEntry(id){
       ${historyHtml}
     </details>
 
-    <div class="actionsRow" style="margin-top:18px;">
+    <div class="actions-row" style="margin-top:18px;">
       ${showConvert ? `<button type="button" onclick="convertDepositToTattoo()">Convert Deposit → Full Tattoo</button>` : ``}
       <button type="button" onclick="editFromView()">Edit</button>
       <button type="button" class="dangerbtn" onclick="deleteFromView()">Delete</button>
@@ -1343,7 +1310,7 @@ function updateStats(filteredList){
   if(!todayEl) return;
 
   const now = new Date();
-  const todayStr = now.toISOString().split("T")[0];
+  const todayStr = localTodayKey(); // ✅ LOCAL, midnight reset
   const weekWin = getWeekWindow(now);
   const qNow = currentQuarterIndex(now);
 
@@ -1595,7 +1562,7 @@ function buildRewardsUI(){
           <button type="button" class="secondarybtn" onclick="removeBadgeLevel('${l.id}')">Remove</button>
         </div>
 
-        <div class="row">
+        <div class="row" style="margin-top:10px;">
           <div class="field">
             <label>Badge Name</label>
             <input type="text" id="lvlName_${l.id}" value="${(l.name||"").replace(/"/g,"&quot;")}">
@@ -1606,12 +1573,14 @@ function buildRewardsUI(){
           </div>
         </div>
 
-        <div class="actionsRow" style="margin-top:0;">
-          <div class="field" style="flex: 2 1 260px; max-width: 520px;">
+        <div class="row" style="margin-top:10px;">
+          <div class="field">
             <label>Badge PNG</label>
             <input type="file" id="lvlFile_${l.id}" accept="image/png,image/*" />
           </div>
-          <button type="button" class="secondarybtn" onclick="clearBadgePNG('${l.id}')">Clear PNG</button>
+          <div class="field" style="display:flex; align-items:flex-end;">
+            <button type="button" class="secondarybtn" style="margin-top:0; width:100%;" onclick="clearBadgePNG('${l.id}')">Clear PNG</button>
+          </div>
         </div>
       </div>
     `;
@@ -1625,7 +1594,7 @@ function buildRewardsUI(){
           <button type="button" class="secondarybtn" onclick="removeDiscountTier('${d.id}')">Remove</button>
         </div>
 
-        <div class="row">
+        <div class="row" style="margin-top:10px;">
           <div class="field">
             <label>Label</label>
             <input type="text" id="discLabel_${d.id}" value="${(d.label||"").replace(/"/g,"&quot;")}">
@@ -1636,7 +1605,7 @@ function buildRewardsUI(){
           </div>
         </div>
 
-        <div class="row">
+        <div class="row" style="margin-top:10px;">
           <div class="field">
             <label>Percent</label>
             <input type="number" id="discPct_${d.id}" value="${Number(d.percent||0)}">
@@ -1871,6 +1840,4 @@ function render(){
 }
 
 // ================= INIT =================
-updateFiltersSummary();
-setFiltersOpen(false);
 render();

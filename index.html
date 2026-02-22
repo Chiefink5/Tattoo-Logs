@@ -54,9 +54,7 @@
       gap:10px;
       align-items:flex-start;
     }
-    .action-stack.right{
-      align-items:flex-end;
-    }
+    .action-stack.right{ align-items:flex-end; }
 
     .smallbtn{
       background:rgba(0,0,0,.12);
@@ -187,6 +185,30 @@
         calc(14px + env(safe-area-inset-left));
     }
 
+    /* ===== Field label system ===== */
+    .field{ width:100%; }
+    .field label{
+      display:block;
+      margin:0 0 6px 2px;
+      font-weight:900;
+      letter-spacing:.01em;
+      font-size:.86rem;
+      color:rgba(255,255,255,.82);
+    }
+
+    input, textarea, select{
+      display:block;
+      margin:0;
+      padding:12px;
+      width:100%;
+      background:#0f1713;
+      color:white;
+      border:1px solid rgba(31,111,80,.75);
+      border-radius:12px;
+      outline:none;
+    }
+    textarea{ min-height:90px; }
+
     /* ===== FILTERBAR ===== */
     .filterbar{
       background:rgba(0,0,0,.12);
@@ -204,17 +226,6 @@
     }
     @media(max-width:820px){ .filterbar .row{ grid-template-columns:1fr; } }
 
-    .filterbar input, .filterbar select{
-      display:block;
-      margin:0;
-      padding:12px 12px;
-      width:100%;
-      background:#101815;
-      color:white;
-      border:1px solid rgba(31,111,80,.75);
-      border-radius:12px;
-      outline:none;
-    }
     .filterbar .row2{
       display:grid;
       grid-template-columns: 1fr 1fr 1fr;
@@ -358,10 +369,7 @@
       opacity:.92;
       min-width:0;
     }
-    .sub-row{
-      line-height:1.25;
-      word-break:break-word;
-    }
+    .sub-row{ line-height:1.25; word-break:break-word; }
     .sub-row.clamp2{
       display:-webkit-box;
       -webkit-line-clamp:2;
@@ -424,19 +432,6 @@
       padding-bottom:10px;
     }
 
-    input, textarea, select{
-      display:block;
-      margin:8px auto;
-      padding:12px;
-      width:100%;
-      background:#0f1713;
-      color:white;
-      border:1px solid rgba(31,111,80,.75);
-      border-radius:12px;
-      outline:none;
-    }
-    textarea{ min-height:90px; }
-
     .row{
       display:grid;
       grid-template-columns:1fr 1fr;
@@ -450,18 +445,19 @@
       flex-wrap:wrap;
       margin-top:12px;
     }
-    /* app.js uses actionsRow in some templates — support both */
-    .actionsRow{
-      display:flex;
-      gap:10px;
-      flex-wrap:wrap;
-      margin-top:12px;
-    }
 
     hr{
       border:none;
       border-top:1px solid rgba(31,111,80,.55);
       margin:18px 0;
+    }
+
+    .sectionDivider{
+      height:1px;
+      background:rgba(31,111,80,.55);
+      margin:16px 0;
+      border-radius:999px;
+      opacity:.9;
     }
 
     details{
@@ -519,19 +515,6 @@
       overflow:hidden;
     }
 
-    /* ===== FIELD TITLES (labels above inputs) ===== */
-    .field{ width:100%; }
-    .field label{
-      display:block;
-      font-weight:900;
-      color:rgba(255,255,255,.88);
-      margin:6px 0 6px;
-      letter-spacing:.01em;
-    }
-    .field input, .field select, .field textarea{
-      margin:0;
-    }
-
     /* Toasts */
     #toasts{
       position:fixed;
@@ -576,7 +559,6 @@
       border:1px solid rgba(31,111,80,.55);
     }
 
-    /* Mobile tighten */
     @media (max-width:520px){
       .smallbtn{ min-width:108px; padding:10px 12px; }
       #logoImg{ width:50px; height:50px; }
@@ -611,14 +593,12 @@
       </div>
     </div>
 
-    <!-- split centered above stats -->
     <div class="split-row">
       <div id="splitPill" title="Tap to edit split" onclick="openSettings()">
         Split: <b id="splitPillPct">100%</b>
       </div>
     </div>
 
-    <!-- stats pills (centered) -->
     <div id="stats">
       <div class="stats-grid">
         <div class="stat-pill"><strong id="todayTotal">$0</strong><small>Today</small></div>
@@ -660,11 +640,11 @@
 
       <div class="row2">
         <div class="field">
-          <label>From Date</label>
+          <label>From</label>
           <input id="fromDate" type="date">
         </div>
         <div class="field">
-          <label>To Date</label>
+          <label>To</label>
           <input id="toDate" type="date">
         </div>
         <div class="field">
@@ -722,7 +702,7 @@
       <div class="field">
         <label>Location</label>
         <select id="location">
-          <option value="">Select…</option>
+          <option value="">Choose location</option>
           <option>Arm</option><option>Leg</option><option>Back</option><option>Chest</option>
           <option>Hand</option><option>Foot</option><option>Neck</option>
         </select>
@@ -750,8 +730,13 @@
         </select>
       </div>
 
-      <div id="sessions"></div>
+      <div class="sectionDivider"></div>
+
+      <div style="font-weight:900;color:var(--gold);">Additional Sessions</div>
+      <div id="sessions" style="margin-top:10px;"></div>
       <button type="button" class="secondarybtn" onclick="addSession()">+ Additional Session</button>
+
+      <div class="sectionDivider"></div>
 
       <div class="field">
         <label>Notes</label>
@@ -759,7 +744,7 @@
       </div>
 
       <div class="field">
-        <label>Reference Image</label>
+        <label>Image</label>
         <input type="file" id="image" accept="image/*">
       </div>
 
@@ -794,7 +779,7 @@
         <div class="field">
           <label>Location</label>
           <select id="bLocation">
-            <option value="">Select…</option>
+            <option value="">Choose location</option>
             <option>Arm</option><option>Leg</option><option>Back</option><option>Chest</option>
             <option>Hand</option><option>Foot</option><option>Neck</option>
           </select>
@@ -868,7 +853,7 @@
       <div class="field">
         <label>Location</label>
         <select id="dLocation">
-          <option value="">Select…</option>
+          <option value="">Choose location</option>
           <option>Arm</option><option>Leg</option><option>Back</option><option>Chest</option>
           <option>Hand</option><option>Foot</option><option>Neck</option>
         </select>
@@ -899,7 +884,6 @@
       <div class="summary-box" style="margin-top:0;">
         <div style="font-weight:900;color:var(--gold);">Payout Split</div>
         <div class="hint">Used for totals unless a month override exists.</div>
-
         <div class="field" style="margin-top:10px;">
           <label>Default Split %</label>
           <input id="defaultSplitPct" type="number" min="0" max="100" step="1" placeholder="">
@@ -909,18 +893,16 @@
       <div class="summary-box">
         <div style="font-weight:900;color:var(--gold);">Monthly override</div>
         <div class="hint">Set a different % for a specific month.</div>
-
         <div class="row" style="margin-top:10px;">
           <div class="field">
-            <label>Override Month</label>
+            <label>Month</label>
             <input id="overrideMonth" type="month">
           </div>
           <div class="field">
-            <label>Override %</label>
+            <label>Split %</label>
             <input id="overridePct" type="number" min="0" max="100" step="1" placeholder="">
           </div>
         </div>
-
         <div class="actions-row">
           <button type="button" onclick="saveMonthOverride()">Save Override</button>
           <button type="button" class="secondarybtn" onclick="removeMonthOverride()">Remove Override</button>
@@ -943,10 +925,9 @@
           <button type="button" onclick="downloadBackup()">Download Backup (JSON)</button>
         </div>
         <hr>
-
         <div class="hint">Restore from a backup JSON file.</div>
         <div class="field" style="margin-top:10px;">
-          <label>Restore File (JSON)</label>
+          <label>Backup File</label>
           <input id="restoreFile" type="file" accept="application/json">
         </div>
         <div class="actions-row">
@@ -1081,7 +1062,7 @@
       <hr>
 
       <div class="field">
-        <label>Payday (week starts)</label>
+        <label>Payday (week starts on this day)</label>
         <select id="paydaySelect">
           <option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option>
           <option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option>
@@ -1094,11 +1075,11 @@
       <h4 style="margin:0;">Pay Period (Payday Week)</h4>
       <div class="row" style="margin-top:10px;">
         <div class="field">
-          <label>Pay Period Start</label>
+          <label>Start</label>
           <input type="date" id="ppStart" disabled>
         </div>
         <div class="field">
-          <label>Pay Period End</label>
+          <label>End</label>
           <input type="date" id="ppEnd" disabled>
         </div>
       </div>
@@ -1113,11 +1094,11 @@
       <h4 style="margin:0;">CSV Date Range</h4>
       <div class="row" style="margin-top:10px;">
         <div class="field">
-          <label>Export Start</label>
+          <label>Start</label>
           <input type="date" id="exportStart">
         </div>
         <div class="field">
-          <label>Export End</label>
+          <label>End</label>
           <input type="date" id="exportEnd">
         </div>
       </div>
@@ -1138,10 +1119,8 @@
     </div>
   </div>
 
-  <!-- Toasts -->
   <div id="toasts"></div>
 
-  <!-- IMPORTANT: bills.js before app.js -->
   <script src="bills.js"></script>
   <script src="app.js"></script>
 </body>
