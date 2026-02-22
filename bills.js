@@ -58,8 +58,6 @@
     return quotes[idx];
   }
 
-  let state = loadState();
-
   function loadState(){
     try{
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -72,7 +70,6 @@
       parsed.rentAmount = num(parsed.rentAmount);
       parsed.rentSaved = num(parsed.rentSaved);
 
-      // Safe-by day (defaults to 15)
       parsed.rentSafeByDay = Math.max(1, Math.min(28, Math.floor(num(parsed.rentSafeByDay || 15)) || 15));
 
       parsed.bills = parsed.bills.map(b=>({
@@ -89,14 +86,13 @@
     }
   }
 
+  let state = loadState();
+
   function saveState(){
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }
 
   function getRentTargetDate(){
-    // “Safe by X day of month” means: fully fund next rent by that day.
-    // If today is before that day this month -> target is this month day X.
-    // If today is after -> target is next month day X.
     const t = today0();
     const day = Math.max(1, Math.min(28, Math.floor(num(state.rentSafeByDay || 15)) || 15));
 
@@ -114,7 +110,6 @@
     const t = today0();
     let sumDaily = 0;
 
-    // RENT: due 1st, but “safe-by” is the funding target
     const rentRemaining = Math.max(0, num(state.rentAmount) - num(state.rentSaved));
     if(rentRemaining > 0){
       const target = getRentTargetDate();
@@ -124,7 +119,6 @@
       }
     }
 
-    // BILLS: per-bill due dates
     for(const b of state.bills){
       const remaining = Math.max(0, num(b.amount) - num(b.saved));
       if(!(remaining > 0)) continue;
@@ -259,7 +253,7 @@
 
     if(field === "amount" || field === "saved"){
       b[field] = num(value);
-    }else{
+    } else {
       b[field] = String(value || "");
     }
 
@@ -267,7 +261,6 @@
     renderTarget();
   };
 
-  // click-off close
   (function wire(){
     const modal = getEl("billsModal");
     const box = getEl("billsBox");
@@ -277,6 +270,31 @@
     }
   })();
 
-  // Back-compat
-  window.openBills = InkBills.openBills;
+  window.openBills = function(){
+    if(window.InkBills && typeof window.InkBills.openBills === "function"){
+      window.InkBills.openBills();
+      return;
+    }
+  };
+
+  window.closeBills = function(){
+    if(window.InkBills && typeof window.InkBills.closeBills === "function"){
+      window.InkBills.closeBills();
+      return;
+    }
+  };
+
+  window.saveBills = function(){
+    if(window.InkBills && typeof window.InkBills.saveBills === "function"){
+      window.InkBills.saveBills();
+      return;
+    }
+  };
+
+  window.addBill = function(){
+    if(window.InkBills && typeof window.InkBills.addBill === "function"){
+      window.InkBills.addBill();
+      return;
+    }
+  };
 })();
