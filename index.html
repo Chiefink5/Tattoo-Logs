@@ -862,7 +862,72 @@
       </div>
     </div>
   </div>
+  <!-- BILLS MODAL -->
+  <div class="modal" id="billsModal">
+    <div class="modal-box" id="billsBox">
+      <div class="modal-title">Bills + Rent</div>
 
+      <div class="summary-box" style="margin-top:0;">
+        <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;">
+          <div style="font-weight:900;color:var(--gold);">Daily target</div>
+          <button type="button" class="secondarybtn" onclick="saveBills()">Save</button>
+        </div>
+
+        <div id="billsTodayOut" style="margin-top:10px;"></div>
+        <div id="billsQuote" class="hint" style="margin-top:10px;"></div>
+      </div>
+
+      <hr>
+
+      <div class="summary-box">
+        <div style="font-weight:900;color:var(--gold);">Rent</div>
+
+        <div class="row" style="margin-top:10px;">
+          <div class="field">
+            <label>Rent Amount</label>
+            <input id="rentAmount" type="number" min="0" step="0.01" placeholder="">
+          </div>
+
+          <div class="field">
+            <label>Saved So Far</label>
+            <input id="rentSavedSoFar" type="number" min="0" step="0.01" placeholder="">
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:10px;">
+          <div class="field">
+            <label>Safe By Day (1–28)</label>
+            <input id="rentSafeByDay" type="number" min="1" max="28" step="1" placeholder="">
+          </div>
+
+          <div class="field">
+            <label>Rent Due</label>
+            <input type="text" value="1st of every month" disabled>
+          </div>
+        </div>
+
+        <div class="hint" style="margin-top:10px;">
+          Safe-by day controls how aggressive the daily target is.
+        </div>
+      </div>
+
+      <hr>
+
+      <div class="summary-box">
+        <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;">
+          <div style="font-weight:900;color:var(--gold);">Bills</div>
+          <button type="button" class="secondarybtn" onclick="addBill()">+ Add Bill</button>
+        </div>
+
+        <div id="billsList" style="margin-top:10px;"></div>
+      </div>
+
+      <div class="actions-row">
+        <button type="button" class="secondarybtn" onclick="closeBills()">Close</button>
+      </div>
+    </div>
+  </div>
+  
   <!-- EXPORT MODAL -->
   <div class="modal" id="exportModal">
     <div class="modal-box" id="exportBox">
