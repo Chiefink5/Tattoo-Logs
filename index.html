@@ -565,6 +565,50 @@
       .brand-title{ font-size:1.2rem; }
       .stat-pill strong{ font-size:1.85rem; }
     }
+    /* ===== CLIENTS PAGE ===== */
+.client-card{
+  background:rgba(0,0,0,.16);
+  border:1px solid rgba(212,175,55,.18);
+  border-left:4px solid rgba(212,175,55,.7);
+  padding:12px;
+  border-radius:14px;
+  cursor:pointer;
+  margin-top:10px;
+}
+.client-card:hover{ outline:1px solid rgba(212,175,55,.22); }
+.client-card .top{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  align-items:flex-start;
+  flex-wrap:wrap;
+}
+.client-card .name{
+  font-weight:1000;
+  color:var(--gold);
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.client-card .meta{
+  opacity:.9;
+  margin-top:6px;
+  display:flex;
+  gap:12px;
+  flex-wrap:wrap;
+}
+.client-card .pill{
+  display:inline-flex;
+  gap:6px;
+  align-items:center;
+  padding:4px 10px;
+  border-radius:999px;
+  border:1px solid rgba(31,111,80,.55);
+  background:rgba(0,0,0,.14);
+  font-size:.85rem;
+  white-space:nowrap;
+}
   </style>
 </head>
 
@@ -576,6 +620,7 @@
         <button class="smallbtn" type="button" onclick="openBills()">Bills</button>
         <button class="smallbtn" type="button" onclick="openExport()">Export</button>
         <button class="smallbtn" type="button" onclick="openRewards()">Rewards</button>
+        <button class="smallbtn" type="button" onclick="openClientsPage()">Clients</button>
       </div>
 
       <!-- CENTER BRAND -->
@@ -611,6 +656,35 @@
   </header>
 
   <div class="container">
+    <!-- CLIENTS PAGE -->
+<div id="clientsPage" style="display:none;">
+  <div class="summary-box" style="margin-top:0;">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;">
+      <div style="font-weight:900;color:var(--gold);">Clients</div>
+      <button type="button" class="secondarybtn" onclick="closeClientsPage()">Back</button>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <div class="field">
+        <label>Search Clients</label>
+        <input id="clientsSearch" type="text" placeholder="">
+      </div>
+      <div class="field">
+        <label>Sort</label>
+        <select id="clientsSort">
+          <option value="recent">Most Recent</option>
+          <option value="count">Most Tattoos</option>
+          <option value="net">Highest Net</option>
+          <option value="name">Name (A→Z)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="hint" style="margin-top:10px;">Tap a client to open their profile.</div>
+  </div>
+
+  <div id="clientsList" style="margin-top:12px;"></div>
+</div>
     <div class="filterbar">
       <div class="row">
         <div class="field">
