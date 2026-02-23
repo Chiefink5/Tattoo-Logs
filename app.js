@@ -2024,3 +2024,48 @@ if(typeof window.openSettings === "function"){
 
 window.scanClientDuplicates = scanClientDuplicates;
 window.mergeSelectedClientDuplicates = mergeSelectedClientDuplicates;
+
+// ================= CLIENT INDEX BUTTON FIX =================
+// Ensures the header "Clients" button works even if function names drift.
+
+(function(){
+  function el(id){ return document.getElementById(id); }
+
+  // If your modal is named differently, change this id to match your HTML.
+  const MODAL_ID = "clientsModal";     // <- must exist in index.html
+  const BOX_ID   = "clientsBox";       // <- must exist in index.html
+
+  function openClients(){
+    const modal = el(MODAL_ID);
+    const box = el(BOX_ID);
+
+    if(!modal || !box){
+      alert(`Clients UI missing. Expected #${MODAL_ID} and #${BOX_ID} in index.html`);
+      return;
+    }
+
+    // If you already have a builder function, call it here:
+    if(typeof window.buildClientsUI === "function"){
+      window.buildClientsUI();
+    }
+
+    modal.style.display = "flex";
+  }
+
+  function closeClients(){
+    const modal = el(MODAL_ID);
+    if(modal) modal.style.display = "none";
+  }
+
+  // expose globally for onclick=""
+  window.openClients = openClients;
+  window.closeClients = closeClients;
+
+  // Optional: click-off close if not already wired
+  const modal = el(MODAL_ID);
+  const box = el(BOX_ID);
+  if(modal && box){
+    modal.addEventListener("click",(e)=>{ if(e.target === modal) closeClients(); });
+    box.addEventListener("click",(e)=> e.stopPropagation());
+  }
+})();
