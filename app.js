@@ -2069,3 +2069,109 @@ window.mergeSelectedClientDuplicates = mergeSelectedClientDuplicates;
     box.addEventListener("click",(e)=> e.stopPropagation());
   }
 })();
+
+// ================= CLIENTS PAGE (INDEX) =================
+(function(){
+  function safeEl(id){ return document.getElementById(id); }
+  function normalizeName(s){
+    return String(s||"")
+      .trim()
+      .replace(/\s+/g," ")
+      .toLowerCase();
+  }
+
+  function buildClientsIndex(){
+    const map = new Map(); // key -> { displayName, count, lastDate }
+
+    entries.forEach(e=>{
+      const raw = (e.client || "").trim();
+      if(!raw) return;
+
+      const key = normalizeName(raw);
+      if(!key) return;
+
+      const prev = map.get(key) || { displayName: raw, count: 0, lastDate: "" };
+      prev.count += (typeof isTattooEntry === "function" ? (isTattooEntry(e) ? 1 : 0) : 1);
+
+      // lastDate (string compare works for YYYY-MM-DD, but you switched display format; still stored as YYYY-MM-DD)
+      if(e.date && (!prev.lastDate || e.date > prev.lastDate)) prev.lastDate = e.date;
+
+      // keep the “best looking” capitalization version as display name (first seen wins)
+      map.set(key, prev);
+    });
+
+    const arr = Array.from(map.values())
+      .sort((a,b)=>{
+        // Most recent first, then highest count
+        if((b.lastDate||"") !== (a.lastDate||"")) return String(b.lastDate||"").localeCompare(String(a.lastDate||""));
+        return (b.count||0) - (a.count||0);
+      });
+
+    return arr;
+  }
+
+  function mmddyy(iso){
+    // iso is stored as YYYY-MM-DD
+    if(!iso) return "";
+    const p = String(iso).split("-");
+    if(p.length !== 3) return iso;
+    const yy = p[0].slice(2);
+    const mm = p[1];
+    const dd = p[2];
+    return `${mm}/${dd}/${yy}`;
+  }
+
+  function renderClients(){
+    const out = safeEl("clientsList");
+    if(!out) return;
+
+    const list = buildClientsIndex();
+    if(!list.length){
+      out.innerHTML = `<div class="hint" style="margin-top:10px;">No clients yet.</div>`;
+      return;
+    }
+
+    out.innerHTML = list.map(c=>{
+      return `
+        <div class="client-entry" onclick="openClientProfile(${JSON.stringify(c.displayName)})">
+          <div class="top">
+            <div><strong>${c.displayName}</strong></div>
+            <div class="date">${c.lastDate ? mmddyy(c.lastDate) : ""}</div>
+          </div>
+          <div class="desc">Tattoo count: <strong>${c.count}</strong></div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  function openClientsPage(){
+    const modal = safeEl("clientsModal");
+    if(!modal) {
+      alert('Missing Clients modal in index.html (id="clientsModal").');
+      return;
+    }
+    renderClients();
+    modal.style.display = "flex";
+  }
+
+  function closeClientsPage(){
+    const modal = safeEl("clientsModal");
+    if(!modal) return;
+    modal.style.display = "none";
+  }
+
+  // expose globally so your HTML onclick can see it
+  window.openClientsPage = openClientsPage;
+  window.closeClientsPage = closeClientsPage;
+
+  // re-render clients if you want it always fresh after saves (optional)
+  const oldSave = window.save;
+  if(typeof oldSave === "function"){
+    window.save = function(){
+      oldSave();
+      // if modal is open, refresh list
+      const modal = safeEl("clientsModal");
+      if(modal && modal.style.display === "flex") renderClients();
+    };
+  }
+})();
