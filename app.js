@@ -1841,3 +1841,186 @@ function render(){
 
 // ================= INIT =================
 render();
+
+// ================= DUPLICATE CLIENT MERGE (Dynamic Settings Injection) =================
+
+let dupeMergeCandidates = [];
+
+function normNameBasic(s){
+  return String(s || "")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function normNameKeyCaseOnly(s){
+  const cleaned = normNameBasic(s);
+  const parts = cleaned.split(" ").filter(Boolean);
+  if(parts.length < 2) return "";
+  return parts.map(p => p.toLowerCase()).join(" ");
+}
+
+function pickPreferredVariant(entryCountByName){
+  const names = Object.keys(entryCountByName || {});
+  if(!names.length) return "";
+
+  names.sort((a,b)=>{
+    const ca = entryCountByName[a] || 0;
+    const cb = entryCountByName[b] || 0;
+    if(cb !== ca) return cb - ca;
+
+    const scoreCase = (name)=>{
+      const hasLower = /[a-z]/.test(name);
+      const hasUpper = /[A-Z]/.test(name);
+      if(hasLower && hasUpper) return 3;
+      if(hasUpper) return 2;
+      if(hasLower) return 1;
+      return 0;
+    };
+
+    const sa = scoreCase(a), sb = scoreCase(b);
+    if(sb !== sa) return sb - sa;
+
+    return b.length - a.length;
+  });
+
+  return names[0];
+}
+
+function scanClientDuplicates(){
+  const groups = {};
+
+  (entries || []).forEach(e=>{
+    const name = normNameBasic(e.client);
+    const key = normNameKeyCaseOnly(name);
+    if(!key) return;
+
+    groups[key] = groups[key] || { entryCountByName: {} };
+    groups[key].entryCountByName[name] =
+      (groups[key].entryCountByName[name] || 0) + 1;
+  });
+
+  dupeMergeCandidates = Object.entries(groups)
+    .map(([key, g])=>{
+      const variants = Object.keys(g.entryCountByName);
+      return {
+        key,
+        variants,
+        entryCountByName: g.entryCountByName,
+        preferred: pickPreferredVariant(g.entryCountByName)
+      };
+    })
+    .filter(x => x.variants.length >= 2)
+    .filter(x =>
+      x.variants.every(v => normNameKeyCaseOnly(v) === x.key) &&
+      x.variants.some(v => v !== x.preferred)
+    );
+
+  renderDupeClientUI();
+}
+
+function renderDupeClientUI(){
+  const out = document.getElementById("dupeClientOut");
+  if(!out) return;
+
+  if(!dupeMergeCandidates.length){
+    out.innerHTML = "No capitalization/spacing duplicates found ✅";
+    return;
+  }
+
+  out.innerHTML = `
+    ${dupeMergeCandidates.map((g,i)=>{
+
+      const total = g.variants.reduce(
+        (s,v)=> s + (g.entryCountByName[v]||0), 0
+      );
+
+      return `
+        <div style="margin-top:12px; padding:12px; border:1px solid rgba(212,175,55,.2); border-radius:12px;">
+          <label style="display:flex; align-items:center; gap:10px; font-weight:900;">
+            <input type="checkbox" id="dupePick_${i}" checked style="width:auto;">
+            Merge into <span style="color:var(--gold);">${g.preferred}</span>
+          </label>
+          <div style="margin-top:8px; opacity:.85;">
+            ${g.variants.map(v =>
+              `<div>• ${v} (${g.entryCountByName[v]})</div>`
+            ).join("")}
+          </div>
+          <div style="margin-top:6px; font-size:.85rem; opacity:.7;">
+            Entries affected: ${total}
+          </div>
+        </div>
+      `;
+    }).join("")}
+  `;
+}
+
+function mergeSelectedClientDuplicates(){
+  let changed = 0;
+
+  dupeMergeCandidates.forEach((g,i)=>{
+    const pick = document.getElementById(`dupePick_${i}`);
+    if(!pick || !pick.checked) return;
+
+    (entries || []).forEach(e=>{
+      const current = normNameBasic(e.client);
+      if(
+        normNameKeyCaseOnly(current) === g.key &&
+        current !== g.preferred
+      ){
+        e.client = g.preferred;
+        changed++;
+      }
+    });
+  });
+
+  if(changed > 0){
+    save();
+  } else {
+    render();
+  }
+
+  const out = document.getElementById("dupeClientOut");
+  if(out){
+    out.innerHTML = `Merged ${changed} entries successfully ✅`;
+  }
+}
+
+function injectDupeClientSection(){
+  const settingsModal = document.getElementById("settingsModal");
+  if(!settingsModal) return;
+
+  const settingsBox = settingsModal.querySelector(".modal-box");
+  if(!settingsBox) return;
+
+  if(document.getElementById("dupeClientSection")) return;
+
+  const section = document.createElement("div");
+  section.id = "dupeClientSection";
+  section.style.marginTop = "20px";
+  section.innerHTML = `
+    <div style="font-weight:900; color:var(--gold); margin-bottom:6px;">
+      Duplicate Client Merge
+    </div>
+    <div style="opacity:.8; margin-bottom:10px;">
+      Fix duplicates caused by capitalization/spacing only.
+    </div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <button type="button" onclick="scanClientDuplicates()">Scan Duplicates</button>
+      <button type="button" class="secondarybtn" onclick="mergeSelectedClientDuplicates()">Merge Selected</button>
+    </div>
+    <div id="dupeClientOut" style="margin-top:12px;"></div>
+  `;
+
+  settingsBox.appendChild(section);
+}
+
+if(typeof window.openSettings === "function"){
+  const oldOpenSettings = window.openSettings;
+  window.openSettings = function(){
+    oldOpenSettings();
+    setTimeout(injectDupeClientSection, 50);
+  };
+}
+
+window.scanClientDuplicates = scanClientDuplicates;
+window.mergeSelectedClientDuplicates = mergeSelectedClientDuplicates;
