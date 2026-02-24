@@ -3,10 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <div class="brand-title">
-  <span class="brand-top">Globbers</span>
-  <span class="brand-bottom">Ink Log</span>
-</div>
+  <title>Globber’s Ink Log</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -88,14 +85,33 @@
       font-family:Cinzel, serif;
       font-weight:800;
       letter-spacing:.03em;
-      font-size:1.35rem;
-      line-height:1.1;
-      white-space:nowrap;
-      overflow:hidden;
-      text-overflow:ellipsis;
+      line-height:1.05;
       max-width:min(62vw, 520px);
       text-align:center;
       color:var(--gold);
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap:2px;
+    }
+
+    .brand-title .brand-top{
+      font-size:1.35rem;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width:100%;
+    }
+    .brand-title .brand-bottom{
+      font-size:1.02rem;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      opacity:.9;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width:100%;
     }
 
     /* plain png logo (no border/shadow) */
@@ -565,7 +581,8 @@
     @media (max-width:520px){
       .smallbtn{ min-width:108px; padding:10px 12px; }
       #logoImg{ width:50px; height:50px; }
-      .brand-title{ font-size:1.2rem; }
+      .brand-title .brand-top{ font-size:1.2rem; }
+      .brand-title .brand-bottom{ font-size:.95rem; }
       .stat-pill strong{ font-size:1.85rem; }
     }
     /* ===== CLIENTS PAGE ===== */
@@ -630,7 +647,10 @@
       <div class="brand">
         <img id="logoImg" alt="Logo" title="Tap to upload logo">
         <input id="logoInput" type="file" accept="image/png,image/*">
-        <div class="brand-title">Globber’s Ink Log</div>
+        <div class="brand-title">
+          <span class="brand-top">Globber’s</span>
+          <span class="brand-bottom">Ink Log</span>
+        </div>
       </div>
 
       <!-- RIGHT STACK -->
@@ -686,7 +706,7 @@
     <div class="hint" style="margin-top:10px;">Tap a client to open their profile.</div>
   </div>
 
-  <div id="clientsPageList" style="margin-top:12px;"></div>
+  <div id="clientsList" style="margin-top:12px;"></div>
 </div>
     <div class="filterbar">
       <div class="row">
