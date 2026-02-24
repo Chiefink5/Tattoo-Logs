@@ -705,3 +705,34 @@ input:focus, select:focus, textarea:focus{
   gap: 12px;
   flex-wrap:wrap;
 }
+
+
+/* --- Filters panel polish (v2) --- */
+.filters-panel{
+  position: relative;
+}
+.filters-panel::before{
+  content:"";
+  position:absolute;
+  left:0;
+  top:0;
+  bottom:0;
+  width:6px;
+  background: rgba(214,180,75,.92);
+  box-shadow: 0 0 18px rgba(214,180,75,.25);
+}
+.filters-head{
+  flex-wrap: nowrap;
+  background: linear-gradient(180deg, rgba(10,18,16,.72), rgba(10,18,16,.38));
+}
+#filtersToggleBtn{
+  width: auto !important;
+  min-width: 92px;
+  flex: 0 0 auto;
+  align-self: center;
+}
+@media (max-width: 560px){
+  #filtersToggleBtn{ min-width: 86px; }
+  .filters-head{ padding: 12px 14px; }
+  .filters-body{ padding: 12px 14px 14px; }
+}
