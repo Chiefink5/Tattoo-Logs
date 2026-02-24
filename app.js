@@ -2156,15 +2156,21 @@ window.mergeSelectedClientDuplicates = mergeSelectedClientDuplicates;
     modal.style.display = "flex";
   }
 
-  function closeClients(){
+  function closeClientsPage(){
     const modal = safeEl("clientsModal");
     if(!modal) return;
     modal.style.display = "none";
   }
 
-  // expose globally so your HTML onclick can see it
-  window.openClientsPage = openClientsPage;
-  window.closeClientsPage = closeClientsPage;
+/* ✅ ALIASES so old onclicks still work */
+function closeClients(){ closeClientsPage(); }
+function openClients(){ openClientsPage(); }
+
+/* ✅ expose globally */
+window.openClientsPage = openClientsPage;
+window.closeClientsPage = closeClientsPage;
+window.openClients = openClients;
+window.closeClients = closeClients;
 
   // re-render clients if you want it always fresh after saves (optional)
   const oldSave = window.save;
