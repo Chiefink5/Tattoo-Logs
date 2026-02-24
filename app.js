@@ -2128,22 +2128,22 @@ window.mergeSelectedClientDuplicates = mergeSelectedClientDuplicates;
 
     const list = buildClientsIndex();
     if(!list.length){
-      console.log("clients built:", clients.length);
+      console.log("clients built:", list.length);
       out.innerHTML = `<div class="hint" style="margin-top:10px;">No clients yet.</div>`;
       return;
     }
-
+const list = buildClientsIndex();
     out.innerHTML = list.map(c=>{
-      return `
-        <div class="client-entry" onclick="openClientProfile(${JSON.stringify(c.displayName)})">
-          <div class="top">
-            <div><strong>${c.displayName}</strong></div>
-            <div class="date">${c.lastDate ? mmddyy(c.lastDate) : ""}</div>
-          </div>
-          <div class="desc">Tattoo count: <strong>${c.count}</strong></div>
-        </div>
-      `;
-    }).join("");
+  return `
+    <div class="client-entry" onclick='openClientProfile(${JSON.stringify(c.displayName)})'>
+      <div class="top">
+        <div><strong>${c.displayName || c.name || ""}</strong></div>
+        <div class="date">${c.lastDate ? mmddyy(c.lastDate) : ""}</div>
+      </div>
+      <div class="desc">Tattoo count: <strong>${c.count || 0}</strong></div>
+    </div>
+  `;
+}).join("");
   }
 
   function openClientsPage(){
