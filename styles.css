@@ -67,6 +67,23 @@ body{
 /* =========================================================
    Header / Branding
    ========================================================= */
+   .brand-title {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+}
+
+.brand-top {
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+.brand-bottom {
+  font-size: 0.9rem;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
 .topbar{
   background: linear-gradient(180deg, rgba(18,34,28,.82), rgba(10,18,16,.65));
   border: 1px solid rgba(120,255,210,.20);
