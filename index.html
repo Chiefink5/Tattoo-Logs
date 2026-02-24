@@ -236,44 +236,6 @@
       backdrop-filter: blur(6px);
       -webkit-backdrop-filter: blur(6px);
     }
-
-    /* ===== FILTERBAR TOGGLE ===== */
-    details.filterbar{ }
-    details.filterbar > summary{
-      list-style:none;
-      cursor:pointer;
-      user-select:none;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
-      padding:14px;
-    }
-    details.filterbar > summary::-webkit-details-marker{ display:none; }
-    .filterbar-summary .filterbar-title{
-      font-weight:1000;
-      color:rgba(255,255,255,.92);
-      letter-spacing:.01em;
-    }
-    .filterbar-summary .filterbar-mini{
-      color:var(--muted);
-      font-weight:800;
-      font-size:.92rem;
-      opacity:.85;
-      margin-left:auto;
-    }
-    .filterbar-summary .filterbar-chev{
-      opacity:.9;
-      font-weight:1000;
-      transition: transform .15s ease;
-    }
-    details.filterbar[open] .filterbar-summary .filterbar-chev{
-      transform: rotate(180deg);
-    }
-    details.filterbar .filterbar-body{
-      padding:0 14px 14px;
-      border-top:1px solid rgba(31,111,80,.40);
-    }
     .filterbar .row{
       display:grid;
       grid-template-columns: 1.2fr 0.8fr 0.8fr;
@@ -713,99 +675,98 @@
   <div class="container">
     <!-- CLIENTS PAGE -->
 <div id="clientsPage" style="display:none;">
-  <div c
-    <details class="filterbar" id="filtersPanel">
-      <summary class="filterbar-summary">
-        <span class="filterbar-title">Search & Filters</span>
-        <span class="filterbar-mini">Tap to expand</span>
-        <span class="filterbar-chev">▾</span>
-      </summary>
-      <div class="filterbar-body">
-      <div class="row">
-        <div class="field">
-          <label>Search</label>
-          <input id="q" type="text" placeholder="">
-        </div>
+  <div class="summary-box" style="margin-top:0;">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;">
+      <div style="font-weight:900;color:var(--gold);">Clients</div>
+      <button type="button" class="secondarybtn" onclick="closeClientsPage()">Back</button>
+    </div>
 
-        <div class="field">
-          <label>Status</label>
-          <select id="statusFilter">
-            <option value="all">All Status</option>
-            <option value="booked">Booked</option>
-            <option value="paid">Paid</option>
-            <option value="partial">Partial</option>
-            <option value="unpaid">Unpaid</option>
-            <option value="no_show">No Show</option>
-          </select>
-        </div>
+    <div class="row" style="margin-top:10px;">
+      <div class="field">
+        <label>Search Clients</label>
+        <input id="clientsSearch" type="text" placeholder="">
+      </div>
+      <div class="field">
+        <label>Sort</label>
+        <select id="clientsSort">
+          <option value="recent">Most Recent</option>
+          <option value="count">Most Tattoos</option>
+          <option value="net">Highest Net</option>
+          <option value="name">Name (A→Z)</option>
+        </select>
+      </div>
+    </div>
 
-        <div class="field">
-          <label>Location</label>
-          <select id="locationFilter">
-            <option value="all">All Locations</option>
-          </select>
+    <div class="hint" style="margin-top:10px;">Tap a client to open their profile.</div>
+  </div>
+
+  <div id="clientsPageList" style="margin-top:12px;"></div>
+</div>
+    
+    <div class="filters-panel" id="filtersPanel">
+      <div class="filters-head">
+        <div class="filters-head-left">
+          <div class="filters-dot"></div>
+          <div class="filters-title">Filters</div>
         </div>
+        <button id="filtersToggleBtn" type="button" class="secondarybtn smallbtn" onclick="toggleFiltersPanel()">Show</button>
       </div>
 
-      <div class="row2">
-        <div class="field">
-          <label>From</label>
-          <input id="fromDate" type="date">
-        </div>
-        <div class="field">
-          <label>To</label>
-          <input id="toDate" type="date">
-        </div>
-        <div class="field">
-          <label>Sort</label>
-          <select id="sortFilter">
-            <option value="newest">Newest</option>
-            <option value="oldest">Oldest</option>
-          </select>
-        </div>
-      </div>
+      <div class="filters-body" id="filtersBody">
+        <div class="row">
+          <div class="field">
+            <label>Search</label>
+            <input id="q" type="text" placeholder="">
+          </div>
 
-      <div class="filter-actions">
-        <div class="hint">Filters affect the accordion + totals shown.</div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;">
-          <button type="button" class="secondarybtn" onclick="clearFilters()">Clear</button>
-          <button type="button" onclick="applyFilters()">Apply</button>
-        </div>
-      </div>
-      </div>
-    </details>
-   <select id="locationFilter">
-            <option value="all">All Locations</option>
-          </select>
-        </div>
-      </div>
+          <div class="field">
+            <label>Status</label>
+            <select id="statusFilter">
+              <option value="all">All Status</option>
+              <option value="booked">Booked</option>
+              <option value="paid">Paid</option>
+              <option value="partial">Partial</option>
+              <option value="unpaid">Unpaid</option>
+              <option value="no_show">No Show</option>
+            </select>
+          </div>
 
-      <div class="row2">
-        <div class="field">
-          <label>From</label>
-          <input id="fromDate" type="date">
+          <div class="field">
+            <label>Location</label>
+            <select id="locationFilter">
+              <option value="all">All Locations</option>
+            </select>
+          </div>
         </div>
-        <div class="field">
-          <label>To</label>
-          <input id="toDate" type="date">
-        </div>
-        <div class="field">
-          <label>Sort</label>
-          <select id="sortFilter">
-            <option value="newest">Newest</option>
-            <option value="oldest">Oldest</option>
-          </select>
-        </div>
-      </div>
 
-      <div class="filter-actions">
-        <div class="hint">Filters affect the accordion + totals shown.</div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;">
-          <button type="button" class="secondarybtn" onclick="clearFilters()">Clear</button>
-          <button type="button" onclick="applyFilters()">Apply</button>
+        <div class="row row-tight">
+          <div class="field">
+            <label>From</label>
+            <input id="fromDate" type="date">
+          </div>
+          <div class="field">
+            <label>To</label>
+            <input id="toDate" type="date">
+          </div>
+          <div class="field">
+            <label>Sort</label>
+            <select id="sortFilter">
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="filter-actions">
+          <div class="hint">Filters affect the accordion + totals shown.</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <button type="button" class="secondarybtn" onclick="clearFilters()">Clear</button>
+            <button type="button" onclick="applyFilters()">Apply</button>
+          </div>
         </div>
       </div>
     </div>
+
 
     <div id="entries"></div>
   </div>

@@ -2188,3 +2188,38 @@ if(typeof window.closeClientsPage !== "function") window.closeClientsPage = clos
     };
   }
 })();
+
+/* Filters panel toggle */
+(function(){
+  function setFiltersOpen(isOpen){
+    var panel = document.getElementById("filtersPanel");
+    var body = document.getElementById("filtersBody");
+    var btn = document.getElementById("filtersToggleBtn");
+    if(!panel || !body || !btn) return;
+    if(isOpen){
+      panel.classList.add("open");
+      body.style.display = "";
+      btn.textContent = "Hide";
+      btn.setAttribute("aria-expanded","true");
+      localStorage.setItem("inklog_filters_open","1");
+    }else{
+      panel.classList.remove("open");
+      body.style.display = "";
+      btn.textContent = "Show";
+      btn.setAttribute("aria-expanded","false");
+      localStorage.setItem("inklog_filters_open","0");
+    }
+  }
+
+  window.toggleFiltersPanel = function(){
+    var panel = document.getElementById("filtersPanel");
+    if(!panel) return;
+    setFiltersOpen(!panel.classList.contains("open"));
+  };
+
+  document.addEventListener("DOMContentLoaded", function(){
+    var saved = localStorage.getItem("inklog_filters_open");
+    // default collapsed
+    setFiltersOpen(saved === "1");
+  });
+})();

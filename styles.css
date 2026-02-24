@@ -650,3 +650,58 @@ input:focus, select:focus, textarea:focus{
       margin:6px 0 6px;
       letter-spacing:.01em;
     }
+
+/* Filters panel (single collapsible container) */
+.filters-panel{
+  margin-top: 18px;
+  background: rgba(10,18,16,.55);
+  border: 2px solid rgba(80,255,200,.26);
+  border-radius: var(--r-lg);
+  overflow:hidden;
+  box-shadow: 0 22px 70px rgba(0,0,0,.38);
+}
+.filters-head{
+  padding: 14px 16px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+  user-select:none;
+  border-bottom: 1px solid rgba(214,180,75,.18);
+}
+.filters-head-left{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+}
+.filters-dot{
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(214,180,75,.95);
+  box-shadow: 0 0 14px rgba(214,180,75,.55);
+}
+.filters-title{
+  font-weight: 1000;
+  letter-spacing: .6px;
+  color: var(--gold);
+}
+.filters-body{
+  padding: 14px 16px 16px;
+}
+.row-tight{ margin-top: 10px; }
+.filters-panel:not(.open) .filters-body{
+  display:none;
+}
+.filters-panel .hint{
+  opacity:.75;
+  font-weight: 700;
+}
+.filters-panel .filter-actions{
+  margin-top: 12px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+  flex-wrap:wrap;
+}
