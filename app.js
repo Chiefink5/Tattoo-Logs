@@ -2123,10 +2123,12 @@ window.mergeSelectedClientDuplicates = mergeSelectedClientDuplicates;
 
   function renderClients(){
     const out = safeEl("clientsList");
+    console.log("entries length:", entries.length);
     if(!out) return;
 
     const list = buildClientsIndex();
     if(!list.length){
+      console.log("clients built:", clients.length);
       out.innerHTML = `<div class="hint" style="margin-top:10px;">No clients yet.</div>`;
       return;
     }
