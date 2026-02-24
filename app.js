@@ -2058,8 +2058,8 @@ window.mergeSelectedClientDuplicates = mergeSelectedClientDuplicates;
   }
 
   // expose globally for onclick=""
-  window.openClients = openClientsList;
-  window.closeClients = closeClientsList;
+  window.openClients = openClients;
+  window.closeClients = closeClients;
 
   // Optional: click-off close if not already wired
   const modal = el(MODAL_ID);
