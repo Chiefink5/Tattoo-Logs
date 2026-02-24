@@ -95,15 +95,14 @@
       justify-content:center;
       gap:2px;
     }
-
-    .brand-title .brand-top{
+    .brand-top{
       font-size:1.35rem;
       white-space:nowrap;
       overflow:hidden;
       text-overflow:ellipsis;
       max-width:100%;
     }
-    .brand-title .brand-bottom{
+    .brand-bottom{
       font-size:1.02rem;
       letter-spacing:.18em;
       text-transform:uppercase;
@@ -113,8 +112,7 @@
       text-overflow:ellipsis;
       max-width:100%;
     }
-
-    /* plain png logo (no border/shadow) */
+/* plain png logo (no border/shadow) */
     #logoImg{
       width:54px;height:54px;
       object-fit:contain;
@@ -581,8 +579,7 @@
     @media (max-width:520px){
       .smallbtn{ min-width:108px; padding:10px 12px; }
       #logoImg{ width:50px; height:50px; }
-      .brand-title .brand-top{ font-size:1.2rem; }
-      .brand-title .brand-bottom{ font-size:.95rem; }
+      .brand-title{ font-size:1.2rem; }
       .stat-pill strong{ font-size:1.85rem; }
     }
     /* ===== CLIENTS PAGE ===== */
@@ -647,10 +644,7 @@
       <div class="brand">
         <img id="logoImg" alt="Logo" title="Tap to upload logo">
         <input id="logoInput" type="file" accept="image/png,image/*">
-        <div class="brand-title">
-          <span class="brand-top">Globber’s</span>
-          <span class="brand-bottom">Ink Log</span>
-        </div>
+        <div class="brand-title"><span class="brand-top">Globber’s</span><span class="brand-bottom">Ink Log</span></div>
       </div>
 
       <!-- RIGHT STACK -->
@@ -706,7 +700,7 @@
     <div class="hint" style="margin-top:10px;">Tap a client to open their profile.</div>
   </div>
 
-  <div id="clientsList" style="margin-top:12px;"></div>
+  <div id="clientsPageList" style="margin-top:12px;"></div>
 </div>
     <div class="filterbar">
       <div class="row">
