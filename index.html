@@ -74,11 +74,16 @@
     .smallbtn:hover{ filter:brightness(1.06); }
 
     .brand{
+      /* Responsive brand sizing via CSS vars */
+      --logoSize:64px;
+      --brandTopSize:1.75rem;
+      --brandBottomSize:1.18rem;
+
       display:flex;
       flex-direction:column;
       align-items:center;
       justify-content:center;
-      gap:8px;
+      gap:10px;
       min-width:0;
     }
     .brand-title{
@@ -86,24 +91,24 @@
       font-weight:800;
       letter-spacing:.03em;
       line-height:1.05;
-      max-width:min(62vw, 520px);
+      max-width:min(62vw, 640px);
       text-align:center;
       color:var(--gold);
       display:flex;
       flex-direction:column;
       align-items:center;
       justify-content:center;
-      gap:2px;
+      gap:4px;
     }
     .brand-top{
-      font-size:1.35rem;
+      font-size:var(--brandTopSize);
       white-space:nowrap;
       overflow:hidden;
       text-overflow:ellipsis;
       max-width:100%;
     }
     .brand-bottom{
-      font-size:1.02rem;
+      font-size:var(--brandBottomSize);
       letter-spacing:.18em;
       text-transform:uppercase;
       opacity:.9;
@@ -112,9 +117,10 @@
       text-overflow:ellipsis;
       max-width:100%;
     }
-/* plain png logo (no border/shadow) */
+    /* plain png logo (no border/shadow) */
     #logoImg{
-      width:54px;height:54px;
+      width:var(--logoSize);
+      height:var(--logoSize);
       object-fit:contain;
       background:transparent;
       border:none;
@@ -576,10 +582,13 @@
       border:1px solid rgba(31,111,80,.55);
     }
 
+    @media (min-width:900px){
+      .brand{ --logoSize:76px; --brandTopSize:2.05rem; --brandBottomSize:1.28rem; }
+    }
+
     @media (max-width:520px){
       .smallbtn{ min-width:108px; padding:10px 12px; }
-      #logoImg{ width:50px; height:50px; }
-      .brand-title{ font-size:1.2rem; }
+      .brand{ --logoSize:108px; --brandTopSize:2.05rem; --brandBottomSize:1.25rem; gap:12px; }
       .stat-pill strong{ font-size:1.85rem; }
     }
     /* ===== CLIENTS PAGE ===== */
