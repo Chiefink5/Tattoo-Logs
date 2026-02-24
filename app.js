@@ -81,6 +81,36 @@ function clampPct(p){
 function normalize(s){ return String(s||"").toLowerCase(); }
 function uid(prefix="id"){ return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`; }
 
+// ================= FORM VALIDATION UI =================
+function clearInvalidMarks(root){
+  const scope = root || document;
+  scope.querySelectorAll(".field.invalid").forEach(f=> f.classList.remove("invalid"));
+  scope.querySelectorAll(".field .field-err").forEach(el=> el.remove());
+}
+function markInvalid(inputId, message){
+  const el = safeEl(inputId);
+  if(!el) return;
+  const field = el.closest(".field");
+  if(!field) return;
+  field.classList.add("invalid");
+  if(message){
+    let m = field.querySelector(".field-err");
+    if(!m){
+      m = document.createElement("div");
+      m.className = "field-err";
+      field.appendChild(m);
+    }
+    m.textContent = message;
+  }
+}
+function scrollToFirstInvalid(root){
+  const scope = root || document;
+  const first = scope.querySelector(".field.invalid");
+  if(first){
+    first.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+}
+
 function paymentsArray(entry){ return Array.isArray(entry.payments) ? entry.payments : []; }
 function paidAmount(entry){ return paymentsArray(entry).reduce((sum,p)=>sum + Number(p.amount || 0), 0); }
 function depositAmount(entry){
@@ -199,225 +229,101 @@ const viewModal = safeEl("viewModal");
 const viewBox = safeEl("viewBox");
 const exportModal = safeEl("exportModal");
 const exportBox = safeEl("exportBox");
-const bammerModal = safeEl("bammerModal");
-const bammerBox = safeEl("bammerBox");
-const depositModal = safeEl("depositModal");
-const depositBox = safeEl("depositBox");
 const settingsModal = safeEl("settingsModal");
 const settingsBox = safeEl("settingsBox");
-const clientModal = safeEl("clientModal");
-const clientBox = safeEl("clientBox");
 const rewardsModal = safeEl("rewardsModal");
 const rewardsBox = safeEl("rewardsBox");
+const clientModal = safeEl("clientModal");
+const clientBox = safeEl("clientBox");
+const bammerModal = safeEl("bammerModal");
+const depositModal = safeEl("depositModal");
 
-function wireModal(modal, box, closer){
-  if(!modal || !box) return;
-  modal.addEventListener("click",(e)=>{ if(e.target===modal) closer(); });
-  box.addEventListener("click",(e)=> e.stopPropagation());
-}
-wireModal(formModal, formBox, closeForm);
-wireModal(viewModal, viewBox, closeView);
-wireModal(exportModal, exportBox, closeExport);
-wireModal(bammerModal, bammerBox, closeBammerQuick);
-wireModal(depositModal, depositBox, closeDepositQuick);
-wireModal(settingsModal, settingsBox, closeSettings);
-wireModal(clientModal, clientBox, closeClient);
-wireModal(rewardsModal, rewardsBox, closeRewards);
+[formModal, viewModal, exportModal, settingsModal, rewardsModal, clientModal, bammerModal, depositModal].forEach(modal=>{
+  if(!modal) return;
+  modal.addEventListener("click", (e)=>{
+    if(e.target === modal){
+      modal.style.display = "none";
+      if(modal === formModal){ resetForm(); editingId = null; }
+    }
+  });
+});
 
 // ================= LOGO =================
-function initLogo(){
-  const img = safeEl("logoImg");
-  const input = safeEl("logoInput");
-  if(!img || !input) return;
+(function initLogo(){
+  const logoImg = safeEl("logoImg");
+  const logoInput = safeEl("logoInput");
+  if(!logoImg || !logoInput) return;
 
-  const saved = localStorage.getItem("logoDataUrl");
-  if(saved){
-    img.src = saved;
+  const stored = localStorage.getItem("logoDataUrl");
+  if(stored){
+    logoImg.src = stored;
   } else {
-    img.src = "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(`
-      <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">
-        <rect width="64" height="64" rx="14" fill="#16201b"/>
-        <text x="50%" y="58%" text-anchor="middle" font-family="Inter" font-size="28" font-weight="800" fill="#d4af37">G</text>
+    logoImg.src = "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(`
+      <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256">
+        <defs>
+          <radialGradient id="g" cx="50%" cy="50%" r="60%">
+            <stop offset="0%" stop-color="#d4af37" stop-opacity=".95"/>
+            <stop offset="100%" stop-color="#1f6f50" stop-opacity=".35"/>
+          </radialGradient>
+        </defs>
+        <rect width="100%" height="100%" fill="transparent"/>
+        <circle cx="128" cy="128" r="86" fill="url(#g)" stroke="rgba(212,175,55,.55)" stroke-width="6"/>
+        <text x="128" y="144" text-anchor="middle" font-family="Inter, Arial" font-size="56" fill="rgba(242,242,242,.92)" font-weight="900">G</text>
       </svg>
     `);
   }
 
-  img.addEventListener("click", ()=> input.click());
-
-  input.addEventListener("change", ()=>{
-    const file = input.files && input.files[0];
+  logoImg.addEventListener("click", ()=> logoInput.click());
+  logoInput.addEventListener("change", ()=>{
+    const file = logoInput.files && logoInput.files[0];
     if(!file) return;
     const reader = new FileReader();
     reader.onload = (e)=>{
-      localStorage.setItem("logoDataUrl", e.target.result);
-      img.src = e.target.result;
-      input.value = "";
+      const url = e.target.result;
+      localStorage.setItem("logoDataUrl", url);
+      logoImg.src = url;
+      pushToast({ title:"Logo updated", sub:"Saved locally on this device." });
     };
     reader.readAsDataURL(file);
   });
-}
+})();
+
 function removeLogo(){
   localStorage.removeItem("logoDataUrl");
-  initLogo();
+  location.reload();
 }
-initLogo();
 window.removeLogo = removeLogo;
 
-// ================= SPLIT SETTINGS =================
-function updateSplitPill(){
-  const pillPct = safeEl("splitPillPct");
-  if(pillPct) pillPct.textContent = `${clampPct(splitSettings.defaultPct)}%`;
+// ================= FILTERS MODAL (open/close) =================
+function openFiltersModal(){
+  const m = safeEl("filtersModal");
+  if(m) m.style.display = "flex";
 }
-updateSplitPill();
-
-function openSettings(){
-  if(!settingsModal) return;
-
-  const def = safeEl("defaultSplitPct");
-  if(def) def.value = String(clampPct(splitSettings.defaultPct));
-
-  const list = safeEl("overrideList");
-  if(list){
-    const keys = Object.keys(splitSettings.monthOverrides || {}).sort().reverse();
-    list.innerHTML = keys.length
-      ? keys.map(k => `• <b style="color:var(--gold)">${k}</b> → ${clampPct(splitSettings.monthOverrides[k])}%`).join("<br>")
-      : "No monthly overrides yet.";
-  }
-
-  settingsModal.style.display = "flex";
+function closeFiltersModal(){
+  const m = safeEl("filtersModal");
+  if(m) m.style.display = "none";
 }
-function closeSettings(){
-  if(!settingsModal) return;
-  settingsModal.style.display = "none";
-}
-function saveSplitSettings(){
-  splitSettings.defaultPct = clampPct(safeVal("defaultSplitPct"));
-  localStorage.setItem("splitSettings", JSON.stringify(splitSettings));
-  updateSplitPill();
-  closeSettings();
-  render();
-}
-function saveMonthOverride(){
-  const m = safeVal("overrideMonth");
-  const pct = clampPct(safeVal("overridePct"));
-  if(!m){ alert("Pick a month."); return; }
-  splitSettings.monthOverrides = splitSettings.monthOverrides || {};
-  splitSettings.monthOverrides[m] = pct;
-  localStorage.setItem("splitSettings", JSON.stringify(splitSettings));
-  openSettings();
-  render();
-}
-function removeMonthOverride(){
-  const m = safeVal("overrideMonth");
-  if(!m){ alert("Pick a month."); return; }
-  if(splitSettings.monthOverrides && splitSettings.monthOverrides[m] !== undefined){
-    delete splitSettings.monthOverrides[m];
-    localStorage.setItem("splitSettings", JSON.stringify(splitSettings));
-    openSettings();
-    render();
-  }
-}
-window.openSettings = openSettings;
-window.closeSettings = closeSettings;
-window.saveSplitSettings = saveSplitSettings;
-window.saveMonthOverride = saveMonthOverride;
-window.removeMonthOverride = removeMonthOverride;
-
-// ================= BACKUP / RESTORE =================
-function downloadBackup(){
-  const payload = {
-    version: 2,
-    exportedAt: new Date().toISOString(),
-    entries,
-    payday,
-    splitSettings,
-    filters,
-    rewardsSettings
-  };
-
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `globbers-ink-log_backup_${new Date().toISOString().slice(0,10)}.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-function restoreBackup(){
-  const input = safeEl("restoreFile");
-  const file = input && input.files ? input.files[0] : null;
-  if(!file){ alert("Pick a backup JSON file first."); return; }
-
-  const ok = confirm("Restore backup? This will overwrite your current data.");
-  if(!ok) return;
-
-  const reader = new FileReader();
-  reader.onload = (e)=>{
-    try{
-      const data = JSON.parse(e.target.result);
-      if(!data || typeof data !== "object") throw new Error("Invalid backup");
-      if(!Array.isArray(data.entries)) throw new Error("Backup missing entries");
-
-      entries = data.entries;
-
-      if(typeof data.payday === "number"){
-        payday = data.payday;
-        localStorage.setItem("payday", String(payday));
-      }
-
-      if(data.splitSettings && typeof data.splitSettings === "object"){
-        splitSettings = data.splitSettings;
-        localStorage.setItem("splitSettings", JSON.stringify(splitSettings));
-        updateSplitPill();
-      }
-
-      if(data.filters && typeof data.filters === "object"){
-        filters = data.filters;
-        saveFilters();
-      }
-
-      if(data.rewardsSettings && typeof data.rewardsSettings === "object"){
-        rewardsSettings = data.rewardsSettings;
-        saveRewardsSettings();
-      }
-
-      localStorage.setItem("entries", JSON.stringify(entries));
-      alert("Backup restored ✅");
-      closeSettings();
-      render();
-    }catch(err){
-      alert("Couldn’t restore that file. Make sure it’s a real backup JSON.");
-    }finally{
-      if(input) input.value = "";
-    }
-  };
-  reader.readAsText(file);
-}
-
-window.downloadBackup = downloadBackup;
-window.restoreBackup = restoreBackup;
+window.openFiltersModal = openFiltersModal;
+window.closeFiltersModal = closeFiltersModal;
 
 // ================= FILTERS =================
 function hydrateFilterUI(){
   const q = safeEl("q");
-  const status = safeEl("statusFilter");
-  const loc = safeEl("locationFilter");
-  const from = safeEl("fromDate");
-  const to = safeEl("toDate");
+  const s = safeEl("statusFilter");
+  const l = safeEl("locationFilter");
+  const f = safeEl("fromDate");
+  const t = safeEl("toDate");
   const sort = safeEl("sortFilter");
-
   if(q) q.value = filters.q || "";
-  if(status) status.value = filters.status || "all";
-  if(from) from.value = filters.from || "";
-  if(to) to.value = filters.to || "";
+  if(s) s.value = filters.status || "all";
+  if(l) l.value = filters.location || "all";
+  if(f) f.value = filters.from || "";
+  if(t) t.value = filters.to || "";
   if(sort) sort.value = filters.sort || "newest";
-  if(loc) loc.value = filters.location || "all";
 }
+
 function applyFilters(){
-  filters.q = (safeVal("q") || "").trim();
+  filters.q = safeVal("q") || "";
   filters.status = safeVal("statusFilter") || "all";
   filters.location = safeVal("locationFilter") || "all";
   filters.from = safeVal("fromDate") || "";
@@ -426,52 +332,32 @@ function applyFilters(){
   saveFilters();
   render();
 }
+window.applyFilters = applyFilters;
+
 function clearFilters(){
   filters = { q:"", status:"all", location:"all", from:"", to:"", sort:"newest" };
   saveFilters();
-  hydrateFilterUI();
   render();
 }
-window.applyFilters = applyFilters;
 window.clearFilters = clearFilters;
 
-function openFiltersModal(){
-  const m = document.getElementById("filtersModal");
-  if(m) m.style.display = "flex";
-}
-function closeFiltersModal(){
-  const m = document.getElementById("filtersModal");
-  if(m) m.style.display = "none";
-}
-window.openFiltersModal = openFiltersModal;
-window.closeFiltersModal = closeFiltersModal;
+function entryMatchesFilters(e){
+  const q = normalize(filters.q || "").trim();
+  const status = (filters.status || "all").toLowerCase();
+  const location = normalize(filters.location || "all");
 
-(function wireFiltersModalClose(){
-  const m = document.getElementById("filtersModal");
-  if(!m) return;
-  m.addEventListener("click",(e)=>{ if(e.target === m) closeFiltersModal(); });
-  document.addEventListener("keydown",(e)=>{ if(e.key === "Escape" && m.style.display === "flex") closeFiltersModal(); });
-})();
-
-
-(function wireFilterKeys(){
-  const q = safeEl("q");
   if(q){
-    q.addEventListener("keydown",(e)=>{
-      if(e.key === "Enter") applyFilters();
-    });
+    const blob = normalize([e.client, e.description, e.location, e.notes, e.contact, e.social].filter(Boolean).join(" "));
+    if(!blob.includes(q)) return false;
   }
-})();
-
-function passesFilters(entry){
-  if(filters.status && filters.status !== "all"){
-    if((entry.status || "unpaid") !== filters.status) return false;
+  if(status !== "all"){
+    if(normalize(e.status) !== status) return false;
   }
-  if(filters.location && filters.location !== "all"){
-    if((entry.location || "") !== filters.location) return false;
+  if(location !== "all"){
+    if(normalize(e.location) !== location) return false;
   }
 
-  const d = parseLocalDate(entry.date);
+  const d = parseLocalDate(e.date);
   if(!d) return false;
 
   if(filters.from){
@@ -483,121 +369,83 @@ function passesFilters(entry){
     if(to && d > to) return false;
   }
 
-  const q = normalize(filters.q).trim();
-  if(q){
-    const hay = [entry.client, entry.description, entry.location].map(normalize).join(" | ");
-    if(!hay.includes(q)) return false;
-  }
-
   return true;
 }
 
 function getFilteredEntries(){
-  const list = entries.filter(passesFilters);
-  list.sort((a,b)=> filters.sort === "oldest" ? (a.id - b.id) : (b.id - a.id));
-  return list;
+  const out = entries.filter(entryMatchesFilters);
+  if(filters.sort === "oldest"){
+    out.sort((a,b)=> a.id - b.id);
+  } else {
+    out.sort((a,b)=> b.id - a.id);
+  }
+  return out;
 }
 
-// ================= PAYDAY WINDOW + EXPORT =================
-function getWeekWindowFromDate(anchorDate){
-  const now = new Date(anchorDate);
-  const currentDay = now.getDay();
-  const diffToPayday = (currentDay - payday + 7) % 7;
-
-  const start = new Date(now);
-  start.setDate(now.getDate() - diffToPayday);
-  start.setHours(0,0,0,0);
-
-  const end = new Date(start);
-  end.setDate(start.getDate() + 6);
-  end.setHours(23,59,59,999);
-
-  return { start, end };
-}
-function getWeekWindow(now){ return getWeekWindowFromDate(now); }
-
-function openExport(){
-  if(!exportModal) return;
-
-  const paydaySelect = safeEl("paydaySelect");
-  if(paydaySelect) paydaySelect.value = String(payday);
+// ================= STATS =================
+function updateStats(list){
+  const todayKey = localTodayKey();
+  const today = list.filter(e=>e.date === todayKey).reduce((s,e)=> s + totalForTotalsNet(e), 0);
 
   const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  const end = new Date(now.getFullYear(), now.getMonth()+1, 0);
+  const weekStart = new Date(now);
+  const day = now.getDay();
+  weekStart.setDate(now.getDate() - day);
+  weekStart.setHours(0,0,0,0);
 
-  const exportStart = safeEl("exportStart");
-  const exportEnd = safeEl("exportEnd");
-  if(exportStart) exportStart.value = formatYYYYMMDD(start);
-  if(exportEnd) exportEnd.value = formatYYYYMMDD(end);
+  const week = list.reduce((s,e)=>{
+    const d = parseLocalDate(e.date);
+    if(!d) return s;
+    if(d >= weekStart) return s + totalForTotalsNet(e);
+    return s;
+  }, 0);
 
-  const w = getWeekWindow(now);
-  payPeriodAnchor = new Date(w.start);
-  updatePayPeriodUI();
+  const month = list.reduce((s,e)=>{
+    const d = parseLocalDate(e.date);
+    if(!d) return s;
+    if(d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()){
+      return s + totalForTotalsNet(e);
+    }
+    return s;
+  }, 0);
 
-  const summaryOut = safeEl("summaryOut");
-  if(summaryOut) summaryOut.innerHTML = "";
+  const qIdx = currentQuarterIndex(now);
+  const quarter = list.reduce((s,e)=>{
+    const d = parseLocalDate(e.date);
+    if(!d) return s;
+    if(d.getFullYear() === now.getFullYear() && currentQuarterIndex(d) === qIdx){
+      return s + totalForTotalsNet(e);
+    }
+    return s;
+  }, 0);
 
-  exportModal.style.display = "flex";
+  const year = list.reduce((s,e)=>{
+    const d = parseLocalDate(e.date);
+    if(!d) return s;
+    if(d.getFullYear() === now.getFullYear()){
+      return s + totalForTotalsNet(e);
+    }
+    return s;
+  }, 0);
+
+  const t = safeEl("todayTotal"); if(t) t.textContent = money(today);
+  const w = safeEl("weekTotal"); if(w) w.textContent = money(week);
+  const m = safeEl("monthTotal"); if(m) m.textContent = money(month);
+  const q = safeEl("quarterTotal"); if(q) q.textContent = money(quarter);
+  const y = safeEl("yearTotal"); if(y) y.textContent = money(year);
+
+  const pill = safeEl("splitPillPct");
+  if(pill) pill.textContent = `${clampPct(splitSettings.defaultPct || 100)}%`;
 }
-function closeExport(){
-  if(!exportModal) return;
-  exportModal.style.display = "none";
+
+// ================= ENTRY FORM =================
+function set(id, val){
+  const el = safeEl(id);
+  if(el) el.value = (val === null || val === undefined) ? "" : val;
 }
 
-(function initPaydaySelect(){
-  const paydaySelect = safeEl("paydaySelect");
-  if(!paydaySelect) return;
-
-  paydaySelect.value = String(payday);
-  paydaySelect.addEventListener("change", function(){
-    payday = Number(this.value);
-    localStorage.setItem("payday", String(payday));
-
-    const base = payPeriodAnchor ? new Date(payPeriodAnchor) : new Date();
-    const w = getWeekWindowFromDate(base);
-    payPeriodAnchor = new Date(w.start);
-    updatePayPeriodUI();
-
-    render();
-  });
-})();
-
-function updatePayPeriodUI(){
-  const ppStart = safeEl("ppStart");
-  const ppEnd = safeEl("ppEnd");
-  if(!ppStart || !ppEnd) return;
-
-  const anchor = payPeriodAnchor ? new Date(payPeriodAnchor) : new Date();
-  const w = getWeekWindowFromDate(anchor);
-  ppStart.value = formatYYYYMMDD(w.start);
-  ppEnd.value = formatYYYYMMDD(w.end);
-}
-function prevPayPeriod(){
-  if(!payPeriodAnchor) payPeriodAnchor = new Date();
-  const d = new Date(payPeriodAnchor);
-  d.setDate(d.getDate() - 7);
-  payPeriodAnchor = d;
-  updatePayPeriodUI();
-}
-function nextPayPeriod(){
-  if(!payPeriodAnchor) payPeriodAnchor = new Date();
-  const d = new Date(payPeriodAnchor);
-  d.setDate(d.getDate() + 7);
-  payPeriodAnchor = d;
-  updatePayPeriodUI();
-}
-window.openExport = openExport;
-window.closeExport = closeExport;
-window.prevPayPeriod = prevPayPeriod;
-window.nextPayPeriod = nextPayPeriod;
-
-// ================= MAIN FORM =================
 function openForm(){
   editingId = null;
-  const title = safeEl("formTitle");
-  if(title) title.textContent = "Add Entry";
-
   if (!formModal) return;
   formModal.style.display="flex";
 
@@ -681,24 +529,24 @@ function saveBammer(){
 
   const before = getClientProgressSnapshot(client);
 
-  entries.push({
+  const entry = {
     id: Date.now(),
     date,
     client,
-    contact: "",
-    social: "",
     description: safeVal("bDesc") || "",
     location: safeVal("bLocation") || "",
-    notes: "",
     total,
-    payments: [],
+    payments: [{ amount: total, kind:"session" }],
     status: safeVal("bStatus") || "paid",
+    contact: "",
+    social: "",
+    notes: "",
     image: null,
     createdAt: new Date().toISOString(),
     updatedAt: null,
     editHistory: []
-  });
-
+  };
+  entries.push(entry);
   save();
   closeBammerQuick();
 
@@ -731,12 +579,16 @@ function saveDepositOnly(){
   const date = safeVal("dDate");
   const client = (safeVal("dClient") || "").trim();
   const dep = Number(safeVal("dDeposit") || 0);
-  if(!date || !client){ alert("Date + Client required."); return; }
-  if(!(dep > 0)){ alert("Deposit amount must be > 0."); return; }
-
   const total = Number(safeVal("dTotal") || 0);
 
-  entries.push({
+  if(!date || !client || !(dep > 0)){
+    alert("Date + Client + Deposit amount required.");
+    return;
+  }
+
+  const before = getClientProgressSnapshot(client);
+
+  const entry = {
     id: Date.now(),
     date,
     client,
@@ -746,45 +598,51 @@ function saveDepositOnly(){
     location: safeVal("dLocation") || "",
     notes: "",
     total,
-    payments: [{ amount: dep, kind: "deposit", note: "" }],
+    payments: [{ amount: dep, kind:"deposit" }],
     status: "booked",
     image: null,
     createdAt: new Date().toISOString(),
     updatedAt: null,
     editHistory: []
-  });
-
+  };
+  entries.push(entry);
   save();
   closeDepositQuick();
+
+  const after = getClientProgressSnapshot(client);
+  maybeNotifyClientProgress(client, before, after);
 }
 window.openDepositQuick = openDepositQuick;
 window.closeDepositQuick = closeDepositQuick;
 window.saveDepositOnly = saveDepositOnly;
 
-// ================= EDIT HISTORY + EDIT FORM FILL =================
+// ================= EDIT HISTORY =================
 function diffFields(oldEntry, newEntry){
-  const fields = ["date","client","contact","social","description","location","notes","total","status"];
+  const fields = [
+    ["date","Date"],
+    ["client","Client"],
+    ["contact","Contact"],
+    ["social","Social"],
+    ["description","Description"],
+    ["location","Location"],
+    ["notes","Notes"],
+    ["status","Status"],
+    ["total","Total"]
+  ];
   const changes = [];
 
-  for(const f of fields){
-    const oldV = (oldEntry[f] ?? "");
-    const newV = (newEntry[f] ?? "");
-    if(String(oldV) !== String(newV)){
-      changes.push({ field:f, oldValue:oldV, newValue:newV });
+  fields.forEach(([key,label])=>{
+    const a = oldEntry[key];
+    const b = newEntry[key];
+    if(String(a ?? "") !== String(b ?? "")){
+      changes.push({ field: label, oldValue: String(a ?? ""), newValue: String(b ?? "") });
     }
-  }
+  });
 
-  const oldPaid = paidAmount(oldEntry);
-  const newPaid = paidAmount(newEntry);
-  const oldDep = depositAmount(oldEntry);
-  const newDep = depositAmount(newEntry);
-
-  if(oldPaid !== newPaid || oldDep !== newDep){
-    changes.push({
-      field:"payments",
-      oldValue:`paidSoFar=${oldPaid}, deposit=${oldDep}`,
-      newValue:`paidSoFar=${newPaid}, deposit=${newDep}`
-    });
+  const oldPay = JSON.stringify(paymentsArray(oldEntry));
+  const newPay = JSON.stringify(paymentsArray(newEntry));
+  if(oldPay !== newPay){
+    changes.push({ field:"Payments", oldValue:"updated", newValue:"updated" });
   }
 
   const oldHas = !!oldEntry.image;
@@ -794,43 +652,6 @@ function diffFields(oldEntry, newEntry){
   }
 
   return changes;
-}
-
-function fillFormForEdit(entry){
-  editingId = entry.id;
-
-  const title = safeEl("formTitle");
-  if(title) title.textContent = "Edit Entry";
-
-  if(!formModal) return;
-  formModal.style.display = "flex";
-
-  const set = (id, val) => { const el = safeEl(id); if(el) el.value = (val ?? ""); };
-
-  set("date", entry.date);
-  set("client", entry.client);
-  set("contact", entry.contact || "");
-  set("social", entry.social || "");
-  set("description", entry.description || "");
-  set("location", entry.location || "");
-  set("notes", entry.notes || "");
-  set("total", entry.total ?? 0);
-  set("status", entry.status || "unpaid");
-
-  const sessions = safeEl("sessions");
-  if(sessions) sessions.innerHTML = "";
-
-  set("deposit", depositAmount(entry));
-
-  const sessionPays = paymentsArray(entry).filter(p => p.kind !== "deposit");
-  sessionPays.forEach(p=>{
-    addSession();
-    const amounts = document.querySelectorAll(".session-amount");
-    const notes = document.querySelectorAll(".session-note");
-    const idx = amounts.length - 1;
-    if(amounts[idx]) amounts[idx].value = Number(p.amount || 0);
-    if(notes[idx]) notes[idx].value = p.note || "";
-  });
 }
 
 // ================= CLIENT REWARDS (badge + discount) =================
@@ -924,27 +745,44 @@ function maybeNotifyClientProgress(name, before, after){
 
 // ================= SAVE ENTRY (ADD/EDIT) =================
 function saveEntry(){
+  if(!formBox) return;
+
+  clearInvalidMarks(formBox);
+
   const dateVal = safeVal("date");
   const clientVal = (safeVal("client") || "").trim();
-  if(!dateVal || !clientVal){
-    alert("Date and Client Name are required.");
-    return;
-  }
 
-  const before = getClientProgressSnapshot(clientVal);
+  const errors = [];
+  if(!dateVal) errors.push({ id:"date", msg:"Required" });
+  if(!clientVal) errors.push({ id:"client", msg:"Required" });
+
+  const totalValRaw = safeVal("total");
+  const totalVal = Number(totalValRaw || 0);
+  if(totalVal < 0) errors.push({ id:"total", msg:"Must be 0 or more" });
+
+  const depositValRaw = safeVal("deposit");
+  const depositVal = Number(depositValRaw || 0);
+  if(depositVal < 0) errors.push({ id:"deposit", msg:"Must be 0 or more" });
+
+  const statusVal = (safeVal("status") || "unpaid").toLowerCase();
 
   const payments = [];
-
-  const depositVal = Number(safeVal("deposit") || 0);
-  if(depositVal > 0){
-    payments.push({ amount: depositVal, kind: "deposit" });
-  }
+  if(depositVal > 0) payments.push({ amount: depositVal, kind: "deposit" });
 
   const sessionAmounts = document.querySelectorAll(".session-amount");
   const sessionNotes = document.querySelectorAll(".session-note");
 
   sessionAmounts.forEach((input, i)=>{
     const val = Number(input.value || 0);
+    if(val < 0){
+      const field = input.closest('.field');
+      if(field){
+        field.classList.add('invalid');
+        let m = field.querySelector('.field-err');
+        if(!m){ m = document.createElement('div'); m.className = 'field-err'; field.appendChild(m); }
+        m.textContent = 'Must be 0 or more';
+      }
+    }
     if(val > 0){
       payments.push({
         amount: val,
@@ -954,6 +792,18 @@ function saveEntry(){
     }
   });
 
+  if(statusVal === "booked" && !(depositVal > 0)){
+    errors.push({ id:"deposit", msg:"Booked needs a deposit" });
+  }
+
+  if(errors.length){
+    errors.forEach(e=> markInvalid(e.id, e.msg));
+    scrollToFirstInvalid(formBox);
+    return;
+  }
+
+  const before = getClientProgressSnapshot(clientVal);
+
   const base = {
     date: dateVal,
     client: clientVal,
@@ -962,57 +812,66 @@ function saveEntry(){
     description: safeVal("description") || "",
     location: safeVal("location") || "",
     notes: safeVal("notes") || "",
-    total: Number(safeVal("total") || 0),
+    total: totalVal,
     payments,
-    status: safeVal("status") || "unpaid"
+    status: statusVal
   };
 
-  const imageEl = safeEl("image");
-  const file = imageEl && imageEl.files ? imageEl.files[0] : null;
+  const warnings = [];
+  const paidSoFar = payments.reduce((s,p)=> s + Number(p.amount || 0), 0);
 
-  const applyAndSave = (newImageDataUrlOrNull)=>{
-    if(editingId){
-      const idx = entries.findIndex(e=>e.id===editingId);
-      if(idx === -1){ closeForm(); return; }
+  if(statusVal === "paid" && totalVal > 0 && paidSoFar < totalVal){
+    warnings.push("Status is PAID but paid so far is less than Total.");
+  }
+  if(statusVal === "unpaid" && paidSoFar > 0){
+    warnings.push("Status is UNPAID but payments exist.");
+  }
+  if(statusVal === "partial" && paidSoFar <= 0){
+    warnings.push("Status is PARTIAL but no payments were entered.");
+  }
+  if(totalVal > 0 && depositVal > totalVal){
+    warnings.push("Deposit is greater than Total.");
+  }
 
-      const old = entries[idx];
-      const next = Object.assign({}, old, base);
-      next.image = newImageDataUrlOrNull ? newImageDataUrlOrNull : (old.image || null);
+  if(warnings.length){
+    const ok = confirm("Quick check:\n\n" + warnings.map(w=> "• " + w).join("\n") + "\n\nSave anyway?");
+    if(!ok) return;
+  }
 
-      const ts = new Date().toISOString();
-      if(!Array.isArray(next.editHistory)) next.editHistory = [];
-      const changes = diffFields(old, next);
-      next.editHistory.push({ timestamp: ts, changes: changes.length ? changes : [{ field:"(no changes)", oldValue:"", newValue:"" }] });
-      next.updatedAt = ts;
+  if(editingId){
+    const idx = entries.findIndex(e=>e.id===editingId);
+    if(idx === -1){ closeForm(); return; }
 
-      entries[idx] = next;
-      save();
-      closeForm();
+    const old = entries[idx];
+    const next = Object.assign({}, old, base);
 
-      const after = getClientProgressSnapshot(clientVal);
-      maybeNotifyClientProgress(clientVal, before, after);
-    } else {
-      entries.push(Object.assign({}, base, {
-        id: Date.now(),
-        image: newImageDataUrlOrNull || null,
-        createdAt: new Date().toISOString(),
-        updatedAt: null,
-        editHistory: []
-      }));
-      save();
-      closeForm();
+    next.image = old.image || null;
 
-      const after = getClientProgressSnapshot(clientVal);
-      maybeNotifyClientProgress(clientVal, before, after);
-    }
-  };
+    const ts = new Date().toISOString();
+    if(!Array.isArray(next.editHistory)) next.editHistory = [];
+    const changes = diffFields(old, next);
+    next.editHistory.push({ timestamp: ts, changes: changes.length ? changes : [{ field:"(no changes)", oldValue:"", newValue:"" }] });
+    next.updatedAt = ts;
 
-  if(file){
-    const reader = new FileReader();
-    reader.onload = (e)=> applyAndSave(e.target.result);
-    reader.readAsDataURL(file);
+    entries[idx] = next;
+    save();
+    closeForm();
+
+    const after = getClientProgressSnapshot(clientVal);
+    maybeNotifyClientProgress(clientVal, before, after);
   } else {
-    applyAndSave(null);
+    entries.push(Object.assign({}, base, {
+      id: Date.now(),
+      image: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: null,
+      editHistory: []
+    }));
+    save();
+    closeForm();
+
+    const after = getClientProgressSnapshot(clientVal);
+    maybeNotifyClientProgress(clientVal, before, after);
   }
 }
 window.saveEntry = saveEntry;
@@ -1120,433 +979,239 @@ function openClientProfile(name){
           </div>
         `;
       }).join("")}
-      ${list.length > 30 ? `<div class="hint" style="margin-top:8px;">Showing newest 30…</div>` : ``}
     </div>
 
     <div class="actions-row">
-      <button type="button" class="secondarybtn" onclick="closeClient()">Close</button>
+      <button type="button" class="secondarybtn" onclick="closeClientProfile()">Close</button>
     </div>
   `;
 
-  prefillClient = { client: displayName, contact, social };
   clientModal.style.display = "flex";
 }
+window.openClientProfile = openClientProfile;
 
-function closeClient(){
+function closeClientProfile(){
   if(!clientModal) return;
   clientModal.style.display = "none";
 }
+window.closeClientProfile = closeClientProfile;
+
 function openEntryFromClient(id){
-  closeClient();
+  closeClientProfile();
   viewEntry(id);
 }
+window.openEntryFromClient = openEntryFromClient;
 
 function repeatClientFull(){
-  if(!prefillClient) return;
-  closeClient();
+  if(!clientModal) return;
+  const name = (clientBox.querySelector(".modal-title")?.textContent || "").replace("Client — ","").trim();
+  const list = getClientEntries(name);
+  if(!list.length) return;
+  const contact = guessLatestField(list, "contact");
+  const social = guessLatestField(list, "social");
+  prefillClient = { client: name, contact, social };
+  closeClientProfile();
   openForm();
 }
+window.repeatClientFull = repeatClientFull;
+
 function repeatClientBammer(){
-  if(!prefillClient) return;
-  closeClient();
+  if(!clientModal) return;
+  const name = (clientBox.querySelector(".modal-title")?.textContent || "").replace("Client — ","").trim();
+  const list = getClientEntries(name);
+  if(!list.length) return;
+  const contact = guessLatestField(list, "contact");
+  const social = guessLatestField(list, "social");
+  prefillClient = { client: name, contact, social };
+  closeClientProfile();
   openBammerQuick();
 }
+window.repeatClientBammer = repeatClientBammer;
+
 function repeatClientDeposit(){
-  if(!prefillClient) return;
-  closeClient();
+  if(!clientModal) return;
+  const name = (clientBox.querySelector(".modal-title")?.textContent || "").replace("Client — ","").trim();
+  const list = getClientEntries(name);
+  if(!list.length) return;
+  const contact = guessLatestField(list, "contact");
+  const social = guessLatestField(list, "social");
+  prefillClient = { client: name, contact, social };
+  closeClientProfile();
   openDepositQuick();
 }
-
-window.openClientProfile = openClientProfile;
-window.closeClient = closeClient;
-window.openEntryFromClient = openEntryFromClient;
-window.repeatClientFull = repeatClientFull;
-window.repeatClientBammer = repeatClientBammer;
 window.repeatClientDeposit = repeatClientDeposit;
 
-// ================= VIEW / EDIT / DELETE =================
+// ================= VIEW ENTRY =================
 function viewEntry(id){
   const entry = entries.find(e=>e.id===id);
-  if(!entry || !viewBox) return;
-
+  if(!entry || !viewModal || !viewBox) return;
   viewingId = id;
 
-  const paidSoFar = paidAmount(entry);
-  const dep = depositAmount(entry);
-  const remaining = Number(entry.total || 0) - paidSoFar;
-
-  const showPaymentsSection = hasAnyPayments(entry);
-  const showDepositLine = dep > 0;
-  const showConvert = isDepositOnlyEntry(entry);
-
-  const grossCounts = totalForTotalsGross(entry);
-  const pct = getSplitPctForDate(entry.date);
-  const netCounts = totalForTotalsNet(entry);
-
-  let historyHtml = "<p style='opacity:.7;'>No edits yet.</p>";
-  if(Array.isArray(entry.editHistory) && entry.editHistory.length){
-    historyHtml = entry.editHistory
-      .slice()
-      .reverse()
-      .map(h=>{
-        const list = (h.changes || []).map(c=>{
-          return `<li><strong>${c.field}:</strong> "${String(c.oldValue)}" → "${String(c.newValue)}"</li>`;
-        }).join("");
-        return `<div style="margin-top:10px;">
-          <div style="opacity:.85;"><strong>${h.timestamp}</strong></div>
-          <ul style="margin:6px 0 0 18px;">${list}</ul>
-        </div>`;
-      }).join("");
-  }
-
-  const badge = badgeHtmlForClient(entry.client);
+  const paid = paidForPreview(entry);
+  const deposit = depositAmount(entry);
+  const sessions = paymentsArray(entry).filter(p=>p.kind==="session");
 
   viewBox.innerHTML = `
-    <div class="modal-title">
-      <span class="client-link" onclick="openClientProfile(${JSON.stringify(entry.client)})">${entry.client}</span>
-      ${badge ? `&nbsp;${badge}` : ``}
-      — ${entry.date}
-    </div>
-
-    <div class="row">
-      <div class="summary-box" style="margin-top:0;">
-        <div><strong>Status:</strong> <span class="status ${entry.status}">${entry.status}</span></div>
-        <div style="margin-top:8px;"><strong>Total Price:</strong> ${money(entry.total)}</div>
-        ${showDepositLine ? `<div style="margin-top:8px;"><strong>Deposit:</strong> ${money(dep)}</div>` : ``}
-      </div>
-
-      <div class="summary-box" style="margin-top:0;">
-        <div><strong>Location:</strong> ${entry.location || ""}</div>
-      </div>
-    </div>
-
-    <div class="sectionDivider"></div>
+    <div class="modal-title">Entry — ${entry.client}</div>
 
     <div class="summary-box" style="margin-top:0;">
-      <div><strong>Description:</strong></div>
-      <div style="margin-top:6px; opacity:.95;">${entry.description || ""}</div>
-      ${entry.contact ? `<div style="margin-top:10px;"><strong>Contact:</strong> ${entry.contact}</div>` : ``}
-      ${entry.social ? `<div style="margin-top:8px;"><strong>Social:</strong> ${entry.social}</div>` : ``}
-      ${entry.notes ? `<div style="margin-top:8px;"><strong>Notes:</strong> ${entry.notes}</div>` : ``}
+      <div><strong>Date:</strong> ${entry.date}</div>
+      <div><strong>Status:</strong> ${String(entry.status||"").toUpperCase()}</div>
+      <div><strong>Total:</strong> ${money(entry.total)}</div>
+      <div><strong>Paid:</strong> ${money(paid)}</div>
+      ${deposit ? `<div><strong>Deposit:</strong> ${money(deposit)}</div>` : ``}
+      ${entry.location ? `<div><strong>Location:</strong> ${entry.location}</div>` : ``}
+      ${entry.contact ? `<div><strong>Contact:</strong> ${entry.contact}</div>` : ``}
+      ${entry.social ? `<div><strong>Social:</strong> ${entry.social}</div>` : ``}
+      ${entry.description ? `<div style="margin-top:10px;"><strong>Description:</strong><br>${entry.description}</div>` : ``}
+      ${entry.notes ? `<div style="margin-top:10px;"><strong>Notes:</strong><br>${entry.notes}</div>` : ``}
     </div>
 
-    ${showPaymentsSection ? `
-      <div class="sectionDivider"></div>
-
-      <div class="summary-box" style="margin-top:0;">
-        <div style="font-weight:900;color:var(--gold);">Payments</div>
-        <ul style="margin:10px 0 0 18px;">
-          ${paymentsArray(entry).filter(p=>Number(p.amount||0)>0).map(p=>{
-            const label = p.kind ? `(${p.kind})` : "";
-            const note = p.note ? ` — ${p.note}` : "";
-            return `<li>${money(p.amount)} ${label}${note}</li>`;
-          }).join("")}
-        </ul>
-
-        <details style="margin-top:12px;">
-          <summary>More details</summary>
-          <div style="margin-top:10px;">
-            <div><strong>Paid So Far:</strong> ${money(paidSoFar)}</div>
-            ${Number(entry.total||0) > 0 ? `<div style="margin-top:6px;"><strong>Remaining:</strong> ${money(remaining)}</div>` : ``}
-            <div style="margin-top:10px;"><strong>Gross counted:</strong> ${money(grossCounts)}</div>
-            <div style="margin-top:6px;"><strong>Split for month:</strong> ${pct}%</div>
-            <div style="margin-top:6px;"><strong>Net counted:</strong> ${money(netCounts)}</div>
-          </div>
-        </details>
+    ${sessions.length ? `
+      <div class="summary-box">
+        <div style="font-weight:900;color:var(--gold);">Sessions</div>
+        ${sessions.map(s=> `<div>${money(s.amount)} ${s.note ? `— <span style="opacity:.85;">${s.note}</span>` : ``}</div>`).join("")}
       </div>
     ` : ``}
 
-    ${entry.image ? `<img src="${entry.image}" style="width:100%; margin-top:15px; border-radius:12px; border:1px solid rgba(212,175,55,.3);">` : ""}
-
-    <div class="sectionDivider"></div>
-
     <details>
-      <summary>Edit History</summary>
-      ${historyHtml}
+      <summary>Edit history</summary>
+      <div style="margin-top:10px;">
+        ${(Array.isArray(entry.editHistory) && entry.editHistory.length)
+          ? entry.editHistory.slice().reverse().map(h=>{
+              const list = (h.changes || []).map(c=> `<li><strong>${c.field}:</strong> ${c.oldValue} → ${c.newValue}</li>`).join("");
+              return `<div style="margin:10px 0;"><div class="hint">${h.timestamp}</div><ul style="margin:8px 0 0 18px;">${list}</ul></div>`;
+            }).join("")
+          : `<div class="hint">No edits yet.</div>`
+        }
+      </div>
     </details>
 
-    <div class="actions-row" style="margin-top:18px;">
-      ${showConvert ? `<button type="button" onclick="convertDepositToTattoo()">Convert Deposit → Full Tattoo</button>` : ``}
-      <button type="button" onclick="editFromView()">Edit</button>
-      <button type="button" class="dangerbtn" onclick="deleteFromView()">Delete</button>
+    <div class="actions-row">
+      <button type="button" onclick="editEntry(${entry.id})">Edit</button>
+      <button type="button" class="dangerbtn" onclick="deleteEntry(${entry.id})">Delete</button>
       <button type="button" class="secondarybtn" onclick="closeView()">Close</button>
     </div>
   `;
 
-  if(viewModal) viewModal.style.display = "flex";
+  viewModal.style.display = "flex";
 }
-
-function convertDepositToTattoo(){
-  if(!viewingId) return;
-  const entry = entries.find(e=>e.id===viewingId);
-  if(!entry) return;
-
-  closeView();
-  fillFormForEdit(entry);
-
-  const statusEl = safeEl("status");
-  if(statusEl && (!statusEl.value || statusEl.value === "unpaid" || statusEl.value === "booked")) statusEl.value = "partial";
-}
+window.viewEntry = viewEntry;
 
 function closeView(){
   if(!viewModal) return;
-  viewModal.style.display="none";
+  viewModal.style.display = "none";
   viewingId = null;
 }
-function editFromView(){
-  if(!viewingId) return;
-  const entry = entries.find(e=>e.id===viewingId);
-  if(!entry) return;
-  closeView();
-  fillFormForEdit(entry);
-}
-function deleteFromView(){
-  if(!viewingId) return;
-  const entry = entries.find(e=>e.id===viewingId);
-  if(!entry) return;
+window.closeView = closeView;
 
-  const ok = confirm(`Delete entry for ${entry.client} on ${entry.date}?`);
+function deleteEntry(id){
+  const ok = confirm("Delete this entry permanently?");
   if(!ok) return;
-
-  entries = entries.filter(e=>e.id!==viewingId);
+  entries = entries.filter(e=>e.id !== id);
   save();
   closeView();
 }
+window.deleteEntry = deleteEntry;
 
-window.viewEntry = viewEntry;
-window.closeView = closeView;
-window.editFromView = editFromView;
-window.deleteFromView = deleteFromView;
-window.convertDepositToTattoo = convertDepositToTattoo;
+function editEntry(id){
+  const entry = entries.find(e=>e.id===id);
+  if(!entry) return;
 
-// ================= STATS (NET) =================
-function updateStats(filteredList){
-  const todayEl = safeEl("todayTotal");
-  const weekEl = safeEl("weekTotal");
-  const monthEl = safeEl("monthTotal");
-  const quarterEl = safeEl("quarterTotal");
-  const yearEl = safeEl("yearTotal");
-  if(!todayEl) return;
+  editingId = id;
+  if(!formModal) return;
 
-  const now = new Date();
-  const todayStr = localTodayKey(); // ✅ LOCAL, midnight reset
-  const weekWin = getWeekWindow(now);
-  const qNow = currentQuarterIndex(now);
+  formModal.style.display = "flex";
+  set("date", entry.date);
+  set("client", entry.client);
+  set("contact", entry.contact || "");
+  set("social", entry.social || "");
+  set("description", entry.description || "");
+  set("location", entry.location || "");
+  set("notes", entry.notes || "");
+  set("total", Number(entry.total || 0));
+  set("status", entry.status || "unpaid");
 
-  let today=0, week=0, month=0, quarter=0, year=0;
+  const sessions = safeEl("sessions");
+  if(sessions) sessions.innerHTML = "";
 
-  (filteredList || entries).forEach(entry=>{
-    const d = parseLocalDate(entry.date);
-    if(!d) return;
+  set("deposit", depositAmount(entry));
 
-    const amtNet = totalForTotalsNet(entry);
-
-    if(entry.date === todayStr) today += amtNet;
-
-    if(d.getFullYear() === now.getFullYear()){
-      year += amtNet;
-      if(currentQuarterIndex(d) === qNow) quarter += amtNet;
-    }
-
-    if(d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()){
-      month += amtNet;
-    }
-
-    if(d >= weekWin.start && d <= weekWin.end){
-      week += amtNet;
-    }
+  const sessionPays = paymentsArray(entry).filter(p => p.kind !== "deposit");
+  sessionPays.forEach(p=>{
+    addSession();
+    const amounts = document.querySelectorAll(".session-amount");
+    const notes = document.querySelectorAll(".session-note");
+    const idx = amounts.length - 1;
+    if(amounts[idx]) amounts[idx].value = Number(p.amount || 0);
+    if(notes[idx]) notes[idx].value = p.note || "";
   });
-
-  todayEl.innerText = money(today);
-  if(weekEl) weekEl.innerText = money(week);
-  if(monthEl) monthEl.innerText = money(month);
-  if(quarterEl) quarterEl.innerText = money(quarter);
-  if(yearEl) yearEl.innerText = money(year);
 }
+window.editEntry = editEntry;
 
-// ================= CSV EXPORT (NET columns) =================
-function csvEscape(v){
-  const s = String(v ?? "");
-  if (/[",\n]/.test(s)) return `"${s.replace(/"/g,'""')}"`;
-  return s;
+// ================= SETTINGS =================
+function openSettings(){
+  if(!settingsModal) return;
+  safeEl("defaultSplitPct").value = clampPct(splitSettings.defaultPct || 100);
+  safeEl("overrideMonth").value = "";
+  safeEl("overridePct").value = "";
+  renderOverrideList();
+  settingsModal.style.display = "flex";
 }
-function downloadCSV(rows, filename){
-  const csv = rows.map(r=>r.map(csvEscape).join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+function closeSettings(){
+  if(!settingsModal) return;
+  settingsModal.style.display = "none";
 }
+window.openSettings = openSettings;
+window.closeSettings = closeSettings;
 
-function exportCSV(){
-  const startStr = safeVal("exportStart");
-  const endStr = safeVal("exportEnd");
-  const start = parseLocalDate(startStr);
-  const end = parseLocalDate(endStr);
-
-  if(!start || !end){ alert("Pick a start and end date."); return; }
-  if(end < start){ alert("End date must be after start date."); return; }
-
-  exportRangeCSV(start, end, `ink-log_${startStr}_to_${endStr}.csv`);
-}
-function exportPayPeriodCSV(){
-  const ppStartStr = safeVal("ppStart");
-  const ppEndStr = safeVal("ppEnd");
-  const start = parseLocalDate(ppStartStr);
-  const end = parseLocalDate(ppEndStr);
-  if(!start || !end){ alert("Pay period dates missing."); return; }
-
-  exportRangeCSV(start, end, `pay_period_${ppStartStr}_to_${ppEndStr}.csv`);
-}
-function exportRangeCSV(start, end, filename){
-  const rows = [];
-  rows.push([
-    "date","client","contact","social","description","location",
-    "total_price","paid_so_far","deposit",
-    "gross_counted","split_pct","net_counted",
-    "remaining","status","notes"
-  ]);
-
-  entries.forEach(e=>{
-    const d = parseLocalDate(e.date);
-    if(!d) return;
-    if(d < start || d > end) return;
-
-    const paidSoFar = paidAmount(e);
-    const dep = depositAmount(e);
-    const total = Number(e.total || 0);
-    const remaining = total - paidSoFar;
-
-    const gross = totalForTotalsGross(e);
-    const pct = getSplitPctForDate(e.date);
-    const net = totalForTotalsNet(e);
-
-    rows.push([
-      e.date,
-      e.client,
-      e.contact || "",
-      e.social || "",
-      e.description || "",
-      e.location || "",
-      total,
-      paidSoFar,
-      dep,
-      gross,
-      pct,
-      net,
-      remaining,
-      e.status || "",
-      e.notes || ""
-    ]);
-  });
-
-  downloadCSV(rows, filename);
-}
-window.exportCSV = exportCSV;
-window.exportPayPeriodCSV = exportPayPeriodCSV;
-
-// ================= EXPORT SUMMARY (NET) =================
-function buildSummary(mode){
-  let start = null;
-  let end = null;
-  let title = "";
-
-  if(mode === "payperiod"){
-    const s = parseLocalDate(safeVal("ppStart"));
-    const e = parseLocalDate(safeVal("ppEnd"));
-    if(!s || !e){ alert("Pay period dates missing."); return; }
-    start = s; end = e;
-    title = `Pay Period Summary (${safeVal("ppStart")} → ${safeVal("ppEnd")})`;
-  } else {
-    const s = parseLocalDate(safeVal("exportStart"));
-    const e = parseLocalDate(safeVal("exportEnd"));
-    if(!s || !e){ alert("Pick start/end dates."); return; }
-    if(e < s){ alert("End date must be after start date."); return; }
-    start = s; end = e;
-    title = `Date Range Summary (${safeVal("exportStart")} → ${safeVal("exportEnd")})`;
-  }
-
-  const filtered = entries.filter(e=>{
-    const d = parseLocalDate(e.date);
-    if(!d) return false;
-    return d >= start && d <= end;
-  });
-
-  const totalCount = filtered.length;
-  let netTotal = 0;
-  let grossTotal = 0;
-
-  const statusCounts = { booked:0, paid:0, partial:0, unpaid:0, no_show:0 };
-  const clientTotals = {};
-  const locationTotals = {};
-
-  filtered.forEach(e=>{
-    const s = (e.status || "unpaid").toLowerCase();
-    if(statusCounts[s] !== undefined) statusCounts[s]++;
-
-    const gross = totalForTotalsGross(e);
-    const net = totalForTotalsNet(e);
-    grossTotal += gross;
-    netTotal += net;
-
-    const c = (e.client || "Unknown").trim() || "Unknown";
-    clientTotals[c] = (clientTotals[c] || 0) + net;
-
-    const loc = (e.location || "Unknown").trim() || "Unknown";
-    locationTotals[loc] = (locationTotals[loc] || 0) + net;
-  });
-
-  function topN(obj, n){
-    return Object.entries(obj).sort((a,b)=>b[1]-a[1]).slice(0,n);
-  }
-
-  const topClients = topN(clientTotals, 5);
-  const topLocs = topN(locationTotals, 5);
-
-  const out = safeEl("summaryOut");
+function renderOverrideList(){
+  const out = safeEl("overrideList");
   if(!out) return;
-
-  out.innerHTML = `
-    <div style="font-weight:900; color: var(--gold); margin-bottom:8px;">${title}</div>
-
-    <div class="summary-grid">
-      <div class="summary-box">
-        <div style="font-weight:900;">Totals</div>
-        <div>Entries: <strong>${totalCount}</strong></div>
-        <div>Gross: <strong>${money(grossTotal)}</strong></div>
-        <div>Net (after split): <strong>${money(netTotal)}</strong></div>
-      </div>
-
-      <div class="summary-box">
-        <div style="font-weight:900;">Status Counts</div>
-        <div>BOOKED: <strong>${statusCounts.booked}</strong></div>
-        <div>PAID: <strong>${statusCounts.paid}</strong></div>
-        <div>PARTIAL: <strong>${statusCounts.partial}</strong></div>
-        <div>UNPAID: <strong>${statusCounts.unpaid}</strong></div>
-        <div>NO SHOW: <strong>${statusCounts.no_show}</strong></div>
-      </div>
-    </div>
-
-    <div class="summary-grid" style="margin-top:10px;">
-      <div class="summary-box">
-        <div style="font-weight:900;">Top Clients (NET)</div>
-        ${topClients.length ? `<ol style="margin:8px 0 0 18px;">${topClients.map(([k,v])=>`<li>${k}: <strong>${money(v)}</strong></li>`).join("")}</ol>` : "<div style='opacity:.75;'>None</div>"}
-      </div>
-
-      <div class="summary-box">
-        <div style="font-weight:900;">Top Locations (NET)</div>
-        ${topLocs.length ? `<ol style="margin:8px 0 0 18px;">${topLocs.map(([k,v])=>`<li>${k}: <strong>${money(v)}</strong></li>`).join("")}</ol>` : "<div style='opacity:.75;'>None</div>"}
-      </div>
-    </div>
-  `;
+  const mo = splitSettings.monthOverrides || {};
+  const keys = Object.keys(mo).sort();
+  if(!keys.length){
+    out.textContent = "No month overrides.";
+    return;
+  }
+  out.innerHTML = keys.map(k=> `<div>${k}: <b style="color:var(--gold)">${clampPct(mo[k])}%</b></div>`).join("");
 }
-window.buildSummary = buildSummary;
+
+function saveSplitSettings(){
+  const pct = clampPct(safeVal("defaultSplitPct") || 100);
+  splitSettings.defaultPct = pct;
+  localStorage.setItem("splitSettings", JSON.stringify(splitSettings));
+  pushToast({ title:"Settings saved", sub:`Default split: ${pct}%` });
+  closeSettings();
+  render();
+}
+window.saveSplitSettings = saveSplitSettings;
+
+function saveMonthOverride(){
+  const month = safeVal("overrideMonth");
+  const pct = clampPct(safeVal("overridePct") || 0);
+  if(!month){ alert("Pick a month."); return; }
+  if(!splitSettings.monthOverrides) splitSettings.monthOverrides = {};
+  splitSettings.monthOverrides[month] = pct;
+  localStorage.setItem("splitSettings", JSON.stringify(splitSettings));
+  renderOverrideList();
+  pushToast({ title:"Month override saved", sub:`${month}: ${pct}%` });
+  render();
+}
+window.saveMonthOverride = saveMonthOverride;
+
+function removeMonthOverride(){
+  const month = safeVal("overrideMonth");
+  if(!month){ alert("Pick a month."); return; }
+  if(splitSettings.monthOverrides && splitSettings.monthOverrides[month] !== undefined){
+    delete splitSettings.monthOverrides[month];
+    localStorage.setItem("splitSettings", JSON.stringify(splitSettings));
+    renderOverrideList();
+    pushToast({ title:"Month override removed", sub:month });
+    render();
+  }
+}
+window.removeMonthOverride = removeMonthOverride;
 
 // ================= REWARDS UI =================
 function openRewards(){
@@ -1564,111 +1229,97 @@ window.closeRewards = closeRewards;
 function buildRewardsUI(){
   const levelsList = safeEl("levelsList");
   const discountsList = safeEl("discountsList");
-  if(!levelsList || !discountsList) return;
+  if(levelsList) levelsList.innerHTML = "";
+  if(discountsList) discountsList.innerHTML = "";
 
   const levels = Array.isArray(rewardsSettings.levels) ? rewardsSettings.levels : [];
+  levels.forEach(l=>{
+    const box = document.createElement("div");
+    box.className = "summary-box";
+    box.innerHTML = `
+      <div class="row">
+        <div class="field">
+          <label>Badge Name</label>
+          <input id="lvlName_${l.id}" type="text" value="${l.name || ""}">
+        </div>
+        <div class="field">
+          <label>Min Tattoo Count</label>
+          <input id="lvlMin_${l.id}" type="number" min="0" step="1" value="${Number(l.minCount||0)}">
+        </div>
+      </div>
+      <div class="field" style="margin-top:10px;">
+        <label>Badge PNG</label>
+        <input type="file" id="lvlFile_${l.id}" accept="image/png,image/*" />
+        ${l.pngDataUrl ? `<div class="hint" style="margin-top:6px;">Current badge saved.</div>` : `<div class="hint" style="margin-top:6px;">No PNG uploaded.</div>`}
+      </div>
+      <div class="actions-row">
+        <button type="button" class="dangerbtn" onclick="removeBadgeLevel('${l.id}')">Remove</button>
+      </div>
+    `;
+    if(levelsList) levelsList.appendChild(box);
+  });
+
   const discounts = Array.isArray(rewardsSettings.discounts) ? rewardsSettings.discounts : [];
-
-  levelsList.innerHTML = levels.map(l=>{
-    const img = l.pngDataUrl ? `<img src="${l.pngDataUrl}" style="width:28px;height:28px;border-radius:8px;border:1px solid rgba(212,175,55,.25);object-fit:cover;background:#16201b;">` : "";
-    return `
-      <div class="summary-box" data-level="${l.id}" style="margin-top:10px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
-          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-            ${img}
-            <div style="font-weight:900;color:var(--gold);">${l.name || "Badge"}</div>
-          </div>
-          <button type="button" class="secondarybtn" onclick="removeBadgeLevel('${l.id}')">Remove</button>
+  discounts.forEach(d=>{
+    const box = document.createElement("div");
+    box.className = "summary-box";
+    box.innerHTML = `
+      <div class="row">
+        <div class="field">
+          <label>Label</label>
+          <input id="discLabel_${d.id}" type="text" value="${d.label || ""}">
         </div>
-
-        <div class="row" style="margin-top:10px;">
-          <div class="field">
-            <label>Badge Name</label>
-            <input type="text" id="lvlName_${l.id}" value="${(l.name||"").replace(/"/g,"&quot;")}">
-          </div>
-          <div class="field">
-            <label>Min Tattoos</label>
-            <input type="number" id="lvlMin_${l.id}" value="${Number(l.minCount||0)}">
-          </div>
-        </div>
-
-        <div class="row" style="margin-top:10px;">
-          <div class="field">
-            <label>Badge PNG</label>
-            <input type="file" id="lvlFile_${l.id}" accept="image/png,image/*" />
-          </div>
-          <div class="field" style="display:flex; align-items:flex-end;">
-            <button type="button" class="secondarybtn" style="margin-top:0; width:100%;" onclick="clearBadgePNG('${l.id}')">Clear PNG</button>
-          </div>
+        <div class="field">
+          <label>Min Tattoo Count</label>
+          <input id="discMin_${d.id}" type="number" min="0" step="1" value="${Number(d.minCount||0)}">
         </div>
       </div>
-    `;
-  }).join("");
-
-  discountsList.innerHTML = discounts.map(d=>{
-    return `
-      <div class="summary-box" data-disc="${d.id}" style="margin-top:10px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
-          <div style="font-weight:900;color:var(--gold);">${d.label || "Discount"}</div>
-          <button type="button" class="secondarybtn" onclick="removeDiscountTier('${d.id}')">Remove</button>
+      <div class="row">
+        <div class="field">
+          <label>Percent</label>
+          <input id="discPct_${d.id}" type="number" min="0" max="100" step="1" value="${Number(d.percent||0)}">
         </div>
-
-        <div class="row" style="margin-top:10px;">
-          <div class="field">
-            <label>Label</label>
-            <input type="text" id="discLabel_${d.id}" value="${(d.label||"").replace(/"/g,"&quot;")}">
-          </div>
-          <div class="field">
-            <label>Min Tattoos</label>
-            <input type="number" id="discMin_${d.id}" value="${Number(d.minCount||0)}">
-          </div>
-        </div>
-
-        <div class="row" style="margin-top:10px;">
-          <div class="field">
-            <label>Percent</label>
-            <input type="number" id="discPct_${d.id}" value="${Number(d.percent||0)}">
-          </div>
-          <div class="field"></div>
-        </div>
+        <div class="field"></div>
+      </div>
+      <div class="actions-row">
+        <button type="button" class="dangerbtn" onclick="removeDiscountTier('${d.id}')">Remove</button>
       </div>
     `;
-  }).join("");
+    if(discountsList) discountsList.appendChild(box);
+  });
 }
 
 function addBadgeLevel(){
-  rewardsSettings.levels = rewardsSettings.levels || [];
-  rewardsSettings.levels.push({ id: uid("lvl"), name: "New Badge", minCount: 1, pngDataUrl: "" });
+  const id = uid("lvl");
+  if(!rewardsSettings.levels) rewardsSettings.levels = [];
+  rewardsSettings.levels.push({ id, name:"New Badge", minCount: 1, pngDataUrl:"" });
   buildRewardsUI();
 }
+window.addBadgeLevel = addBadgeLevel;
+
 function removeBadgeLevel(id){
   rewardsSettings.levels = (rewardsSettings.levels || []).filter(l=>l.id !== id);
   buildRewardsUI();
 }
-function clearBadgePNG(id){
-  const lvl = (rewardsSettings.levels || []).find(l=>l.id===id);
-  if(lvl){ lvl.pngDataUrl = ""; }
-  buildRewardsUI();
-}
-window.addBadgeLevel = addBadgeLevel;
 window.removeBadgeLevel = removeBadgeLevel;
-window.clearBadgePNG = clearBadgePNG;
 
 function addDiscountTier(){
-  rewardsSettings.discounts = rewardsSettings.discounts || [];
-  rewardsSettings.discounts.push({ id: uid("disc"), label: "New Discount", minCount: 1, percent: 5 });
+  const id = uid("disc");
+  if(!rewardsSettings.discounts) rewardsSettings.discounts = [];
+  rewardsSettings.discounts.push({ id, label:"New Discount", minCount: 1, percent: 5 });
   buildRewardsUI();
 }
+window.addDiscountTier = addDiscountTier;
+
 function removeDiscountTier(id){
   rewardsSettings.discounts = (rewardsSettings.discounts || []).filter(d=>d.id !== id);
   buildRewardsUI();
 }
-window.addDiscountTier = addDiscountTier;
 window.removeDiscountTier = removeDiscountTier;
 
 function saveRewards(){
-  const levels = Array.isArray(rewardsSettings.levels) ? rewardsSettings.levels : [];
-  const discounts = Array.isArray(rewardsSettings.discounts) ? rewardsSettings.discounts : [];
+  const levels = (rewardsSettings.levels || []);
+  const discounts = (rewardsSettings.discounts || []);
 
   levels.forEach(l=>{
     const nameEl = safeEl(`lvlName_${l.id}`);
@@ -1709,9 +1360,55 @@ function saveRewards(){
 window.saveRewards = saveRewards;
 
 // ================= UI BUILDERS =================
-function createAccordion(title, badgeText){
+// ================= ACCORDION STATE (keep open + scroll) =================
+function captureAccordionState(){
+  const container = safeEl("entries");
+  const openKeys = [];
+  if(container){
+    container.querySelectorAll(".accordion[data-acc-key]").forEach(acc=>{
+      const key = acc.getAttribute("data-acc-key") || "";
+      const content = acc.querySelector(".accordion-content");
+      if(key && content && content.style.display === "block"){
+        openKeys.push(key);
+      }
+    });
+  }
+  return {
+    openKeys,
+    scrollY: window.scrollY || 0
+  };
+}
+
+function depthForKey(key){
+  return String(key||"").split("|").length;
+}
+
+function restoreAccordionState(state){
+  const container = safeEl("entries");
+  if(!container || !state) return;
+
+  const keys = Array.isArray(state.openKeys) ? state.openKeys.slice() : [];
+  keys.sort((a,b)=> depthForKey(a) - depthForKey(b));
+
+  keys.forEach(key=>{
+    const acc = container.querySelector(`.accordion[data-acc-key="${CSS.escape(key)}"]`);
+    if(!acc) return;
+    const content = acc.querySelector(".accordion-content");
+    const chev = acc.querySelector(".chev");
+    if(content){
+      content.style.display = "block";
+      if(chev) chev.textContent = "▴";
+    }
+  });
+
+  const y = Number(state.scrollY || 0);
+  requestAnimationFrame(()=> window.scrollTo(0, y));
+}
+
+function createAccordion(title, badgeText, accKey){
   const wrap = document.createElement("div");
   wrap.className = "accordion";
+  if(accKey) wrap.setAttribute("data-acc-key", String(accKey));
 
   const header = document.createElement("div");
   header.className = "accordion-header";
@@ -1770,6 +1467,9 @@ function render(){
 
   const container = safeEl("entries");
   if(!container) return;
+
+  const accState = captureAccordionState();
+
   container.innerHTML = "";
 
   const list = getFilteredEntries();
@@ -1777,6 +1477,7 @@ function render(){
   if(list.length === 0){
     container.innerHTML = "<p style='opacity:.65; padding: 10px 2px;'>No entries match your filters.</p>";
     updateStats(list);
+    restoreAccordionState(accState);
     return;
   }
 
@@ -1800,7 +1501,8 @@ function render(){
       .flatMap(mo=>Object.values(mo).flat())
       .reduce((sum,e)=>sum + totalForTotalsNet(e), 0);
 
-    const yearAcc = createAccordion(String(year), money(yearAmtNet));
+    const yearKey = `Y:${year}`;
+    const yearAcc = createAccordion(String(year), money(yearAmtNet), yearKey);
     container.appendChild(yearAcc.wrap);
 
     Object.keys(grouped[year]).sort((a,b)=>Number(b)-Number(a)).forEach(monthIdx=>{
@@ -1808,7 +1510,8 @@ function render(){
         .flat()
         .reduce((sum,e)=>sum + totalForTotalsNet(e), 0);
 
-      const monthAcc = createAccordion(monthName(Number(year), Number(monthIdx)), money(monthAmtNet));
+      const monthKey = `${yearKey}|M:${monthIdx}`;
+      const monthAcc = createAccordion(monthName(Number(year), Number(monthIdx)), money(monthAmtNet), monthKey);
       yearAcc.content.appendChild(monthAcc.wrap);
 
       Object.keys(grouped[year][monthIdx]).sort((a,b)=>Number(b)-Number(a)).forEach(dayNum=>{
@@ -1816,7 +1519,8 @@ function render(){
         const dayAmtNet = dayEntries.reduce((sum,e)=>sum + totalForTotalsNet(e), 0);
 
         const dateLabel = `${year}-${pad2(Number(monthIdx)+1)}-${pad2(dayNum)}`;
-        const dayAcc = createAccordion(dateLabel, money(dayAmtNet));
+        const dayKey = `${monthKey}|D:${dateLabel}`;
+        const dayAcc = createAccordion(dateLabel, money(dayAmtNet), dayKey);
         monthAcc.content.appendChild(dayAcc.wrap);
 
         dayEntries.forEach(entry=>{
@@ -1843,12 +1547,17 @@ function render(){
             <div class="status ${entry.status}">${entry.status}</div>
           `;
 
-          row.querySelector(".client-link").addEventListener("click",(ev)=>{
-            ev.stopPropagation();
-            openClientProfile(entry.client);
+          row.addEventListener("click", (e)=>{
+            const clientLink = e.target.closest(".client-link");
+            if(clientLink){
+              e.stopPropagation();
+              const name = clientLink.getAttribute("data-client");
+              openClientProfile(name);
+              return;
+            }
+            viewEntry(entry.id);
           });
 
-          row.addEventListener("click", ()=>viewEntry(entry.id));
           dayAcc.content.appendChild(row);
         });
       });
@@ -1856,316 +1565,46 @@ function render(){
   });
 
   updateStats(list);
+  restoreAccordionState(accState);
 }
 
 // ================= INIT =================
 render();
 
-// ================= DUPLICATE CLIENT MERGE (Dynamic Settings Injection) =================
-
-let dupeMergeCandidates = [];
-
-function normNameBasic(s){
-  return String(s || "")
-    .trim()
-    .replace(/\s+/g, " ");
-}
-
-function normNameKeyCaseOnly(s){
-  const cleaned = normNameBasic(s);
-  const parts = cleaned.split(" ").filter(Boolean);
-  if(parts.length < 2) return "";
-  return parts.map(p => p.toLowerCase()).join(" ");
-}
-
-function pickPreferredVariant(entryCountByName){
-  const names = Object.keys(entryCountByName || {});
-  if(!names.length) return "";
-
-  names.sort((a,b)=>{
-    const ca = entryCountByName[a] || 0;
-    const cb = entryCountByName[b] || 0;
-    if(cb !== ca) return cb - ca;
-
-    const scoreCase = (name)=>{
-      const hasLower = /[a-z]/.test(name);
-      const hasUpper = /[A-Z]/.test(name);
-      if(hasLower && hasUpper) return 3;
-      if(hasUpper) return 2;
-      if(hasLower) return 1;
-      return 0;
-    };
-
-    const sa = scoreCase(a), sb = scoreCase(b);
-    if(sb !== sa) return sb - sa;
-
-    return b.length - a.length;
-  });
-
-  return names[0];
-}
-
-function scanClientDuplicates(){
-  const groups = {};
-
-  (entries || []).forEach(e=>{
-    const name = normNameBasic(e.client);
-    const key = normNameKeyCaseOnly(name);
-    if(!key) return;
-
-    groups[key] = groups[key] || { entryCountByName: {} };
-    groups[key].entryCountByName[name] =
-      (groups[key].entryCountByName[name] || 0) + 1;
-  });
-
-  dupeMergeCandidates = Object.entries(groups)
-    .map(([key, g])=>{
-      const variants = Object.keys(g.entryCountByName);
-      return {
-        key,
-        variants,
-        entryCountByName: g.entryCountByName,
-        preferred: pickPreferredVariant(g.entryCountByName)
-      };
-    })
-    .filter(x => x.variants.length >= 2)
-    .filter(x =>
-      x.variants.every(v => normNameKeyCaseOnly(v) === x.key) &&
-      x.variants.some(v => v !== x.preferred)
-    );
-
-  renderDupeClientUI();
-}
-
-function renderDupeClientUI(){
-  const out = document.getElementById("dupeClientOut");
-  if(!out) return;
-
-  if(!dupeMergeCandidates.length){
-    out.innerHTML = "No capitalization/spacing duplicates found ✅";
-    return;
-  }
-
-  out.innerHTML = `
-    ${dupeMergeCandidates.map((g,i)=>{
-
-      const total = g.variants.reduce(
-        (s,v)=> s + (g.entryCountByName[v]||0), 0
-      );
-
-      return `
-        <div style="margin-top:12px; padding:12px; border:1px solid rgba(212,175,55,.2); border-radius:12px;">
-          <label style="display:flex; align-items:center; gap:10px; font-weight:900;">
-            <input type="checkbox" id="dupePick_${i}" checked style="width:auto;">
-            Merge into <span style="color:var(--gold);">${g.preferred}</span>
-          </label>
-          <div style="margin-top:8px; opacity:.85;">
-            ${g.variants.map(v =>
-              `<div>• ${v} (${g.entryCountByName[v]})</div>`
-            ).join("")}
-          </div>
-          <div style="margin-top:6px; font-size:.85rem; opacity:.7;">
-            Entries affected: ${total}
-          </div>
-        </div>
-      `;
-    }).join("")}
-  `;
-}
-
-function mergeSelectedClientDuplicates(){
-  let changed = 0;
-
-  dupeMergeCandidates.forEach((g,i)=>{
-    const pick = document.getElementById(`dupePick_${i}`);
-    if(!pick || !pick.checked) return;
-
-    (entries || []).forEach(e=>{
-      const current = normNameBasic(e.client);
-      if(
-        normNameKeyCaseOnly(current) === g.key &&
-        current !== g.preferred
-      ){
-        e.client = g.preferred;
-        changed++;
-      }
-    });
-  });
-
-  if(changed > 0){
-    save();
-  } else {
-    render();
-  }
-
-  const out = document.getElementById("dupeClientOut");
-  if(out){
-    out.innerHTML = `Merged ${changed} entries successfully ✅`;
-  }
-}
-
-function injectDupeClientSection(){
-  const settingsModal = document.getElementById("settingsModal");
-  if(!settingsModal) return;
-
-  const settingsBox = settingsModal.querySelector(".modal-box");
-  if(!settingsBox) return;
-
-  if(document.getElementById("dupeClientSection")) return;
-
-  const section = document.createElement("div");
-  section.id = "dupeClientSection";
-  section.style.marginTop = "20px";
-  section.innerHTML = `
-    <div style="font-weight:900; color:var(--gold); margin-bottom:6px;">
-      Duplicate Client Merge
-    </div>
-    <div style="opacity:.8; margin-bottom:10px;">
-      Fix duplicates caused by capitalization/spacing only.
-    </div>
-    <div style="display:flex; gap:10px; flex-wrap:wrap;">
-      <button type="button" onclick="scanClientDuplicates()">Scan Duplicates</button>
-      <button type="button" class="secondarybtn" onclick="mergeSelectedClientDuplicates()">Merge Selected</button>
-    </div>
-    <div id="dupeClientOut" style="margin-top:12px;"></div>
-  `;
-
-  settingsBox.appendChild(section);
-}
-
-if(typeof window.openSettings === "function"){
-  const oldOpenSettings = window.openSettings;
-  window.openSettings = function(){
-    oldOpenSettings();
-    setTimeout(injectDupeClientSection, 50);
-  };
-}
-
-window.scanClientDuplicates = scanClientDuplicates;
-window.mergeSelectedClientDuplicates = mergeSelectedClientDuplicates;
-
-// ================= CLIENT INDEX BUTTON FIX =================
-// Ensures the header "Clients" button works even if function names drift.
-
-(function(){
-  function el(id){ return document.getElementById(id); }
-
-  // If your modal is named differently, change this id to match your HTML.
-  const MODAL_ID = "clientsModal";     // <- must exist in index.html
-  const BOX_ID   = "clientsBox";       // <- must exist in index.html
-
-  function openClients(){
-    const modal = el(MODAL_ID);
-    const box = el(BOX_ID);
-
-    if(!modal || !box){
-      alert(`Clients UI missing. Expected #${MODAL_ID} and #${BOX_ID} in index.html`);
-      return;
-    }
-
-    // If you already have a builder function, call it here:
-    if(typeof window.buildClientsUI === "function"){
-      window.buildClientsUI();
-    }
-
-    modal.style.display = "flex";
-  }
-
-  function closeClientsPage(){
-    const modal = el(MODAL_ID);
-    if(modal) modal.style.display = "none";
-  }
-
-  // expose globally for onclick=""
-  window.openClients = openClients;
-  // Back-compat aliases (some HTML uses openClientsPage/closeClientsPage)
-  if(typeof window.openClientsPage !== "function") window.openClientsPage = openClients;
-  if(typeof window.closeClientsPage !== "function") window.closeClientsPage = closeClientsPage;
-  window.closeClients = closeClientsPage;
-
-  // Optional: click-off close if not already wired
-  const modal = el(MODAL_ID);
-  const box = el(BOX_ID);
-  if(modal && box){
-    modal.addEventListener("click",(e)=>{ if(e.target === modal) closeClientsPage(); });
-    box.addEventListener("click",(e)=> e.stopPropagation());
-  }
-})();
-
-// ================= CLIENTS PAGE (INDEX) =================
-(function(){
-  function safeEl(id){ return document.getElementById(id); }
-  function normalizeName(name){
-  return String(name || "")
-    .trim()
-    .replace(/\s+/g, " ")
-    .toLowerCase();
-}
-
-  function buildClientsIndex(){
-    const map = new Map(); // key -> { displayName, count, lastDate }
-
-    entries.forEach(e=>{
-      const raw = (e.client || "").trim();
-      if(!raw) return;
-
-      const key = normalizeName(raw);
-      if(!key) return;
-
-      const prev = map.get(key) || { displayName: raw, count: 0, lastDate: "" };
-      prev.count += (typeof isTattooEntry === "function" ? (isTattooEntry(e) ? 1 : 0) : 1);
-
-      // lastDate (string compare works for YYYY-MM-DD, but you switched display format; still stored as YYYY-MM-DD)
-      if(e.date && (!prev.lastDate || e.date > prev.lastDate)) prev.lastDate = e.date;
-
-      // keep the “best looking” capitalization version as display name (first seen wins)
-      map.set(key, prev);
-    });
-
-    const arr = Array.from(map.values())
-      .sort((a,b)=>{
-        // Most recent first, then highest count
-        if((b.lastDate||"") !== (a.lastDate||"")) return String(b.lastDate||"").localeCompare(String(a.lastDate||""));
-        return (b.count||0) - (a.count||0);
-      });
-
-    return arr;
-  }
-
-  function mmddyy(iso){
-    // iso is stored as YYYY-MM-DD
-    if(!iso) return "";
-    const p = String(iso).split("-");
-    if(p.length !== 3) return iso;
-    const yy = p[0].slice(2);
-    const mm = p[1];
-    const dd = p[2];
-    return `${mm}/${dd}/${yy}`;
-  }
-
+// ================= CLIENTS INDEX (existing) =================
+(function wireClientsModal(){
   function renderClients(){
-    const out = safeEl("clientsList");
-    console.log("entries length:", entries.length);
-    if(!out) return;
+    const box = safeEl("clientsList");
+    if(!box) return;
 
-    const list = buildClientsIndex();
-    if(!list.length){
-      console.log("clients built:", list.length);
-      out.innerHTML = `<div class="hint" style="margin-top:10px;">No clients yet.</div>`;
-      return;
-    }
+    const map = {};
+    entries.forEach(e=>{
+      const key = clientKey(e.client);
+      if(!key) return;
+      if(!map[key]){
+        map[key] = {
+          name: e.client,
+          count: 0,
+          lastDate: e.date
+        };
+      }
+      if(isTattooEntry(e)) map[key].count++;
+      if(e.date > map[key].lastDate) map[key].lastDate = e.date;
+    });
 
-    out.innerHTML = list.map(c=>{
-  return `
-    <div class="client-entry" onclick='openClientProfile(${JSON.stringify(c.displayName)})'>
-      <div class="top">
-        <div><strong>${c.displayName || c.name || ""}</strong></div>
-        <div class="date">${c.lastDate ? mmddyy(c.lastDate) : ""}</div>
-      </div>
-      <div class="desc">Tattoo count: <strong>${c.count || 0}</strong></div>
-    </div>
-  `;
-}).join("");
+    const list = Object.values(map).sort((a,b)=> (b.lastDate || "").localeCompare(a.lastDate || ""));
+
+    box.innerHTML = `
+      ${list.map(c=>`
+        <div class="client-entry" onclick="openClientProfile('${String(c.name).replace(/'/g,"\\'")}')">
+          <div class="top">
+            <div><strong>${c.name}</strong></div>
+            <div class="date">${c.lastDate || ""}</div>
+          </div>
+          <div class="desc">Tattoo count: ${c.count}</div>
+        </div>
+      `).join("")}
+    `;
   }
 
   function openClientsPage(){
@@ -2184,24 +1623,20 @@ window.mergeSelectedClientDuplicates = mergeSelectedClientDuplicates;
     modal.style.display = "none";
   }
 
-/* ✅ ALIASES so old onclicks still work */
-function closeClients(){ closeClientsPage(); }
-function openClients(){ openClientsPage(); }
+  function closeClients(){ closeClientsPage(); }
+  function openClients(){ openClientsPage(); }
 
-/* ✅ expose globally */
-window.openClientsPage = openClientsPage;
-window.closeClientsPage = closeClientsPage;
-window.openClients = openClients;
-window.closeClients = closeClientsPage;
-if(typeof window.openClientsPage !== "function") window.openClientsPage = openClients;
-if(typeof window.closeClientsPage !== "function") window.closeClientsPage = closeClientsPage;
+  window.openClientsPage = openClientsPage;
+  window.closeClientsPage = closeClientsPage;
+  window.openClients = openClients;
+  window.closeClients = closeClientsPage;
+  if(typeof window.openClientsPage !== "function") window.openClientsPage = openClients;
+  if(typeof window.closeClientsPage !== "function") window.closeClientsPage = closeClientsPage;
 
-  // re-render clients if you want it always fresh after saves (optional)
   const oldSave = window.save;
   if(typeof oldSave === "function"){
     window.save = function(){
       oldSave();
-      // if modal is open, refresh list
       const modal = safeEl("clientsModal");
       if(modal && modal.style.display === "flex") renderClients();
     };
