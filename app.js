@@ -2052,7 +2052,7 @@ window.mergeSelectedClientDuplicates = mergeSelectedClientDuplicates;
     modal.style.display = "flex";
   }
 
-  function closeClients(){
+  function closeClientsPage(){
     const modal = el(MODAL_ID);
     if(modal) modal.style.display = "none";
   }
@@ -2156,7 +2156,7 @@ window.mergeSelectedClientDuplicates = mergeSelectedClientDuplicates;
     modal.style.display = "flex";
   }
 
-  function closeClientsPage(){
+  function closeClients(){
     const modal = safeEl("clientsModal");
     if(!modal) return;
     modal.style.display = "none";
