@@ -2059,13 +2059,16 @@ window.mergeSelectedClientDuplicates = mergeSelectedClientDuplicates;
 
   // expose globally for onclick=""
   window.openClients = openClients;
-  window.closeClients = closeClients;
+  // Back-compat aliases (some HTML uses openClientsPage/closeClientsPage)
+  if(typeof window.openClientsPage !== "function") window.openClientsPage = openClients;
+  if(typeof window.closeClientsPage !== "function") window.closeClientsPage = closeClientsPage;
+  window.closeClients = closeClientsPage;
 
   // Optional: click-off close if not already wired
   const modal = el(MODAL_ID);
   const box = el(BOX_ID);
   if(modal && box){
-    modal.addEventListener("click",(e)=>{ if(e.target === modal) closeClients(); });
+    modal.addEventListener("click",(e)=>{ if(e.target === modal) closeClientsPage(); });
     box.addEventListener("click",(e)=> e.stopPropagation());
   }
 })();
@@ -2170,7 +2173,9 @@ function openClients(){ openClientsPage(); }
 window.openClientsPage = openClientsPage;
 window.closeClientsPage = closeClientsPage;
 window.openClients = openClients;
-window.closeClients = closeClients;
+window.closeClients = closeClientsPage;
+if(typeof window.openClientsPage !== "function") window.openClientsPage = openClients;
+if(typeof window.closeClientsPage !== "function") window.closeClientsPage = closeClientsPage;
 
   // re-render clients if you want it always fresh after saves (optional)
   const oldSave = window.save;
