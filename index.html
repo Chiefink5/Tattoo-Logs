@@ -637,8 +637,8 @@
         <button class="smallbtn" type="button" onclick="openBills()">Bills</button>
         <button class="smallbtn" type="button" onclick="openExport()">Export</button>
         <button class="smallbtn" type="button" onclick="openRewards()">Rewards</button>
-        <button class="smallbtn" type="button" onclick="openClientsPage()">Clients</button>
         <button class="smallbtn" type="button" onclick="openFiltersModal()">Filters</button>
+<button class="smallbtn" type="button" onclick="openClientsPage()">Clients</button>
       </div>
 
       <!-- CENTER BRAND -->
@@ -703,73 +703,8 @@
 
   <div id="clientsPageList" style="margin-top:12px;"></div>
 </div>
-
     <div id="entries"></div>
   </div>
-
-
-  <!-- FILTERS MODAL -->
-  <div class="modal" id="filtersModal">
-    <div class="modal-box" id="filtersBox" style="max-width:900px;">
-      <div class="modal-title" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
-        <span>Filters</span>
-        <button type="button" class="secondarybtn" onclick="closeFiltersModal()">Close</button>
-      </div>
-
-      <div class="row">
-        <div class="field">
-          <label>Search</label>
-          <input id="q" type="text" placeholder="">
-        </div>
-
-        <div class="field">
-          <label>Status</label>
-          <select id="statusFilter">
-            <option value="all">All Status</option>
-            <option value="booked">Booked</option>
-            <option value="paid">Paid</option>
-            <option value="partial">Partial</option>
-            <option value="unpaid">Unpaid</option>
-            <option value="no_show">No Show</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label>Location</label>
-          <select id="locationFilter">
-            <option value="all">All Locations</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="row2">
-        <div class="field">
-          <label>From</label>
-          <input id="fromDate" type="date">
-        </div>
-        <div class="field">
-          <label>To</label>
-          <input id="toDate" type="date">
-        </div>
-        <div class="field">
-          <label>Sort</label>
-          <select id="sortFilter">
-            <option value="newest">Newest</option>
-            <option value="oldest">Oldest</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="filter-actions" style="margin-top:6px;">
-        <div class="hint">Filters affect the accordion + totals shown.</div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;">
-          <button type="button" class="secondarybtn" onclick="clearFilters()">Clear</button>
-          <button type="button" onclick="applyFilters(); closeFiltersModal();">Apply</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
 
   <!-- ADD/EDIT ENTRY MODAL -->
   <div class="modal" id="formModal">
@@ -1237,5 +1172,69 @@
 
   <script src="bills.js"></script>
   <script src="app.js"></script>
+
+<!-- Filters Modal -->
+<div id="filtersModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="filtersModalTitle">
+  <div class="modalBox">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;">
+      <div id="filtersModalTitle" class="modal-title" style="margin:0;">Filters</div>
+      <button type="button" class="secondarybtn" onclick="closeFiltersModal()">Close</button>
+    </div>
+
+    <div class="filterbar" style="padding:0;border:none;box-shadow:none;background:transparent;">
+      <div class="row">
+        <div class="field">
+          <label>Search</label>
+          <input id="q" type="text" placeholder="">
+        </div>
+
+        <div class="field">
+          <label>Status</label>
+          <select id="statusFilter">
+            <option value="all">All Status</option>
+            <option value="booked">Booked</option>
+            <option value="paid">Paid</option>
+            <option value="partial">Partial</option>
+            <option value="unpaid">Unpaid</option>
+            <option value="no_show">No Show</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Location</label>
+          <select id="locationFilter"></select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>From</label>
+          <input id="fromDate" type="date" />
+        </div>
+        <div class="field">
+          <label>To</label>
+          <input id="toDate" type="date" />
+        </div>
+
+        <div class="field">
+          <label>Sort</label>
+          <select id="sortFilter">
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="filter-actions" style="padding-top:12px;">
+        <div class="hint">Filters affect the accordion + totals shown.</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
+          <button type="button" class="secondarybtn" onclick="clearFilters()">Clear</button>
+          <button type="button" onclick="applyFilters(); closeFiltersModal();">Apply</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

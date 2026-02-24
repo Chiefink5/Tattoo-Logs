@@ -400,38 +400,6 @@ function restoreBackup(){
 window.downloadBackup = downloadBackup;
 window.restoreBackup = restoreBackup;
 
-
-// ================= FILTERS MODAL =================
-function openFiltersModal(){
-  const modal = safeEl("filtersModal");
-  const box = safeEl("filtersBox");
-  if(!modal || !box) return;
-
-  hydrateFilterUI();
-  modal.classList.add("show");
-
-  // click-off to close (tap-safe)
-  const handler = (e)=>{
-    if(e.target === modal){
-      closeFiltersModal();
-    }
-  };
-  // store so we can remove later
-  modal.__clickOffHandler = handler;
-  modal.addEventListener("click", handler, { passive:true });
-}
-function closeFiltersModal(){
-  const modal = safeEl("filtersModal");
-  if(!modal) return;
-  modal.classList.remove("show");
-  if(modal.__clickOffHandler){
-    modal.removeEventListener("click", modal.__clickOffHandler);
-    delete modal.__clickOffHandler;
-  }
-}
-window.openFiltersModal = openFiltersModal;
-window.closeFiltersModal = closeFiltersModal;
-
 // ================= FILTERS =================
 function hydrateFilterUI(){
   const q = safeEl("q");
@@ -466,6 +434,25 @@ function clearFilters(){
 }
 window.applyFilters = applyFilters;
 window.clearFilters = clearFilters;
+
+function openFiltersModal(){
+  const m = document.getElementById("filtersModal");
+  if(m) m.style.display = "flex";
+}
+function closeFiltersModal(){
+  const m = document.getElementById("filtersModal");
+  if(m) m.style.display = "none";
+}
+window.openFiltersModal = openFiltersModal;
+window.closeFiltersModal = closeFiltersModal;
+
+(function wireFiltersModalClose(){
+  const m = document.getElementById("filtersModal");
+  if(!m) return;
+  m.addEventListener("click",(e)=>{ if(e.target === m) closeFiltersModal(); });
+  document.addEventListener("keydown",(e)=>{ if(e.key === "Escape" && m.style.display === "flex") closeFiltersModal(); });
+})();
+
 
 (function wireFilterKeys(){
   const q = safeEl("q");
