@@ -2073,12 +2073,12 @@ window.mergeSelectedClientDuplicates = mergeSelectedClientDuplicates;
 // ================= CLIENTS PAGE (INDEX) =================
 (function(){
   function safeEl(id){ return document.getElementById(id); }
-  function normalizeName(s){
-    return String(s||"")
-      .trim()
-      .replace(/\s+/g," ")
-      .toLowerCase();
-  }
+  function normalizeName(name){
+  return String(name || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
 
   function buildClientsIndex(){
     const map = new Map(); // key -> { displayName, count, lastDate }
