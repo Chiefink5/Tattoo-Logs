@@ -107,6 +107,9 @@
       text-overflow:ellipsis;
       max-width:100%;
     }
+    .brand-logo {
+  filter: drop-shadow(0 0 40px rgba(150,0,200,0.35));
+}
     .brand-bottom{
       font-size:var(--brandBottomSize);
       letter-spacing:.18em;
@@ -117,6 +120,12 @@
       text-overflow:ellipsis;
       max-width:100%;
     }
+    .brand-wrap {
+  padding: 0;
+  background: none;
+  border: none;
+  box-shadow: none;
+}
     /* plain png logo (no border/shadow) */
     #logoImg{
       width:var(--logoSize);
@@ -581,9 +590,9 @@
       background:rgba(0,0,0,.18);
       border:1px solid rgba(31,111,80,.55);
     }
-
+/*EDIT DESKTOP LOGO SIZE HERE*/
     @media (min-width:900px){
-      .brand{ --logoSize:76px; --brandTopSize:2.05rem; --brandBottomSize:1.28rem; }
+      .brand{ --logoSize:160px; --brandTopSize:3.8rem; --brandBottomSize:2rem; }
     }
 
     @media (max-width:520px){
