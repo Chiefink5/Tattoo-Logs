@@ -400,6 +400,38 @@ function restoreBackup(){
 window.downloadBackup = downloadBackup;
 window.restoreBackup = restoreBackup;
 
+
+// ================= FILTERS MODAL =================
+function openFiltersModal(){
+  const modal = safeEl("filtersModal");
+  const box = safeEl("filtersBox");
+  if(!modal || !box) return;
+
+  hydrateFilterUI();
+  modal.classList.add("show");
+
+  // click-off to close (tap-safe)
+  const handler = (e)=>{
+    if(e.target === modal){
+      closeFiltersModal();
+    }
+  };
+  // store so we can remove later
+  modal.__clickOffHandler = handler;
+  modal.addEventListener("click", handler, { passive:true });
+}
+function closeFiltersModal(){
+  const modal = safeEl("filtersModal");
+  if(!modal) return;
+  modal.classList.remove("show");
+  if(modal.__clickOffHandler){
+    modal.removeEventListener("click", modal.__clickOffHandler);
+    delete modal.__clickOffHandler;
+  }
+}
+window.openFiltersModal = openFiltersModal;
+window.closeFiltersModal = closeFiltersModal;
+
 // ================= FILTERS =================
 function hydrateFilterUI(){
   const q = safeEl("q");
@@ -2187,39 +2219,4 @@ if(typeof window.closeClientsPage !== "function") window.closeClientsPage = clos
       if(modal && modal.style.display === "flex") renderClients();
     };
   }
-})();
-
-/* Filters panel toggle */
-(function(){
-  function setFiltersOpen(isOpen){
-    var panel = document.getElementById("filtersPanel");
-    var body = document.getElementById("filtersBody");
-    var btn = document.getElementById("filtersToggleBtn");
-    if(!panel || !body || !btn) return;
-    if(isOpen){
-      panel.classList.add("open");
-      body.style.display = "";
-      btn.textContent = "Hide";
-      btn.setAttribute("aria-expanded","true");
-      localStorage.setItem("inklog_filters_open","1");
-    }else{
-      panel.classList.remove("open");
-      body.style.display = "";
-      btn.textContent = "Show";
-      btn.setAttribute("aria-expanded","false");
-      localStorage.setItem("inklog_filters_open","0");
-    }
-  }
-
-  window.toggleFiltersPanel = function(){
-    var panel = document.getElementById("filtersPanel");
-    if(!panel) return;
-    setFiltersOpen(!panel.classList.contains("open"));
-  };
-
-  document.addEventListener("DOMContentLoaded", function(){
-    var saved = localStorage.getItem("inklog_filters_open");
-    // default collapsed
-    setFiltersOpen(saved === "1");
-  });
 })();
