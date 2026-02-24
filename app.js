@@ -2132,7 +2132,7 @@ window.mergeSelectedClientDuplicates = mergeSelectedClientDuplicates;
       out.innerHTML = `<div class="hint" style="margin-top:10px;">No clients yet.</div>`;
       return;
     }
-const list = buildClientsIndex();
+
     out.innerHTML = list.map(c=>{
   return `
     <div class="client-entry" onclick='openClientProfile(${JSON.stringify(c.displayName)})'>
