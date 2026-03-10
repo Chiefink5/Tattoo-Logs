@@ -2211,6 +2211,7 @@ if(typeof window.closeClientsPage !== "function") window.closeClientsPage = clos
 // ================= EXPENSES + PAGE NAV =================
 let expenses = JSON.parse(localStorage.getItem("expenses") || "[]");
 let activePage = "log";
+let expenseEditingId = null;
 let expenseFilter = "All";
 
 function expenseTodayKey(){
@@ -2221,25 +2222,36 @@ function expenseTodayKey(){
 function openExpenseModal(){
   const modal = document.getElementById("expenseModal");
   if(!modal) return;
+  const titleEl = document.getElementById("expenseModalTitle");
   const dateEl = document.getElementById("expDate");
   const amountEl = document.getElementById("expAmount");
   const vendorEl = document.getElementById("expVendor");
   const notesEl = document.getElementById("expNotes");
   const catEl = document.getElementById("expCategory");
   const deductibleEl = document.getElementById("expDeductible");
-  if(dateEl) dateEl.value = expenseTodayKey();
-  if(amountEl) amountEl.value = "";
-  if(vendorEl) vendorEl.value = "";
-  if(notesEl) notesEl.value = "";
-  if(catEl) catEl.selectedIndex = 0;
-  if(deductibleEl) deductibleEl.value = "true";
+
+  if(expenseEditingId == null){
+    if(titleEl) titleEl.textContent = "Add Expense";
+    if(dateEl) dateEl.value = expenseTodayKey();
+    if(amountEl) amountEl.value = "";
+    if(vendorEl) vendorEl.value = "";
+    if(notesEl) notesEl.value = "";
+    if(catEl) catEl.selectedIndex = 0;
+    if(deductibleEl) deductibleEl.value = "true";
+  } else {
+    if(titleEl) titleEl.textContent = "Edit Expense";
+  }
+
   modal.style.display = "flex";
 }
 window.openExpenseModal = openExpenseModal;
 
 function closeExpenseModal(){
   const modal = document.getElementById("expenseModal");
+  const titleEl = document.getElementById("expenseModalTitle");
   if(modal) modal.style.display = "none";
+  expenseEditingId = null;
+  if(titleEl) titleEl.textContent = "Add Expense";
 }
 window.closeExpenseModal = closeExpenseModal;
 
@@ -2256,12 +2268,90 @@ function saveExpense(){
     return;
   }
 
-  expenses.push({ id: Date.now(), date, amount, category, vendor, notes, deductible });
+  const payload = { date, amount, category, vendor, notes, deductible };
+
+  if(expenseEditingId != null){
+    const idx = expenses.findIndex(e => e.id === expenseEditingId);
+    if(idx !== -1){
+      expenses[idx] = { ...expenses[idx], ...payload };
+    }
+  } else {
+    expenses.push({ id: Date.now(), ...payload });
+  }
+
   localStorage.setItem("expenses", JSON.stringify(expenses));
   closeExpenseModal();
   renderExpenses();
 }
 window.saveExpense = saveExpense;
+
+function openExpenseView(id){
+  const modal = document.getElementById("expenseViewModal");
+  const box = document.getElementById("expenseViewBox");
+  if(!modal || !box) return;
+
+  const expense = expenses.find(e => e.id === id);
+  if(!expense) return;
+
+  box.innerHTML = `
+    <div class="modal-title">Expense</div>
+    <div class="summary-box" style="margin-top:0;">
+      <div><strong>Amount:</strong> ${money(expense.amount)}</div>
+      <div><strong>Category:</strong> ${expense.category || "Other"}</div>
+      <div><strong>Date:</strong> ${expense.date || ""}</div>
+      <div><strong>Vendor:</strong> ${expense.vendor || "—"}</div>
+      <div><strong>Deductible:</strong> ${expense.deductible !== false ? "Yes" : "No"}</div>
+      ${expense.notes ? `<div style="margin-top:10px;"><strong>Notes:</strong><br>${expense.notes}</div>` : ``}
+    </div>
+    <div class="actions-row">
+      <button type="button" onclick="editExpense(${id})">Edit</button>
+      <button type="button" class="dangerbtn" onclick="deleteExpense(${id})">Delete</button>
+      <button type="button" class="secondarybtn" onclick="closeExpenseView()">Close</button>
+    </div>
+  `;
+  modal.style.display = "flex";
+}
+window.openExpenseView = openExpenseView;
+
+function closeExpenseView(){
+  const modal = document.getElementById("expenseViewModal");
+  if(modal) modal.style.display = "none";
+}
+window.closeExpenseView = closeExpenseView;
+
+function editExpense(id){
+  const expense = expenses.find(e => e.id === id);
+  if(!expense) return;
+
+  expenseEditingId = id;
+  const dateEl = document.getElementById("expDate");
+  const amountEl = document.getElementById("expAmount");
+  const catEl = document.getElementById("expCategory");
+  const vendorEl = document.getElementById("expVendor");
+  const notesEl = document.getElementById("expNotes");
+  const deductibleEl = document.getElementById("expDeductible");
+
+  if(dateEl) dateEl.value = expense.date || "";
+  if(amountEl) amountEl.value = Number(expense.amount || 0);
+  if(catEl) catEl.value = expense.category || "Other";
+  if(vendorEl) vendorEl.value = expense.vendor || "";
+  if(notesEl) notesEl.value = expense.notes || "";
+  if(deductibleEl) deductibleEl.value = expense.deductible !== false ? "true" : "false";
+
+  closeExpenseView();
+  openExpenseModal();
+}
+window.editExpense = editExpense;
+
+function deleteExpense(id){
+  const ok = confirm("Delete this expense permanently?");
+  if(!ok) return;
+  expenses = expenses.filter(e => e.id !== id);
+  localStorage.setItem("expenses", JSON.stringify(expenses));
+  closeExpenseView();
+  renderExpenses();
+}
+window.deleteExpense = deleteExpense;
 
 function setExpenseFilter(cat,btn){
   expenseFilter = cat;
@@ -2338,7 +2428,7 @@ function renderExpenses(){
 
     items.forEach(e=>{
       html += `
-        <div class="expense-card">
+        <div class="expense-card" onclick="openExpenseView(${e.id})" style="cursor:pointer;">
           <div class="expense-amount">${money(e.amount)} <span class="client-badge" style="max-width:none;">${e.category || "Other"}</span>${e.deductible !== false ? '<span class="deductible-badge">Deductible</span>' : ''}</div>
           <div>${e.vendor || ""}</div>
           <div style="opacity:.7;font-size:12px;">${e.notes || ""}</div>
@@ -2463,3 +2553,12 @@ function exportExpensesCSV(){
   }, 1000);
 }
 window.exportExpensesCSV = exportExpensesCSV;
+
+
+(function wireExpenseViewModal(){
+  const modal = document.getElementById("expenseViewModal");
+  const box = document.getElementById("expenseViewBox");
+  if(!modal) return;
+  modal.addEventListener("click",(e)=>{ if(e.target === modal) closeExpenseView(); });
+  if(box) box.addEventListener("click",(e)=> e.stopPropagation());
+})();

@@ -1311,7 +1311,7 @@
 
   <div class="modal" id="expenseModal">
     <div class="modal-box" id="expenseBox">
-      <div class="modal-title">Add Expense</div>
+      <div id="expenseModalTitle" class="modal-title">Add Expense</div>
       <div class="row">
         <div class="field"><label>Date</label><input id="expDate" type="date"></div>
         <div class="field"><label>Amount</label><input id="expAmount" type="number" min="0" step="0.01"></div>
@@ -1344,6 +1344,11 @@
         <button type="button" class="secondarybtn" onclick="closeExpenseModal()">Cancel</button>
       </div>
     </div>
+  </div>
+
+
+  <div class="modal" id="expenseViewModal">
+    <div class="modal-box" id="expenseViewBox"></div>
   </div>
 
   <div id="toasts"></div>
