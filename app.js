@@ -324,7 +324,7 @@ window.saveMonthOverride = saveMonthOverride;
 window.removeMonthOverride = removeMonthOverride;
 
 // ================= BACKUP / RESTORE =================
-function downloadBackup(){
+async function downloadBackup(){
   const payload = {
     version: 2,
     exportedAt: new Date().toISOString(),
@@ -337,35 +337,55 @@ function downloadBackup(){
 
   const filename = `globbers-ink-log_backup_${new Date().toISOString().slice(0,10)}.json`;
   const json = JSON.stringify(payload, null, 2);
+  const blob = new Blob([json], { type: "application/json" });
 
-  const blob = new Blob([json], { type: "application/octet-stream" });
-
-  if(window.navigator && typeof window.navigator.msSaveOrOpenBlob === "function"){
-    window.navigator.msSaveOrOpenBlob(blob, filename);
-    return;
+  try{
+    if(window.File && window.navigator && typeof window.navigator.share === "function"){
+      const file = new File([blob], filename, { type: "application/json" });
+      const shareData = { files: [file], title: filename };
+      if(typeof window.navigator.canShare === "function" && window.navigator.canShare(shareData)){
+        await window.navigator.share(shareData);
+        return;
+      }
+    }
+  }catch(err){
   }
 
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.rel = "noopener";
-  a.style.display = "none";
-  document.body.appendChild(a);
-
-  if(typeof a.click === "function"){
+  try{
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.rel = "noopener";
+    a.style.display = "none";
+    document.body.appendChild(a);
     a.click();
-  } else {
-    const evt = document.createEvent("MouseEvents");
-    evt.initMouseEvent("click", true, true, window);
-    a.dispatchEvent(evt);
+    setTimeout(()=>{
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 1000);
+    return;
+  }catch(err){
   }
 
-  document.body.removeChild(a);
+  try{
+    const reader = new FileReader();
+    reader.onloadend = function(){
+      const a = document.createElement("a");
+      a.href = reader.result;
+      a.download = filename;
+      a.rel = "noopener";
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(()=> document.body.removeChild(a), 1000);
+    };
+    reader.readAsDataURL(blob);
+    return;
+  }catch(err){
+  }
 
-  setTimeout(()=>{
-    URL.revokeObjectURL(url);
-  }, 4000);
+  alert("Backup export failed on this device. Try Safari share/save or use another browser.");
 }
 
 function restoreBackup(){
