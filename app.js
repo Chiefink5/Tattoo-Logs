@@ -495,9 +495,20 @@ window.closeFiltersModal = closeFiltersModal;
 
 (function wireFiltersModalClose(){
   const m = document.getElementById("filtersModal");
+  const box = document.getElementById("filtersBox");
   if(!m) return;
-  m.addEventListener("click",(e)=>{ if(e.target === m) closeFiltersModal(); });
-  document.addEventListener("keydown",(e)=>{ if(e.key === "Escape" && m.style.display === "flex") closeFiltersModal(); });
+
+  m.addEventListener("click",(e)=>{
+    if(e.target === m) closeFiltersModal();
+  });
+
+  if(box){
+    box.addEventListener("click",(e)=> e.stopPropagation());
+  }
+
+  document.addEventListener("keydown",(e)=>{
+    if(e.key === "Escape" && m.style.display === "flex") closeFiltersModal();
+  });
 })();
 
 
