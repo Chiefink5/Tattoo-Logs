@@ -2146,29 +2146,70 @@ window.mergeSelectedClientDuplicates = mergeSelectedClientDuplicates;
     return `${mm}/${dd}/${yy}`;
   }
 
+  function ensureClientsSearchUI(){
+    const modalBox = safeEl("clientsBox");
+    const list = safeEl("clientsList");
+    if(!modalBox || !list) return;
+
+    let wrap = safeEl("clientsSearchWrap");
+    if(!wrap){
+      wrap = document.createElement("div");
+      wrap.id = "clientsSearchWrap";
+      wrap.className = "summary-box";
+      wrap.style.marginTop = "0";
+      wrap.innerHTML = `
+        <div class="field">
+          <label>Search Clients</label>
+          <input id="clientsSearchInput" type="text" placeholder="Start typing a name...">
+        </div>
+        <div class="hint" style="margin-top:8px;">Alphabetical order. Typing filters by starting letters.</div>
+      `;
+      modalBox.insertBefore(wrap, list);
+
+      const input = safeEl("clientsSearchInput");
+      if(input){
+        input.addEventListener("input", ()=> renderClients());
+      }
+    }
+  }
+
   function renderClients(){
+    ensureClientsSearchUI();
+
     const out = safeEl("clientsList");
-    console.log("entries length:", entries.length);
+    const input = safeEl("clientsSearchInput");
     if(!out) return;
 
-    const list = buildClientsIndex();
+    const query = normalize((input && input.value) || "").trim();
+
+    let list = buildClientsIndex().slice().sort((a,b)=>{
+      return String(a.displayName || a.name || "").localeCompare(
+        String(b.displayName || b.name || ""),
+        undefined,
+        { sensitivity: "base" }
+      );
+    });
+
+    if(query){
+      list = list.filter(c => normalize(c.displayName || c.name || "").startsWith(query));
+    }
+
     if(!list.length){
-      console.log("clients built:", list.length);
-      out.innerHTML = `<div class="hint" style="margin-top:10px;">No clients yet.</div>`;
+      out.innerHTML = `<div class="hint" style="margin-top:10px;">No clients match that search.</div>`;
       return;
     }
 
     out.innerHTML = list.map(c=>{
-  return `
-    <div class="client-entry" onclick='openClientProfile(${JSON.stringify(c.displayName)})'>
-      <div class="top">
-        <div><strong>${c.displayName || c.name || ""}</strong></div>
-        <div class="date">${c.lastDate ? mmddyy(c.lastDate) : ""}</div>
-      </div>
-      <div class="desc">Tattoo count: <strong>${c.count || 0}</strong></div>
-    </div>
-  `;
-}).join("");
+      return `
+        <div class="client-entry" onclick='openClientProfile(${JSON.stringify(c.displayName)})'>
+          <div class="top">
+            <div><strong>${c.displayName || c.name || ""}</strong></div>
+            <div class="date">${c.lastDate ? mmddyy(c.lastDate) : ""}</div>
+          </div>
+          <div class="desc">Tattoo count: <strong>${c.count || 0}</strong></div>
+        </div>
+      `;
+    }).join("");
   }
 
   function openClientsPage(){
@@ -2177,6 +2218,11 @@ window.mergeSelectedClientDuplicates = mergeSelectedClientDuplicates;
       alert('Missing Clients modal in index.html (id="clientsModal").');
       return;
     }
+
+    ensureClientsSearchUI();
+    const input = safeEl("clientsSearchInput");
+    if(input) input.value = "";
+
     renderClients();
     modal.style.display = "flex";
   }
