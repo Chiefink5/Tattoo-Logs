@@ -652,25 +652,29 @@
     <div class="topbar">
       <!-- LEFT STACK -->
       <div class="action-stack left">
+        <button class="smallbtn" type="button" onclick="showPage('home')">Home</button>
+        <button class="smallbtn" type="button" onclick="showPage('log')">Ink Log</button>
+        <button class="smallbtn" type="button" onclick="showPage('expenses')">Expenses</button>
         <button class="smallbtn" type="button" onclick="openBills()">Bills</button>
         <button class="smallbtn" type="button" onclick="openExport()">Export</button>
         <button class="smallbtn" type="button" onclick="openRewards()">Rewards</button>
         <button class="smallbtn" type="button" onclick="openFiltersModal()">Filters</button>
-<button class="smallbtn" type="button" onclick="openClientsPage()">Clients</button>
+        <button class="smallbtn" type="button" onclick="openClientsPage()">Clients</button>
       </div>
 
       <!-- CENTER BRAND -->
       <div class="brand">
         <img id="logoImg" alt="Logo" title="Tap to upload logo">
         <input id="logoInput" type="file" accept="image/png,image/*">
-        <div class="brand-title"><span class="brand-top">Globber’s</span><span class="brand-bottom">Ink Log</span></div>
+        <div class="brand-title"><span id="brandTop" class="brand-top">Globber’s</span><span id="brandBottom" class="brand-bottom">Ink Log</span></div>
       </div>
 
       <!-- RIGHT STACK -->
       <div class="action-stack right">
-        <button class="smallbtn" type="button" onclick="openDepositQuick()">Deposit</button>
-        <button class="smallbtn" type="button" onclick="openBammerQuick()">Bammer</button>
-        <button class="smallbtn" type="button" onclick="openForm()">+ Entry</button>
+        <button id="inkActionsDeposit" class="smallbtn" type="button" onclick="openDepositQuick()">Deposit</button>
+        <button id="inkActionsBammer" class="smallbtn" type="button" onclick="openBammerQuick()">Bammer</button>
+        <button id="inkActionsEntry" class="smallbtn" type="button" onclick="openForm()">+ Entry</button>
+        <button id="expenseAddBtn" class="smallbtn" type="button" onclick="openExpenseModal()" style="display:none;">+ Expense</button>
       </div>
     </div>
 
@@ -691,7 +695,7 @@
     </div>
   </header>
 
-  <div class="container">
+  <div id="inkLogPage" class="container">
     <!-- CLIENTS PAGE -->
 <div id="clientsPage" style="display:none;">
   <div class="summary-box" style="margin-top:0;">
@@ -1186,6 +1190,70 @@
     </div>
   </div>
 
+
+  <div id="expensesPage" class="container" style="display:none;">
+    <div class="summary-grid">
+      <div class="summary-box"><div style="font-weight:900;color:var(--gold);">Today</div><div id="expToday">$0</div></div>
+      <div class="summary-box"><div style="font-weight:900;color:var(--gold);">Month</div><div id="expMonth">$0</div></div>
+      <div class="summary-box"><div style="font-weight:900;color:var(--gold);">Year</div><div id="expYear">$0</div></div>
+      <div class="summary-box"><div style="font-weight:900;color:var(--gold);">Top Category</div><div id="expTop">—</div></div>
+    </div>
+    <div id="expenseList" style="margin-top:12px;"></div>
+  </div>
+
+  <div class="modal" id="expenseModal">
+    <div class="modal-box" id="expenseBox">
+      <div class="modal-title">Add Expense</div>
+
+      <div class="row">
+        <div class="field">
+          <label>Date</label>
+          <input id="expDate" type="date">
+        </div>
+        <div class="field">
+          <label>Amount</label>
+          <input id="expAmount" type="number" min="0" step="0.01">
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>Category</label>
+          <select id="expCategory">
+            <option>Ink</option>
+            <option>Needles</option>
+            <option>Gloves</option>
+            <option>Stencil / Prep</option>
+            <option>Equipment</option>
+            <option>Furniture</option>
+            <option>Booth Rent</option>
+            <option>Marketing</option>
+            <option>Software / Subscriptions</option>
+            <option>Licenses / Fees</option>
+            <option>Travel / Gas</option>
+            <option>Meals</option>
+            <option>Education</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Vendor</label>
+          <input id="expVendor" type="text">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Notes</label>
+        <textarea id="expNotes"></textarea>
+      </div>
+
+      <div class="actions-row">
+        <button type="button" onclick="saveExpense()">Save Expense</button>
+        <button type="button" class="secondarybtn" onclick="closeExpenseModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toasts"></div>
 
   <script src="bills.js"></script>
@@ -1193,7 +1261,7 @@
 
 <!-- Filters Modal -->
 <div id="filtersModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="filtersModalTitle">
-  <div id="filtersBox" class="modal-box">
+  <div class="modalBox">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;">
       <div id="filtersModalTitle" class="modal-title" style="margin:0;">Filters</div>
       <button type="button" class="secondarybtn" onclick="closeFiltersModal()">Close</button>

@@ -2208,48 +2208,187 @@ if(typeof window.closeClientsPage !== "function") window.closeClientsPage = clos
   }
 })();
 
-let expenses = JSON.parse(localStorage.getItem("expenses")||"[]");
+// ================= EXPENSES + PAGE NAV =================
+let expenses = JSON.parse(localStorage.getItem("expenses") || "[]");
+let activePage = "log";
 
-function showPage(p){
-  const ep=document.getElementById("expensesPage");
-  if(ep) ep.style.display = p==="expenses"?"block":"none";
+function expenseTodayKey(){
+  const d = new Date();
+  return formatYYYYMMDD(d);
 }
 
 function openExpenseModal(){
-  document.getElementById("expenseModal").style.display="flex";
+  const modal = document.getElementById("expenseModal");
+  if(!modal) return;
+  const dateEl = document.getElementById("expDate");
+  const amountEl = document.getElementById("expAmount");
+  const vendorEl = document.getElementById("expVendor");
+  const notesEl = document.getElementById("expNotes");
+  const catEl = document.getElementById("expCategory");
+  if(dateEl) dateEl.value = expenseTodayKey();
+  if(amountEl) amountEl.value = "";
+  if(vendorEl) vendorEl.value = "";
+  if(notesEl) notesEl.value = "";
+  if(catEl) catEl.selectedIndex = 0;
+  modal.style.display = "flex";
 }
+window.openExpenseModal = openExpenseModal;
 
 function closeExpenseModal(){
-  document.getElementById("expenseModal").style.display="none";
+  const modal = document.getElementById("expenseModal");
+  if(modal) modal.style.display = "none";
 }
+window.closeExpenseModal = closeExpenseModal;
 
 function saveExpense(){
-  const e={
-    id:Date.now(),
-    date:document.getElementById("expDate").value,
-    amount:Number(document.getElementById("expAmount").value||0),
-    category:document.getElementById("expCategory").value,
-    vendor:document.getElementById("expVendor").value,
-    notes:document.getElementById("expNotes").value
-  };
-  expenses.push(e);
-  localStorage.setItem("expenses",JSON.stringify(expenses));
+  const date = safeVal("expDate");
+  const amount = Number(safeVal("expAmount") || 0);
+  const category = safeVal("expCategory") || "Other";
+  const vendor = safeVal("expVendor") || "";
+  const notes = safeVal("expNotes") || "";
+
+  if(!date || !(amount > 0)){
+    alert("Expense needs a date and amount.");
+    return;
+  }
+
+  expenses.push({
+    id: Date.now(),
+    date,
+    amount,
+    category,
+    vendor,
+    notes
+  });
+
+  localStorage.setItem("expenses", JSON.stringify(expenses));
   closeExpenseModal();
   renderExpenses();
 }
+window.saveExpense = saveExpense;
 
 function renderExpenses(){
-  const list=document.getElementById("expenseList");
-  if(!list) return;
+  const listEl = document.getElementById("expenseList");
+  if(!listEl) return;
 
-  list.innerHTML=expenses.map(e=>`
-    <div class="card">
-      <div style="font-weight:900;">$${e.amount}</div>
-      <div>${e.category}</div>
-      <div style="opacity:.7;">${e.vendor||""}</div>
-      <div style="opacity:.6;font-size:12px;">${e.date}</div>
-    </div>
-  `).join("");
+  const todayEl = document.getElementById("expToday");
+  const monthEl = document.getElementById("expMonth");
+  const yearEl = document.getElementById("expYear");
+  const topEl = document.getElementById("expTop");
+
+  const todayKey = expenseTodayKey();
+  const now = new Date();
+
+  let today = 0, month = 0, year = 0;
+  const catTotals = {};
+
+  expenses.forEach(e=>{
+    const amt = Number(e.amount || 0);
+    const d = parseLocalDate(e.date);
+    if(!d) return;
+
+    if(e.date === todayKey) today += amt;
+    if(d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) month += amt;
+    if(d.getFullYear() === now.getFullYear()) year += amt;
+
+    const cat = e.category || "Other";
+    catTotals[cat] = (catTotals[cat] || 0) + amt;
+  });
+
+  if(todayEl) todayEl.textContent = money(today);
+  if(monthEl) monthEl.textContent = money(month);
+  if(yearEl) yearEl.textContent = money(year);
+
+  const topCat = Object.entries(catTotals).sort((a,b)=> b[1]-a[1])[0];
+  if(topEl) topEl.textContent = topCat ? `${topCat[0]} (${money(topCat[1])})` : "—";
+
+  const grouped = {};
+  expenses.slice().sort((a,b)=> b.id - a.id).forEach(e=>{
+    const d = parseLocalDate(e.date);
+    if(!d) return;
+    const y = d.getFullYear();
+    const m = d.getMonth();
+    const day = d.getDate();
+    grouped[y] = grouped[y] || {};
+    grouped[y][m] = grouped[y][m] || {};
+    grouped[y][m][day] = grouped[y][m][day] || [];
+    grouped[y][m][day].push(e);
+  });
+
+  const years = Object.keys(grouped).sort((a,b)=> Number(b)-Number(a));
+  if(!years.length){
+    listEl.innerHTML = "<p style='opacity:.65; padding: 10px 2px;'>No expenses yet.</p>";
+    return;
+  }
+
+  let html = "";
+  years.forEach(year=>{
+    html += `<div class="accordion"><div class="accordion-header"><div class="accordion-title">${year}</div></div><div class="accordion-content" style="display:block;">`;
+    Object.keys(grouped[year]).sort((a,b)=> Number(b)-Number(a)).forEach(monthIdx=>{
+      html += `<div class="accordion" style="margin-top:10px;"><div class="accordion-header"><div class="accordion-title">${monthName(Number(year), Number(monthIdx))}</div></div><div class="accordion-content" style="display:block;">`;
+      Object.keys(grouped[year][monthIdx]).sort((a,b)=> Number(b)-Number(a)).forEach(dayNum=>{
+        const dateLabel = `${year}-${pad2(Number(monthIdx)+1)}-${pad2(dayNum)}`;
+        html += `<div class="accordion" style="margin-top:10px;"><div class="accordion-header"><div class="accordion-title">${dateLabel}</div></div><div class="accordion-content" style="display:block;">`;
+        grouped[year][monthIdx][dayNum].forEach(e=>{
+          html += `
+            <div class="entry" style="border-left-color:#a94442;">
+              <div class="entry-left">
+                <div class="entry-name" style="color:#ffb3b1;">${money(e.amount)} <span class="client-badge" style="max-width:none;">${e.category || "Other"}</span></div>
+                <div class="entry-sub">
+                  <div class="sub-row">${e.vendor || ""}</div>
+                  <div class="sub-row clamp2">${e.notes || ""}</div>
+                </div>
+              </div>
+            </div>
+          `;
+        });
+        html += `</div></div>`;
+      });
+      html += `</div></div>`;
+    });
+    html += `</div></div>`;
+  });
+
+  listEl.innerHTML = html;
 }
+window.renderExpenses = renderExpenses;
 
-document.addEventListener("DOMContentLoaded",renderExpenses);
+function showPage(page){
+  activePage = (page === "expenses") ? "expenses" : "log";
+
+  const inkPage = document.getElementById("inkLogPage");
+  const expensesPage = document.getElementById("expensesPage");
+  const depositBtn = document.getElementById("inkActionsDeposit");
+  const bammerBtn = document.getElementById("inkActionsBammer");
+  const entryBtn = document.getElementById("inkActionsEntry");
+  const expenseBtn = document.getElementById("expenseAddBtn");
+  const brandTop = document.getElementById("brandTop");
+  const brandBottom = document.getElementById("brandBottom");
+
+  if(inkPage) inkPage.style.display = activePage === "log" ? "block" : "none";
+  if(expensesPage) expensesPage.style.display = activePage === "expenses" ? "block" : "none";
+
+  if(depositBtn) depositBtn.style.display = activePage === "log" ? "" : "none";
+  if(bammerBtn) bammerBtn.style.display = activePage === "log" ? "" : "none";
+  if(entryBtn) entryBtn.style.display = activePage === "log" ? "" : "none";
+  if(expenseBtn) expenseBtn.style.display = activePage === "expenses" ? "" : "none";
+
+  if(brandTop) brandTop.textContent = "Globber’s";
+  if(brandBottom) brandBottom.textContent = activePage === "expenses" ? "Expenses" : "Ink Log";
+
+  if(activePage === "expenses") renderExpenses();
+}
+window.showPage = showPage;
+
+(function wireExpenseModal(){
+  const modal = document.getElementById("expenseModal");
+  const box = document.getElementById("expenseBox");
+  if(!modal) return;
+  modal.addEventListener("click",(e)=>{ if(e.target === modal) closeExpenseModal(); });
+  if(box) box.addEventListener("click",(e)=> e.stopPropagation());
+})();
+
+document.addEventListener("DOMContentLoaded", ()=>{
+  showPage("log");
+  renderExpenses();
+});
