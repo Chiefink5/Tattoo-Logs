@@ -2320,6 +2320,9 @@ function showPage(page){
   const inkPage = document.getElementById("inkLogPage");
   const expensesPage = document.getElementById("expensesPage");
   const inkStats = document.getElementById("inkStats");
+  const billsBtn = document.getElementById("inkBtnBills");
+  const rewardsBtn = document.getElementById("inkBtnRewards");
+  const clientsBtn = document.getElementById("inkBtnClients");
   const depositBtn = document.getElementById("inkActionsDeposit");
   const bammerBtn = document.getElementById("inkActionsBammer");
   const entryBtn = document.getElementById("inkActionsEntry");
@@ -2334,6 +2337,9 @@ function showPage(page){
   if(expensesPage) expensesPage.style.display = activePage === "expenses" ? "block" : "none";
   if(inkStats) inkStats.style.display = activePage === "log" ? "block" : "none";
 
+  if(billsBtn) billsBtn.style.display = activePage === "log" ? "" : "none";
+  if(rewardsBtn) rewardsBtn.style.display = activePage === "log" ? "" : "none";
+  if(clientsBtn) clientsBtn.style.display = activePage === "log" ? "" : "none";
   if(depositBtn) depositBtn.style.display = activePage === "log" ? "" : "none";
   if(bammerBtn) bammerBtn.style.display = activePage === "log" ? "" : "none";
   if(entryBtn) entryBtn.style.display = activePage === "log" ? "" : "none";
