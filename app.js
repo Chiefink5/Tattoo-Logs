@@ -2568,8 +2568,8 @@ function renderExpenses(){
 
     items.forEach(e=>{
       html += `
-        <div class="expense-card" onclick="openExpenseView(${e.id})" style="cursor:pointer;">
-          <div class="expense-amount">${money(e.amount)} <span class="client-badge" style="max-width:none;">${e.category || "Other"}</span>${e.deductible !== false ? '<span class="deductible-badge">Deductible</span>' : ''}</div>
+        <div class="expense-card" onclick="openExpenseView(${e.id})" style="cursor:pointer;border-left:4px solid ${getExpenseCategoryColor(e.category)};">
+          <div class="expense-amount">${money(e.amount)} <span class="client-badge" style="max-width:none;border-color:${getExpenseCategoryColor(e.category)};color:${getExpenseCategoryColor(e.category)};">${e.category || "Other"}</span>${e.deductible !== false ? '<span class="deductible-badge">Deductible</span>' : ''}</div>
           <div>${e.vendor || ""}</div>
           <div style="opacity:.7;font-size:12px;">${e.notes || ""}</div>
           <div style="opacity:.6;font-size:12px;">${e.date || ""}</div>
@@ -3017,21 +3017,28 @@ function exportFinancialSummary(mode){
 }
 window.exportFinancialSummary = exportFinancialSummary;
 
+
 const EXPENSE_CATEGORY_COLORS = {
   "Ink":"#ff8c42",
   "Needles":"#e74c3c",
   "Gloves":"#20b2aa",
-  "Booth Rent":"#d4af37",
-  "Rent":"#d4af37",
-  "Supplies":"#a66cff",
+  "Stencil / Prep":"#a66cff",
   "Equipment":"#2a5bd7",
-  "Software":"#1f6f50",
-  "Travel":"#f9a825",
+  "Furniture":"#8e44ad",
+  "Booth Rent":"#d4af37",
+  "Marketing":"#ff5e7e",
+  "Software / Subscriptions":"#1f6f50",
+  "Licenses / Fees":"#6c5ce7",
+  "Travel / Gas":"#f9a825",
+  "Meals":"#16a085",
+  "Education":"#3498db",
   "Other":"#7f8c8d"
 };
 
 function getExpenseCategoryColor(cat){
-  if(!cat) return EXPENSE_CATEGORY_COLORS["Other"];
-  const key = Object.keys(EXPENSE_CATEGORY_COLORS).find(k=>k.toLowerCase()===String(cat).toLowerCase());
-  return key ? EXPENSE_CATEGORY_COLORS[key] : "#888";
+  const key = String(cat || "Other").trim().toLowerCase();
+  for(const k of Object.keys(EXPENSE_CATEGORY_COLORS)){
+    if(k.toLowerCase() === key) return EXPENSE_CATEGORY_COLORS[k];
+  }
+  return EXPENSE_CATEGORY_COLORS["Other"];
 }
