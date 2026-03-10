@@ -2212,6 +2212,7 @@ if(typeof window.closeClientsPage !== "function") window.closeClientsPage = clos
 let expenses = JSON.parse(localStorage.getItem("expenses") || "[]");
 let activePage = "log";
 let expenseEditingId = null;
+let dashboardSelection = null;
 let expenseFilter = "All";
 let expenseFilters = {
   search: "",
@@ -2718,6 +2719,7 @@ window.exportExpensesCSV = exportExpensesCSV;
 
 
 
+
 function renderDashboard(){
   const revenueEl = document.getElementById("homeRevenue");
   const expensesEl = document.getElementById("homeExpenses");
@@ -2729,6 +2731,8 @@ function renderDashboard(){
   const recentExpensesEl = document.getElementById("homeRecentExpenses");
   const modeEl = document.getElementById("homeChartMode");
   const rangeEl = document.getElementById("homeDateRange");
+  const selBar = document.getElementById("homeChartSelectionBar");
+  const selText = document.getElementById("homeChartSelectionText");
 
   if(!revenueEl) return;
 
@@ -2776,17 +2780,20 @@ function renderDashboard(){
 
   if(mode === "incomeVsExpenses"){
     data = [
-      { label:"Income", value:revenue },
-      { label:"Expenses", value:expenseTotal }
+      { label:"Income", value:revenue, kind:"income" },
+      { label:"Expenses", value:expenseTotal, kind:"expenses" }
     ];
   }else{
-    data = Object.entries(expenseCats).map(([l,v])=>({label:l,value:v})).sort((a,b)=>b.value-a.value);
+    data = Object.entries(expenseCats)
+      .map(([label,value])=>({label,value,kind:"category"}))
+      .sort((a,b)=>b.value-a.value);
   }
 
   const total = data.reduce((s,i)=>s+Number(i.value||0),0);
 
   if(!total){
     pieEl.style.background = "conic-gradient(rgba(212,175,55,.18) 0deg 360deg)";
+    pieEl.classList.remove("clickable");
     legendEl.innerHTML = "<div class='hint'>No data yet.</div>";
   }else{
     let start = 0;
@@ -2800,9 +2807,9 @@ function renderDashboard(){
       const color = palette[i%palette.length];
       parts.push(`${color} ${start}deg ${end}deg`);
       legend.push(`
-        <div class="dashboard-legend-row">
+        <div class="dashboard-legend-row clickable" onclick='handleDashboardSelection(${JSON.stringify(item).replace(/'/g, "&apos;")})'>
           <div class="dashboard-legend-left">
-            <span class="dashboard-swatch" style="background:${color};"></span>
+            <span class="dashboard-swatch clickable" style="background:${color};"></span>
             <span>${item.label}</span>
           </div>
           <strong>${money(val)}</strong>
@@ -2812,7 +2819,21 @@ function renderDashboard(){
     });
 
     pieEl.style.background=`conic-gradient(${parts.join(",")})`;
+    pieEl.classList.add("clickable");
     legendEl.innerHTML=legend.join("");
+  }
+
+  if(selBar && selText){
+    if(dashboardSelection){
+      selBar.style.display = "block";
+      if(dashboardSelection.kind === "category"){
+        selText.textContent = `Selected: ${dashboardSelection.label}`;
+      } else {
+        selText.textContent = `Selected: ${dashboardSelection.label}`;
+      }
+    } else {
+      selBar.style.display = "none";
+    }
   }
 
   const recentEntries = entries.slice().sort((a,b)=>b.id-a.id).slice(0,5);
@@ -2833,3 +2854,58 @@ function renderDashboard(){
 }
 window.renderDashboard = renderDashboard;
 
+
+
+
+function clearDashboardSelection(){
+  dashboardSelection = null;
+  showPage("home");
+}
+window.clearDashboardSelection = clearDashboardSelection;
+
+
+function handleDashboardSelection(item){
+  if(!item) return;
+  dashboardSelection = item;
+
+  if(item.kind === "category"){
+    expenseFilter = item.label;
+    document.querySelectorAll("#expenseFilters .chip").forEach(c=>c.classList.remove("active"));
+    const chips = Array.from(document.querySelectorAll("#expenseFilters .chip"));
+    const match = chips.find(ch => (ch.textContent || "").trim().toLowerCase() === String(item.label || "").trim().toLowerCase()
+      || ((ch.textContent || "").trim().toLowerCase() === "rent" && String(item.label || "").trim().toLowerCase() === "booth rent"));
+    if(match) match.classList.add("active");
+    expenseFilters.category = "all";
+    expenseFilters.search = "";
+    expenseFilters.vendor = "";
+    expenseFilters.deductible = "all";
+    expenseFilters.from = "";
+    expenseFilters.to = "";
+    expenseFilters.sort = "newest";
+    showPage("expenses");
+    renderExpenses();
+    return;
+  }
+
+  if(item.kind === "expenses"){
+    expenseFilter = "All";
+    document.querySelectorAll("#expenseFilters .chip").forEach(c=>c.classList.remove("active"));
+    const allChip = document.querySelector("#expenseFilters .chip");
+    if(allChip) allChip.classList.add("active");
+    expenseFilters.category = "all";
+    expenseFilters.search = "";
+    expenseFilters.vendor = "";
+    expenseFilters.deductible = "all";
+    expenseFilters.from = "";
+    expenseFilters.to = "";
+    expenseFilters.sort = "newest";
+    showPage("expenses");
+    renderExpenses();
+    return;
+  }
+
+  if(item.kind === "income"){
+    showPage("log");
+  }
+}
+window.handleDashboardSelection = handleDashboardSelection;

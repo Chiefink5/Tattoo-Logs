@@ -792,6 +792,18 @@
   }
 }
 
+
+.dashboard-legend-row.clickable{
+  cursor:pointer;
+}
+.dashboard-legend-row.clickable:hover{
+  filter:brightness(1.08);
+}
+.dashboard-swatch.clickable,
+.dashboard-pie.clickable{
+  cursor:pointer;
+}
+
 </style>
 </head>
 
@@ -884,6 +896,13 @@
             <option value="expensesByCategory">Expenses by Category</option>
             <option value="incomeVsExpenses">Income vs Expenses</option>
           </select>
+        </div>
+      </div>
+
+      <div id="homeChartSelectionBar" class="summary-box" style="display:none;margin-top:12px;margin-bottom:12px;padding:10px 12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+          <div id="homeChartSelectionText" style="font-weight:900;color:var(--gold);">Selected Filter</div>
+          <button type="button" class="secondarybtn" onclick="clearDashboardSelection()">Clear</button>
         </div>
       </div>
 
