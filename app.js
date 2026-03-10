@@ -2291,6 +2291,7 @@ function saveExpense(){
   localStorage.setItem("expenses", JSON.stringify(expenses));
   closeExpenseModal();
   renderExpenses();
+  if(activePage === "home") renderDashboard();
 }
 window.saveExpense = saveExpense;
 
@@ -2359,6 +2360,7 @@ function deleteExpense(id){
   localStorage.setItem("expenses", JSON.stringify(expenses));
   closeExpenseView();
   renderExpenses();
+  if(activePage === "home") renderDashboard();
 }
 window.deleteExpense = deleteExpense;
 
@@ -2584,8 +2586,11 @@ function renderExpenses(){
 window.renderExpenses = renderExpenses;
 
 function showPage(page){
-  activePage = (page === "expenses") ? "expenses" : "log";
+  if(page === "expenses") activePage = "expenses";
+  else if(page === "home") activePage = "home";
+  else activePage = "log";
 
+  const homePage = document.getElementById("homePage");
   const inkPage = document.getElementById("inkLogPage");
   const expensesPage = document.getElementById("expensesPage");
   const inkStats = document.getElementById("inkStats");
@@ -2606,6 +2611,7 @@ function showPage(page){
   const navLog = document.getElementById("navLog");
   const navExpenses = document.getElementById("navExpenses");
 
+  if(homePage) homePage.style.display = activePage === "home" ? "block" : "none";
   if(inkPage) inkPage.style.display = activePage === "log" ? "block" : "none";
   if(expensesPage) expensesPage.style.display = activePage === "expenses" ? "block" : "none";
   if(inkStats) inkStats.style.display = activePage === "log" ? "block" : "none";
@@ -2623,13 +2629,18 @@ function showPage(page){
   if(expenseBtn) expenseBtn.style.display = activePage === "expenses" ? "" : "none";
 
   if(brandTop) brandTop.textContent = "Globber’s";
-  if(brandBottom) brandBottom.textContent = activePage === "expenses" ? "Expenses" : "Ink Log";
+  if(brandBottom){
+    if(activePage === "expenses") brandBottom.textContent = "Expenses";
+    else if(activePage === "home") brandBottom.textContent = "Dashboard";
+    else brandBottom.textContent = "Ink Log";
+  }
 
-  if(navHome) navHome.classList.toggle("active", activePage === "log");
+  if(navHome) navHome.classList.toggle("active", activePage === "home");
   if(navLog) navLog.classList.toggle("active", activePage === "log");
   if(navExpenses) navExpenses.classList.toggle("active", activePage === "expenses");
 
   if(activePage === "expenses") renderExpenses();
+  if(activePage === "home") renderDashboard();
 }
 window.showPage = showPage;
 
@@ -2642,8 +2653,9 @@ window.showPage = showPage;
 })();
 
 document.addEventListener("DOMContentLoaded", ()=>{
-  showPage("log");
+  showPage("home");
   renderExpenses();
+  renderDashboard();
 });
 
 
@@ -2703,3 +2715,116 @@ window.exportExpensesCSV = exportExpensesCSV;
   modal.addEventListener("click",(e)=>{ if(e.target === modal) closeExpenseView(); });
   if(box) box.addEventListener("click",(e)=> e.stopPropagation());
 })();
+
+
+function renderDashboard(){
+  const revenueEl = document.getElementById("homeRevenue");
+  const expensesEl = document.getElementById("homeExpenses");
+  const netEl = document.getElementById("homeNet");
+  const topCatEl = document.getElementById("homeTopCategory");
+  const pieEl = document.getElementById("homePie");
+  const legendEl = document.getElementById("homeChartLegend");
+  const recentTattoosEl = document.getElementById("homeRecentTattoos");
+  const recentExpensesEl = document.getElementById("homeRecentExpenses");
+  const modeEl = document.getElementById("homeChartMode");
+
+  if(!revenueEl || !expensesEl || !netEl || !topCatEl || !pieEl || !legendEl || !recentTattoosEl || !recentExpensesEl) return;
+
+  const now = new Date();
+  let yearRevenue = 0;
+  const yearExpenses = [];
+  const expenseCats = {};
+
+  entries.forEach(e=>{
+    const d = parseLocalDate(e.date);
+    if(!d) return;
+    if(d.getFullYear() === now.getFullYear()){
+      yearRevenue += totalForTotalsNet(e);
+    }
+  });
+
+  expenses.forEach(e=>{
+    const d = parseLocalDate(e.date);
+    if(!d) return;
+    if(d.getFullYear() === now.getFullYear()){
+      yearExpenses.push(e);
+      const cat = e.category || "Other";
+      expenseCats[cat] = (expenseCats[cat] || 0) + Number(e.amount || 0);
+    }
+  });
+
+  const yearExpenseTotal = yearExpenses.reduce((sum,e)=> sum + Number(e.amount || 0), 0);
+  const net = yearRevenue - yearExpenseTotal;
+  const topCat = Object.entries(expenseCats).sort((a,b)=> b[1]-a[1])[0];
+
+  revenueEl.textContent = money(yearRevenue);
+  expensesEl.textContent = money(yearExpenseTotal);
+  netEl.textContent = money(net);
+  topCatEl.textContent = topCat ? `${topCat[0]} (${money(topCat[1])})` : "—";
+
+  const palette = [
+    "#d4af37","#a94442","#1f6f50","#2a5bd7","#a66cff",
+    "#ff8c42","#20b2aa","#f9a825","#8e44ad","#7f8c8d"
+  ];
+
+  const mode = modeEl ? modeEl.value : "expensesByCategory";
+  let data = [];
+  if(mode === "incomeVsExpenses"){
+    data = [
+      { label: "Income", value: yearRevenue },
+      { label: "Expenses", value: yearExpenseTotal }
+    ];
+  } else {
+    data = Object.entries(expenseCats)
+      .sort((a,b)=> b[1]-a[1])
+      .map(([label,value])=>({ label, value }));
+  }
+
+  const total = data.reduce((sum,i)=> sum + Number(i.value || 0), 0);
+  if(!total){
+    pieEl.style.background = "conic-gradient(rgba(212,175,55,.18) 0deg 360deg)";
+    legendEl.innerHTML = "<div class='hint'>No data yet.</div>";
+  } else {
+    let start = 0;
+    const parts = [];
+    const legend = [];
+    data.forEach((item, idx)=>{
+      const value = Number(item.value || 0);
+      const angle = (value / total) * 360;
+      const end = start + angle;
+      const color = palette[idx % palette.length];
+      parts.push(`${color} ${start}deg ${end}deg`);
+      legend.push(`
+        <div class="dashboard-legend-row">
+          <div class="dashboard-legend-left">
+            <span class="dashboard-swatch" style="background:${color};"></span>
+            <span>${item.label}</span>
+          </div>
+          <strong>${money(value)}</strong>
+        </div>
+      `);
+      start = end;
+    });
+    pieEl.style.background = `conic-gradient(${parts.join(",")})`;
+    legendEl.innerHTML = legend.join("");
+  }
+
+  const recentEntries = entries.slice().sort((a,b)=> b.id - a.id).slice(0,5);
+  recentTattoosEl.innerHTML = recentEntries.length ? recentEntries.map(e=>`
+    <div class="dashboard-mini-card">
+      <div style="font-weight:900;color:var(--gold);">${e.client || "Client"} — ${money(totalForTotalsNet(e))}</div>
+      <div style="opacity:.82;">${e.description || e.location || ""}</div>
+      <div class="hint">${e.date || ""} • ${(e.status || "").toUpperCase()}</div>
+    </div>
+  `).join("") : "<div class='hint'>No tattoo entries yet.</div>";
+
+  const recentExp = expenses.slice().sort((a,b)=> b.id - a.id).slice(0,5);
+  recentExpensesEl.innerHTML = recentExp.length ? recentExp.map(e=>`
+    <div class="dashboard-mini-card">
+      <div style="font-weight:900;color:#ffb3b1;">${money(e.amount)} — ${e.category || "Other"}</div>
+      <div style="opacity:.82;">${e.vendor || e.notes || ""}</div>
+      <div class="hint">${e.date || ""}${e.deductible !== false ? " • Deductible" : ""}</div>
+    </div>
+  `).join("") : "<div class='hint'>No expenses yet.</div>";
+}
+window.renderDashboard = renderDashboard;
