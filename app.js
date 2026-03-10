@@ -1707,7 +1707,7 @@ function buildRewardsUI(){
         <div class="row" style="margin-top:10px;">
           <div class="field">
             <label>Discount Type</label>
-            <select id="discType_${tier.id}" onchange="buildRewardsUI()">
+            <select id="discType_${tier.id}" onchange="updateDiscountType(\'${tier.id}\')">
               <option value="percent" ${isPercent ? "selected" : ""}>Percent</option>
               <option value="amount" ${isAmount ? "selected" : ""}>Fixed Amount</option>
               <option value="custom" ${isCustom ? "selected" : ""}>Custom Note</option>
