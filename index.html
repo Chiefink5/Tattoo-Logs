@@ -645,74 +645,75 @@
   white-space:nowrap;
 }
   
-    .top-nav{
-      display:flex;
-      justify-content:center;
-      gap:10px;
-      padding:
-        calc(10px + env(safe-area-inset-top))
-        calc(14px + env(safe-area-inset-right))
-        10px
-        calc(14px + env(safe-area-inset-left));
-      border-bottom:1px solid rgba(212,175,55,.22);
-      position:sticky;
-      top:0;
-      z-index:1000;
-      background:linear-gradient(160deg,#0e1512,#081a14);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-    }
-    .top-nav .navbtn{
-      background:rgba(0,0,0,.14);
-      border:1px solid rgba(212,175,55,.20);
-      color:var(--text);
-      padding:10px 16px;
-      border-radius:999px;
-      cursor:pointer;
-      font-weight:900;
-      letter-spacing:.01em;
-    }
-    .top-nav .navbtn.active{
-      background:rgba(212,175,55,.14);
-      border-color:rgba(212,175,55,.55);
-      color:var(--gold);
-      box-shadow:0 0 0 1px rgba(212,175,55,.18) inset;
-    }
+.chip{
+  border:1px solid rgba(212,175,55,.25);
+  background:rgba(0,0,0,.15);
+  color:var(--text);
+  padding:6px 12px;
+  border-radius:999px;
+  font-weight:700;
+  cursor:pointer;
+  white-space:nowrap;
+}
+.chip.active{
+  border-color:rgba(212,175,55,.6);
+  color:var(--gold);
+  background:rgba(212,175,55,.12);
+}
+.month-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-top:18px;
+  font-weight:900;
+  letter-spacing:.03em;
+}
+.month-pill{
+  border:1px solid rgba(212,175,55,.4);
+  padding:4px 10px;
+  border-radius:999px;
+  color:var(--gold);
+  font-weight:900;
+}
+.expense-card{
+  border-left:4px solid #a94442;
+  background:rgba(0,0,0,.18);
+  border-radius:10px;
+  padding:10px 12px;
+  margin-top:8px;
+}
+.expense-amount{
+  font-size:16px;
+  font-weight:900;
+}
 
-  </style>
+</style>
 </head>
 
 <body>
-  <div class="top-nav">
-    <button id="navHome" class="navbtn" type="button" onclick="showPage('home')">Home</button>
-    <button id="navLog" class="navbtn active" type="button" onclick="showPage('log')">Ink Log</button>
-    <button id="navExpenses" class="navbtn" type="button" onclick="showPage('expenses')">Expenses</button>
-  </div>
-
   <header>
     <div class="topbar">
       <!-- LEFT STACK -->
       <div class="action-stack left">
-        <button id="inkBtnBills" class="smallbtn" type="button" onclick="openBills()">Bills</button>
+        <button class="smallbtn" type="button" onclick="openBills()">Bills</button>
         <button class="smallbtn" type="button" onclick="openExport()">Export</button>
-        <button id="inkBtnRewards" class="smallbtn" type="button" onclick="openRewards()">Rewards</button>
+        <button class="smallbtn" type="button" onclick="openRewards()">Rewards</button>
         <button class="smallbtn" type="button" onclick="openFiltersModal()">Filters</button>
-<button id="inkBtnClients" class="smallbtn" type="button" onclick="openClientsPage()">Clients</button>
+<button class="smallbtn" type="button" onclick="openClientsPage()">Clients</button>
       </div>
 
       <!-- CENTER BRAND -->
       <div class="brand">
         <img id="logoImg" alt="Logo" title="Tap to upload logo">
         <input id="logoInput" type="file" accept="image/png,image/*">
-        <div class="brand-title"><span id="brandTop" class="brand-top">Globber’s</span><span id="brandBottom" class="brand-bottom">Ink Log</span></div>
+        <div class="brand-title"><span class="brand-top">Globber’s</span><span class="brand-bottom">Ink Log</span></div>
       </div>
 
       <!-- RIGHT STACK -->
       <div class="action-stack right">
-        <button id="inkActionsDeposit" class="smallbtn" type="button" onclick="openDepositQuick()">Deposit</button>
-        <button id="inkActionsBammer" class="smallbtn" type="button" onclick="openBammerQuick()">Bammer</button>
-        <button id="inkActionsEntry" class="smallbtn" type="button" onclick="openForm()">+ Entry</button>
-        <button id="expenseAddBtn" class="smallbtn" type="button" onclick="openExpenseModal()" style="display:none;">+ Expense</button>
+        <button class="smallbtn" type="button" onclick="openDepositQuick()">Deposit</button>
+        <button class="smallbtn" type="button" onclick="openBammerQuick()">Bammer</button>
+        <button class="smallbtn" type="button" onclick="openForm()">+ Entry</button>
       </div>
     </div>
 
@@ -722,7 +723,7 @@
       </div>
     </div>
 
-    <div id="inkStats">
+    <div id="stats">
       <div class="stats-grid">
         <div class="stat-pill"><strong id="todayTotal">$0</strong><small>Today</small></div>
         <div class="stat-pill"><strong id="weekTotal">$0</strong><small>Week</small></div>
@@ -733,7 +734,7 @@
     </div>
   </header>
 
-  <div id="inkLogPage" class="container">
+  <div class="container">
     <!-- CLIENTS PAGE -->
 <div id="clientsPage" style="display:none;">
   <div class="summary-box" style="margin-top:0;">
@@ -1224,44 +1225,6 @@
           <button type="button" class="secondarybtn" onclick="buildSummary('payperiod')">Summary for Pay Period</button>
         </div>
         <div id="summaryOut" style="margin-top:10px; opacity:.95;"></div>
-      </div>
-    </div>
-  </div>
-
-
-  <div id="expensesPage" class="container" style="display:none;">
-    <div class="summary-grid">
-      <div class="summary-box"><div style="font-weight:900;color:var(--gold);">Today</div><div id="expToday">$0</div></div>
-      <div class="summary-box"><div style="font-weight:900;color:var(--gold);">Month</div><div id="expMonth">$0</div></div>
-      <div class="summary-box"><div style="font-weight:900;color:var(--gold);">Year</div><div id="expYear">$0</div></div>
-      <div class="summary-box"><div style="font-weight:900;color:var(--gold);">Top Category</div><div id="expTop">—</div></div>
-    </div>
-    <div id="expenseList" style="margin-top:12px;"></div>
-  </div>
-
-  <div class="modal" id="expenseModal">
-    <div class="modal-box" id="expenseBox">
-      <div class="modal-title">Add Expense</div>
-      <div class="row">
-        <div class="field"><label>Date</label><input id="expDate" type="date"></div>
-        <div class="field"><label>Amount</label><input id="expAmount" type="number" min="0" step="0.01"></div>
-      </div>
-      <div class="row">
-        <div class="field">
-          <label>Category</label>
-          <select id="expCategory">
-            <option>Ink</option><option>Needles</option><option>Gloves</option><option>Stencil / Prep</option>
-            <option>Equipment</option><option>Furniture</option><option>Booth Rent</option><option>Marketing</option>
-            <option>Software / Subscriptions</option><option>Licenses / Fees</option><option>Travel / Gas</option><option>Meals</option>
-            <option>Education</option><option>Other</option>
-          </select>
-        </div>
-        <div class="field"><label>Vendor</label><input id="expVendor" type="text"></div>
-      </div>
-      <div class="field"><label>Notes</label><textarea id="expNotes"></textarea></div>
-      <div class="actions-row">
-        <button type="button" onclick="saveExpense()">Save Expense</button>
-        <button type="button" class="secondarybtn" onclick="closeExpenseModal()">Cancel</button>
       </div>
     </div>
   </div>
