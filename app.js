@@ -324,7 +324,7 @@ window.saveMonthOverride = saveMonthOverride;
 window.removeMonthOverride = removeMonthOverride;
 
 // ================= BACKUP / RESTORE =================
-async function downloadBackup(){
+function downloadBackup(){
   const payload = {
     version: 2,
     exportedAt: new Date().toISOString(),
@@ -335,57 +335,15 @@ async function downloadBackup(){
     rewardsSettings
   };
 
-  const filename = `globbers-ink-log_backup_${new Date().toISOString().slice(0,10)}.json`;
-  const json = JSON.stringify(payload, null, 2);
-  const blob = new Blob([json], { type: "application/json" });
-
-  try{
-    if(window.File && window.navigator && typeof window.navigator.share === "function"){
-      const file = new File([blob], filename, { type: "application/json" });
-      const shareData = { files: [file], title: filename };
-      if(typeof window.navigator.canShare === "function" && window.navigator.canShare(shareData)){
-        await window.navigator.share(shareData);
-        return;
-      }
-    }
-  }catch(err){
-  }
-
-  try{
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.rel = "noopener";
-    a.style.display = "none";
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(()=>{
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }, 1000);
-    return;
-  }catch(err){
-  }
-
-  try{
-    const reader = new FileReader();
-    reader.onloadend = function(){
-      const a = document.createElement("a");
-      a.href = reader.result;
-      a.download = filename;
-      a.rel = "noopener";
-      a.style.display = "none";
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(()=> document.body.removeChild(a), 1000);
-    };
-    reader.readAsDataURL(blob);
-    return;
-  }catch(err){
-  }
-
-  alert("Backup export failed on this device. Try Safari share/save or use another browser.");
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `globbers-ink-log_backup_${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function restoreBackup(){
@@ -1076,6 +1034,9 @@ function badgeHtmlForClient(name){
 }
 
 function openClientProfile(name){
+  const clientsModal = safeEl("clientsModal");
+  if(clientsModal) clientsModal.style.display = "none";
+
   if(!clientModal || !clientBox) return;
   const list = getClientEntries(name);
   if(!list.length){
