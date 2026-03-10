@@ -28,15 +28,10 @@ let rewardsSettings = JSON.parse(localStorage.getItem("rewardsSettings") || "nul
     { id: "lvl3", name: "VIP", minCount: 10, pngDataUrl: "" }
   ],
   discounts: [
-    { id: "d1", label: "5% Off", minCount: 5, type: "percent", value: 5, customText: "" },
-    { id: "d2", label: "$50 Off", minCount: 10, type: "amount", value: 50, customText: "" }
+    { id: "d1", label: "5% off", minCount: 5, percent: 5 },
+    { id: "d2", label: "10% off", minCount: 10, percent: 10 }
   ]
 };
-
-rewardsSettings.levels = Array.isArray(rewardsSettings.levels) ? rewardsSettings.levels : [];
-rewardsSettings.discounts = Array.isArray(rewardsSettings.discounts)
-  ? rewardsSettings.discounts.map(normalizeDiscountTier)
-  : [];
 
 // Prefill targets (repeat client)
 let prefillClient = null; // { client, contact, social }
@@ -82,48 +77,6 @@ function clampPct(p){
   p = Number(p);
   if(!Number.isFinite(p)) return 100;
   return Math.max(0, Math.min(100, p));
-}
-function normalizeDiscountTier(t){
-  const raw = t && typeof t === "object" ? t : {};
-  let type = String(raw.type || "").toLowerCase();
-
-  if(!type){
-    if(raw.percent !== undefined && raw.percent !== null) type = "percent";
-    else type = "custom";
-  }
-  if(type !== "percent" && type !== "amount" && type !== "custom") type = "custom";
-
-  let value = Number(raw.value);
-  if(!Number.isFinite(value)){
-    if(type === "percent" && raw.percent !== undefined && raw.percent !== null){
-      value = Number(raw.percent);
-    } else {
-      value = 0;
-    }
-  }
-
-  if(type === "percent"){
-    value = Math.max(0, Math.min(100, value));
-  } else if(type === "amount"){
-    value = Math.max(0, value);
-  }
-
-  const customText = String(raw.customText || "").trim();
-
-  return {
-    id: String(raw.id || uid("disc")),
-    label: String(raw.label || "").trim() || "Discount",
-    minCount: Math.max(0, Number(raw.minCount || 0)),
-    type,
-    value,
-    customText
-  };
-}
-function formatDiscountDisplay(d){
-  const tier = normalizeDiscountTier(d);
-  if(tier.type === "percent") return `${Number(tier.value || 0)}% off`;
-  if(tier.type === "amount") return `${money(tier.value || 0)} off`;
-  return tier.customText || tier.label || "Custom discount";
 }
 function normalize(s){ return String(s||"").toLowerCase(); }
 function uid(prefix="id"){ return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`; }
@@ -948,9 +901,7 @@ function getClientProgressSnapshot(name){
     levelPng: level ? (level.pngDataUrl || "") : "",
     discountId: disc ? disc.id : "",
     discountLabel: disc ? disc.label : "",
-    discountType: disc ? disc.type : "",
-    discountValue: disc ? Number(disc.value || 0) : 0,
-    discountDisplay: disc ? formatDiscountDisplay(disc) : ""
+    discountPct: disc ? Number(disc.percent||0) : 0
   };
 }
 
@@ -973,7 +924,7 @@ function maybeNotifyClientProgress(name, before, after){
   if(before.discountId !== after.discountId && after.discountId){
     pushToast({
       title: `Discount Tier Unlocked`,
-      sub: `${name} is now eligible: ${after.discountDisplay || after.discountLabel}`,
+      sub: `${name} is now eligible: ${after.discountLabel} (${after.discountPct}% off)`,
       mini: `Client total: ${net}`,
       imgDataUrl: after.levelPng || "",
       actionLabel: "View Client",
@@ -1094,9 +1045,6 @@ function badgeHtmlForClient(name){
 }
 
 function openClientProfile(name){
-  const clientsModal = safeEl("clientsModal");
-  if(clientsModal) clientsModal.style.display = "none";
-
   if(!clientModal || !clientBox) return;
   const list = getClientEntries(name);
   if(!list.length){
@@ -1121,7 +1069,7 @@ function openClientProfile(name){
 
   const snap = getClientProgressSnapshot(displayName);
   const discountLine = snap.discountId
-    ? `<div>Discount: <strong>${snap.discountDisplay || snap.discountLabel}</strong></div>`
+    ? `<div>Discount: <strong>${snap.discountLabel}</strong> (${snap.discountPct}% off)</div>`
     : `<div style="opacity:.75;">Discount: —</div>`;
 
   clientBox.innerHTML = `
@@ -1612,33 +1560,10 @@ function buildSummary(mode){
 window.buildSummary = buildSummary;
 
 // ================= REWARDS UI =================
-let rewardsActiveTab = "discounts";
-
-function switchRewardsTab(tab){
-  rewardsActiveTab = tab === "badges" ? "badges" : "discounts";
-
-  const discountsPanel = safeEl("rewardsDiscountsPanel");
-  const badgesPanel = safeEl("rewardsBadgesPanel");
-  const discountsBtn = safeEl("rewardsTabDiscounts");
-  const badgesBtn = safeEl("rewardsTabBadges");
-
-  if(discountsPanel) discountsPanel.style.display = rewardsActiveTab === "discounts" ? "block" : "none";
-  if(badgesPanel) badgesPanel.style.display = rewardsActiveTab === "badges" ? "block" : "none";
-
-  if(discountsBtn){
-    discountsBtn.className = rewardsActiveTab === "discounts" ? "" : "secondarybtn";
-  }
-  if(badgesBtn){
-    badgesBtn.className = rewardsActiveTab === "badges" ? "" : "secondarybtn";
-  }
-}
-window.switchRewardsTab = switchRewardsTab;
-
 function openRewards(){
   if(!rewardsModal) return;
   buildRewardsUI();
   rewardsModal.style.display = "flex";
-  switchRewardsTab("discounts");
 }
 function closeRewards(){
   if(!rewardsModal) return;
@@ -1692,51 +1617,30 @@ function buildRewardsUI(){
   }).join("");
 
   discountsList.innerHTML = discounts.map(d=>{
-    const tier = normalizeDiscountTier(d);
-    const isPercent = tier.type === "percent";
-    const isAmount = tier.type === "amount";
-    const isCustom = tier.type === "custom";
-
     return `
-      <div class="summary-box" data-disc="${tier.id}" style="margin-top:10px;">
+      <div class="summary-box" data-disc="${d.id}" style="margin-top:10px;">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
-          <div style="font-weight:900;color:var(--gold);">${tier.label || "Discount"} <span style="opacity:.8;color:rgba(255,255,255,.85);font-weight:800;">— ${formatDiscountDisplay(tier)}</span></div>
-          <button type="button" class="secondarybtn" onclick="removeDiscountTier('${tier.id}')">Remove</button>
+          <div style="font-weight:900;color:var(--gold);">${d.label || "Discount"}</div>
+          <button type="button" class="secondarybtn" onclick="removeDiscountTier('${d.id}')">Remove</button>
         </div>
 
         <div class="row" style="margin-top:10px;">
           <div class="field">
             <label>Label</label>
-            <input type="text" id="discLabel_${tier.id}" value="${(tier.label||"").replace(/"/g,"&quot;")}">
+            <input type="text" id="discLabel_${d.id}" value="${(d.label||"").replace(/"/g,"&quot;")}">
           </div>
           <div class="field">
             <label>Min Tattoos</label>
-            <input type="number" id="discMin_${tier.id}" value="${Number(tier.minCount||0)}">
+            <input type="number" id="discMin_${d.id}" value="${Number(d.minCount||0)}">
           </div>
         </div>
 
         <div class="row" style="margin-top:10px;">
           <div class="field">
-            <label>Discount Type</label>
-            <select id="discType_${tier.id}" onchange="updateDiscountType(\'${tier.id}\')">
-              <option value="percent" ${isPercent ? "selected" : ""}>Percent</option>
-              <option value="amount" ${isAmount ? "selected" : ""}>Fixed Amount</option>
-              <option value="custom" ${isCustom ? "selected" : ""}>Custom Note</option>
-            </select>
+            <label>Percent</label>
+            <input type="number" id="discPct_${d.id}" value="${Number(d.percent||0)}">
           </div>
-
-          <div class="field">
-            ${isPercent ? `
-              <label>Percent Off</label>
-              <input type="number" id="discValue_${tier.id}" min="0" max="100" step="1" value="${Number(tier.value||0)}">
-            ` : isAmount ? `
-              <label>Amount Off</label>
-              <input type="number" id="discValue_${tier.id}" min="0" step="0.01" value="${Number(tier.value||0)}">
-            ` : `
-              <label>Custom Note</label>
-              <input type="text" id="discCustom_${tier.id}" value="${(tier.customText||"").replace(/"/g,"&quot;")}" placeholder="Friend gets half off">
-            `}
-          </div>
+          <div class="field"></div>
         </div>
       </div>
     `;
@@ -1763,7 +1667,7 @@ window.clearBadgePNG = clearBadgePNG;
 
 function addDiscountTier(){
   rewardsSettings.discounts = rewardsSettings.discounts || [];
-  rewardsSettings.discounts.push({ id: uid("disc"), label: "New Discount", minCount: 1, type: "percent", value: 5, customText: "" });
+  rewardsSettings.discounts.push({ id: uid("disc"), label: "New Discount", minCount: 1, percent: 5 });
   buildRewardsUI();
 }
 function removeDiscountTier(id){
@@ -1785,34 +1689,12 @@ function saveRewards(){
   });
 
   discounts.forEach(d=>{
-    const current = normalizeDiscountTier(d);
-    const labelEl = safeEl(`discLabel_${current.id}`);
-    const minEl = safeEl(`discMin_${current.id}`);
-    const typeEl = safeEl(`discType_${current.id}`);
-    const valueEl = safeEl(`discValue_${current.id}`);
-    const customEl = safeEl(`discCustom_${current.id}`);
-
-    current.label = labelEl ? ((labelEl.value || "").trim() || "Discount") : current.label;
-    current.minCount = minEl ? Math.max(0, Number(minEl.value || 0)) : current.minCount;
-    current.type = typeEl ? String(typeEl.value || "percent") : current.type;
-
-    if(current.type === "percent"){
-      current.value = valueEl ? Math.max(0, Math.min(100, Number(valueEl.value || 0))) : Number(current.value || 0);
-      current.customText = "";
-    } else if(current.type === "amount"){
-      current.value = valueEl ? Math.max(0, Number(valueEl.value || 0)) : Number(current.value || 0);
-      current.customText = "";
-    } else {
-      current.value = 0;
-      current.customText = customEl ? (customEl.value || "").trim() : current.customText;
-    }
-
-    d.id = current.id;
-    d.label = current.label;
-    d.minCount = current.minCount;
-    d.type = current.type;
-    d.value = current.value;
-    d.customText = current.customText;
+    const labelEl = safeEl(`discLabel_${d.id}`);
+    const minEl = safeEl(`discMin_${d.id}`);
+    const pctEl = safeEl(`discPct_${d.id}`);
+    if(labelEl) d.label = (labelEl.value || "").trim() || "Discount";
+    if(minEl) d.minCount = Math.max(0, Number(minEl.value || 0));
+    if(pctEl) d.percent = Math.max(0, Math.min(100, Number(pctEl.value || 0)));
   });
 
   const fileReads = levels.map(l=>{
@@ -1828,7 +1710,7 @@ function saveRewards(){
 
   Promise.all(fileReads).then(()=>{
     rewardsSettings.levels = (rewardsSettings.levels || []).slice().sort((a,b)=> Number(a.minCount||0) - Number(b.minCount||0));
-    rewardsSettings.discounts = (rewardsSettings.discounts || []).map(normalizeDiscountTier).slice().sort((a,b)=> Number(a.minCount||0) - Number(b.minCount||0));
+    rewardsSettings.discounts = (rewardsSettings.discounts || []).slice().sort((a,b)=> Number(a.minCount||0) - Number(b.minCount||0));
     saveRewardsSettings();
     pushToast({ title:"Rewards saved", sub:"Badges + discounts will auto-update as you log entries." });
     closeRewards();
@@ -2272,70 +2154,29 @@ window.mergeSelectedClientDuplicates = mergeSelectedClientDuplicates;
     return `${mm}/${dd}/${yy}`;
   }
 
-  function ensureClientsSearchUI(){
-    const modalBox = safeEl("clientsBox");
-    const list = safeEl("clientsList");
-    if(!modalBox || !list) return;
-
-    let wrap = safeEl("clientsSearchWrap");
-    if(!wrap){
-      wrap = document.createElement("div");
-      wrap.id = "clientsSearchWrap";
-      wrap.className = "summary-box";
-      wrap.style.marginTop = "0";
-      wrap.innerHTML = `
-        <div class="field">
-          <label>Search Clients</label>
-          <input id="clientsSearchInput" type="text" placeholder="Start typing a name...">
-        </div>
-        <div class="hint" style="margin-top:8px;">Alphabetical order. Typing filters by starting letters.</div>
-      `;
-      modalBox.insertBefore(wrap, list);
-
-      const input = safeEl("clientsSearchInput");
-      if(input){
-        input.addEventListener("input", ()=> renderClients());
-      }
-    }
-  }
-
   function renderClients(){
-    ensureClientsSearchUI();
-
     const out = safeEl("clientsList");
-    const input = safeEl("clientsSearchInput");
+    console.log("entries length:", entries.length);
     if(!out) return;
 
-    const query = normalize((input && input.value) || "").trim();
-
-    let list = buildClientsIndex().slice().sort((a,b)=>{
-      return String(a.displayName || a.name || "").localeCompare(
-        String(b.displayName || b.name || ""),
-        undefined,
-        { sensitivity: "base" }
-      );
-    });
-
-    if(query){
-      list = list.filter(c => normalize(c.displayName || c.name || "").startsWith(query));
-    }
-
+    const list = buildClientsIndex();
     if(!list.length){
-      out.innerHTML = `<div class="hint" style="margin-top:10px;">No clients match that search.</div>`;
+      console.log("clients built:", list.length);
+      out.innerHTML = `<div class="hint" style="margin-top:10px;">No clients yet.</div>`;
       return;
     }
 
     out.innerHTML = list.map(c=>{
-      return `
-        <div class="client-entry" onclick='openClientProfile(${JSON.stringify(c.displayName)})'>
-          <div class="top">
-            <div><strong>${c.displayName || c.name || ""}</strong></div>
-            <div class="date">${c.lastDate ? mmddyy(c.lastDate) : ""}</div>
-          </div>
-          <div class="desc">Tattoo count: <strong>${c.count || 0}</strong></div>
-        </div>
-      `;
-    }).join("");
+  return `
+    <div class="client-entry" onclick='openClientProfile(${JSON.stringify(c.displayName)})'>
+      <div class="top">
+        <div><strong>${c.displayName || c.name || ""}</strong></div>
+        <div class="date">${c.lastDate ? mmddyy(c.lastDate) : ""}</div>
+      </div>
+      <div class="desc">Tattoo count: <strong>${c.count || 0}</strong></div>
+    </div>
+  `;
+}).join("");
   }
 
   function openClientsPage(){
@@ -2344,11 +2185,6 @@ window.mergeSelectedClientDuplicates = mergeSelectedClientDuplicates;
       alert('Missing Clients modal in index.html (id="clientsModal").');
       return;
     }
-
-    ensureClientsSearchUI();
-    const input = safeEl("clientsSearchInput");
-    if(input) input.value = "";
-
     renderClients();
     modal.style.display = "flex";
   }
