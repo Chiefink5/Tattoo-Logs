@@ -448,20 +448,9 @@ window.closeFiltersModal = closeFiltersModal;
 
 (function wireFiltersModalClose(){
   const m = document.getElementById("filtersModal");
-  const box = document.getElementById("filtersBox");
   if(!m) return;
-
-  m.addEventListener("click",(e)=>{
-    if(e.target === m) closeFiltersModal();
-  });
-
-  if(box){
-    box.addEventListener("click",(e)=> e.stopPropagation());
-  }
-
-  document.addEventListener("keydown",(e)=>{
-    if(e.key === "Escape" && m.style.display === "flex") closeFiltersModal();
-  });
+  m.addEventListener("click",(e)=>{ if(e.target === m) closeFiltersModal(); });
+  document.addEventListener("keydown",(e)=>{ if(e.key === "Escape" && m.style.display === "flex") closeFiltersModal(); });
 })();
 
 
@@ -2218,3 +2207,49 @@ if(typeof window.closeClientsPage !== "function") window.closeClientsPage = clos
     };
   }
 })();
+
+let expenses = JSON.parse(localStorage.getItem("expenses")||"[]");
+
+function showPage(p){
+  const ep=document.getElementById("expensesPage");
+  if(ep) ep.style.display = p==="expenses"?"block":"none";
+}
+
+function openExpenseModal(){
+  document.getElementById("expenseModal").style.display="flex";
+}
+
+function closeExpenseModal(){
+  document.getElementById("expenseModal").style.display="none";
+}
+
+function saveExpense(){
+  const e={
+    id:Date.now(),
+    date:document.getElementById("expDate").value,
+    amount:Number(document.getElementById("expAmount").value||0),
+    category:document.getElementById("expCategory").value,
+    vendor:document.getElementById("expVendor").value,
+    notes:document.getElementById("expNotes").value
+  };
+  expenses.push(e);
+  localStorage.setItem("expenses",JSON.stringify(expenses));
+  closeExpenseModal();
+  renderExpenses();
+}
+
+function renderExpenses(){
+  const list=document.getElementById("expenseList");
+  if(!list) return;
+
+  list.innerHTML=expenses.map(e=>`
+    <div class="card">
+      <div style="font-weight:900;">$${e.amount}</div>
+      <div>${e.category}</div>
+      <div style="opacity:.7;">${e.vendor||""}</div>
+      <div style="opacity:.6;font-size:12px;">${e.date}</div>
+    </div>
+  `).join("");
+}
+
+document.addEventListener("DOMContentLoaded",renderExpenses);

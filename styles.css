@@ -736,3 +736,27 @@ input:focus, select:focus, textarea:focus{
   .filters-head{ padding: 12px 14px; }
   .filters-body{ padding: 12px 14px 14px; }
 }
+
+.card{
+ background:rgba(0,0,0,.5);
+ padding:10px;
+ margin:6px 0;
+ border-left:4px solid #c44;
+ border-radius:6px;
+}
+.summaryRow{
+ display:flex;
+ gap:10px;
+ margin:12px 0;
+}
+.pill{
+ background:#111;
+ padding:6px 12px;
+ border-radius:20px;
+ font-weight:700;
+}
+.headerRow{
+ display:flex;
+ justify-content:space-between;
+ align-items:center;
+}
