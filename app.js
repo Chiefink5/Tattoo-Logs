@@ -2226,11 +2226,13 @@ function openExpenseModal(){
   const vendorEl = document.getElementById("expVendor");
   const notesEl = document.getElementById("expNotes");
   const catEl = document.getElementById("expCategory");
+  const deductibleEl = document.getElementById("expDeductible");
   if(dateEl) dateEl.value = expenseTodayKey();
   if(amountEl) amountEl.value = "";
   if(vendorEl) vendorEl.value = "";
   if(notesEl) notesEl.value = "";
   if(catEl) catEl.selectedIndex = 0;
+  if(deductibleEl) deductibleEl.value = "true";
   modal.style.display = "flex";
 }
 window.openExpenseModal = openExpenseModal;
@@ -2247,13 +2249,14 @@ function saveExpense(){
   const category = safeVal("expCategory") || "Other";
   const vendor = safeVal("expVendor") || "";
   const notes = safeVal("expNotes") || "";
+  const deductible = safeVal("expDeductible") !== "false";
 
   if(!date || !(amount > 0)){
     alert("Expense needs a date and amount.");
     return;
   }
 
-  expenses.push({ id: Date.now(), date, amount, category, vendor, notes });
+  expenses.push({ id: Date.now(), date, amount, category, vendor, notes, deductible });
   localStorage.setItem("expenses", JSON.stringify(expenses));
   closeExpenseModal();
   renderExpenses();
@@ -2280,7 +2283,7 @@ function renderExpenses(){
   const todayKey = expenseTodayKey();
   const now = new Date();
 
-  let today = 0, month = 0, year = 0;
+  let today = 0, month = 0, year = 0, deductibleYear = 0;
   const catTotals = {};
 
   expenses.forEach(e=>{
@@ -2291,6 +2294,7 @@ function renderExpenses(){
     if(e.date === todayKey) today += amt;
     if(d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) month += amt;
     if(d.getFullYear() === now.getFullYear()) year += amt;
+    if(d.getFullYear() === now.getFullYear() && e.deductible !== false) deductibleYear += amt;
 
     const cat = e.category || "Other";
     catTotals[cat] = (catTotals[cat] || 0) + amt;
@@ -2300,7 +2304,7 @@ function renderExpenses(){
   if(monthEl) monthEl.textContent = money(month);
   if(yearEl) yearEl.textContent = money(year);
   const topCat = Object.entries(catTotals).sort((a,b)=> b[1]-a[1])[0];
-  if(topEl) topEl.textContent = topCat ? `${topCat[0]} (${money(topCat[1])})` : "—";
+  if(topEl) topEl.textContent = topCat ? `${topCat[0]} (${money(topCat[1])}) • Deductible ${money(deductibleYear)}` : `Deductible ${money(deductibleYear)}`;
 
   let data = expenses.slice();
   if(expenseFilter !== "All"){
@@ -2335,7 +2339,7 @@ function renderExpenses(){
     items.forEach(e=>{
       html += `
         <div class="expense-card">
-          <div class="expense-amount">${money(e.amount)} <span class="client-badge" style="max-width:none;">${e.category || "Other"}</span></div>
+          <div class="expense-amount">${money(e.amount)} <span class="client-badge" style="max-width:none;">${e.category || "Other"}</span>${e.deductible !== false ? '<span class="deductible-badge">Deductible</span>' : ''}</div>
           <div>${e.vendor || ""}</div>
           <div style="opacity:.7;font-size:12px;">${e.notes || ""}</div>
           <div style="opacity:.6;font-size:12px;">${e.date || ""}</div>
@@ -2361,6 +2365,8 @@ function showPage(page){
   const billsBtn = document.getElementById("inkBtnBills");
   const rewardsBtn = document.getElementById("inkBtnRewards");
   const clientsBtn = document.getElementById("inkBtnClients");
+  const inkExportBtn = document.getElementById("inkExportBtn");
+  const expenseExportBtn = document.getElementById("expenseExportBtn");
   const depositBtn = document.getElementById("inkActionsDeposit");
   const bammerBtn = document.getElementById("inkActionsBammer");
   const entryBtn = document.getElementById("inkActionsEntry");
@@ -2378,6 +2384,8 @@ function showPage(page){
   if(billsBtn) billsBtn.style.display = activePage === "log" ? "" : "none";
   if(rewardsBtn) rewardsBtn.style.display = activePage === "log" ? "" : "none";
   if(clientsBtn) clientsBtn.style.display = activePage === "log" ? "" : "none";
+  if(inkExportBtn) inkExportBtn.style.display = activePage === "log" ? "" : "none";
+  if(expenseExportBtn) expenseExportBtn.style.display = activePage === "expenses" ? "" : "none";
   if(depositBtn) depositBtn.style.display = activePage === "log" ? "" : "none";
   if(bammerBtn) bammerBtn.style.display = activePage === "log" ? "" : "none";
   if(entryBtn) entryBtn.style.display = activePage === "log" ? "" : "none";
@@ -2406,3 +2414,52 @@ document.addEventListener("DOMContentLoaded", ()=>{
   showPage("log");
   renderExpenses();
 });
+
+
+function exportExpensesCSV(){
+  const rows = [
+    ["Date","Amount","Category","Vendor","Notes","Deductible"]
+  ];
+
+  expenses.slice().sort((a,b)=> new Date(b.date) - new Date(a.date)).forEach(e=>{
+    rows.push([
+      e.date || "",
+      Number(e.amount || 0).toFixed(2),
+      e.category || "",
+      e.vendor || "",
+      e.notes || "",
+      e.deductible !== false ? "Yes" : "No"
+    ]);
+  });
+
+  const csv = rows.map(row =>
+    row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(",")
+  ).join("\n");
+
+  const filename = `globbers-expenses_${new Date().toISOString().slice(0,10)}.csv`;
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+
+  try{
+    if(window.File && window.navigator && typeof window.navigator.share === "function"){
+      const file = new File([blob], filename, { type: "text/csv" });
+      const shareData = { files: [file], title: filename };
+      if(typeof window.navigator.canShare === "function" && window.navigator.canShare(shareData)){
+        window.navigator.share(shareData).catch(()=>{});
+        return;
+      }
+    }
+  }catch(err){}
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 1000);
+}
+window.exportExpensesCSV = exportExpensesCSV;

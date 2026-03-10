@@ -722,6 +722,21 @@
   font-weight:900;
 }
 
+
+.deductible-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:3px 10px;
+  border-radius:999px;
+  border:1px solid rgba(31,111,80,.55);
+  background:rgba(31,111,80,.18);
+  font-size:.78rem;
+  color:rgba(255,255,255,.9);
+  white-space:nowrap;
+  margin-left:8px;
+}
+
 </style>
 </head>
 
@@ -737,7 +752,8 @@
       <!-- LEFT STACK -->
       <div class="action-stack left">
         <button id="inkBtnBills" class="smallbtn" type="button" onclick="openBills()">Bills</button>
-        <button class="smallbtn" type="button" onclick="openExport()">Export</button>
+        <button id="inkExportBtn" class="smallbtn" type="button" onclick="openExport()">Export</button>
+        <button id="expenseExportBtn" class="smallbtn" type="button" onclick="exportExpensesCSV()" style="display:none;">Export Expenses</button>
         <button id="inkBtnRewards" class="smallbtn" type="button" onclick="openRewards()">Rewards</button>
         <button class="smallbtn" type="button" onclick="openFiltersModal()">Filters</button>
 <button id="inkBtnClients" class="smallbtn" type="button" onclick="openClientsPage()">Clients</button>
@@ -1311,6 +1327,16 @@
           </select>
         </div>
         <div class="field"><label>Vendor</label><input id="expVendor" type="text"></div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Tax Deductible</label>
+          <select id="expDeductible">
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
+        </div>
+        <div class="field"></div>
       </div>
       <div class="field"><label>Notes</label><textarea id="expNotes"></textarea></div>
       <div class="actions-row">
