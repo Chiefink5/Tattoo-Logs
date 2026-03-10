@@ -2319,6 +2319,7 @@ function showPage(page){
 
   const inkPage = document.getElementById("inkLogPage");
   const expensesPage = document.getElementById("expensesPage");
+  const inkStats = document.getElementById("inkStats");
   const depositBtn = document.getElementById("inkActionsDeposit");
   const bammerBtn = document.getElementById("inkActionsBammer");
   const entryBtn = document.getElementById("inkActionsEntry");
@@ -2331,6 +2332,7 @@ function showPage(page){
 
   if(inkPage) inkPage.style.display = activePage === "log" ? "block" : "none";
   if(expensesPage) expensesPage.style.display = activePage === "expenses" ? "block" : "none";
+  if(inkStats) inkStats.style.display = activePage === "log" ? "block" : "none";
 
   if(depositBtn) depositBtn.style.display = activePage === "log" ? "" : "none";
   if(bammerBtn) bammerBtn.style.display = activePage === "log" ? "" : "none";
