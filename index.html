@@ -940,10 +940,22 @@
 <option value="custom">Custom Range</option>
 </select>
 <select id="homeChartMode" onchange="renderDashboard()">
-
             <option value="expensesByCategory">Expenses by Category</option>
             <option value="incomeVsExpenses">Income vs Expenses</option>
           </select>
+
+          <div id="homeCustomRangeWrap" style="display:none; width:100%; margin-top:10px;">
+            <div class="row" style="margin-top:0;">
+              <div class="field">
+                <label>From</label>
+                <input id="homeCustomFrom" type="date" onchange="renderDashboard()">
+              </div>
+              <div class="field">
+                <label>To</label>
+                <input id="homeCustomTo" type="date" onchange="renderDashboard()">
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
