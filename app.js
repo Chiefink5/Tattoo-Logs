@@ -335,15 +335,37 @@ function downloadBackup(){
     rewardsSettings
   };
 
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const filename = `globbers-ink-log_backup_${new Date().toISOString().slice(0,10)}.json`;
+  const json = JSON.stringify(payload, null, 2);
+
+  const blob = new Blob([json], { type: "application/octet-stream" });
+
+  if(window.navigator && typeof window.navigator.msSaveOrOpenBlob === "function"){
+    window.navigator.msSaveOrOpenBlob(blob, filename);
+    return;
+  }
+
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `globbers-ink-log_backup_${new Date().toISOString().slice(0,10)}.json`;
+  a.download = filename;
+  a.rel = "noopener";
+  a.style.display = "none";
   document.body.appendChild(a);
-  a.click();
+
+  if(typeof a.click === "function"){
+    a.click();
+  } else {
+    const evt = document.createEvent("MouseEvents");
+    evt.initMouseEvent("click", true, true, window);
+    a.dispatchEvent(evt);
+  }
+
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+
+  setTimeout(()=>{
+    URL.revokeObjectURL(url);
+  }, 4000);
 }
 
 function restoreBackup(){
