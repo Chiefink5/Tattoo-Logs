@@ -1003,39 +1003,29 @@
     <div class="modal-box" id="rewardsBox">
       <div class="modal-title">Client Rewards Setup</div>
 
-      <div class="summary-box" style="margin-top:0;">
-        <div style="display:flex;gap:10px;flex-wrap:wrap;">
-          <button type="button" id="rewardsTabDiscounts" onclick="switchRewardsTab('discounts')">Discount Tiers</button>
-          <button type="button" id="rewardsTabBadges" class="secondarybtn" onclick="switchRewardsTab('badges')">Badge Levels</button>
+      <details open>
+        <summary>Badge Levels</summary>
+        <div class="hint" style="margin-top:8px;">
+          Levels are based on <b>tattoo count</b> (non-deposit-only entries). Highest matching tier wins.
         </div>
-        <div class="hint" style="margin-top:10px;">Discount tiers open first by default.</div>
-      </div>
+        <div id="levelsList" style="margin-top:10px;"></div>
+        <div class="actions-row">
+          <button type="button" onclick="addBadgeLevel()">+ Add Badge Level</button>
+        </div>
+      </details>
 
-      <div id="rewardsDiscountsPanel">
-        <div class="summary-box">
-          <div style="font-weight:900;color:var(--gold);">Discount Tiers</div>
-          <div class="hint" style="margin-top:8px;">
-            Discounts are also based on tattoo count. Highest matching tier wins.
-          </div>
-          <div id="discountsList" style="margin-top:10px;"></div>
-          <div class="actions-row">
-            <button type="button" onclick="addDiscountTier()">+ Add Discount Tier</button>
-          </div>
-        </div>
-      </div>
+      <hr>
 
-      <div id="rewardsBadgesPanel" style="display:none;">
-        <div class="summary-box">
-          <div style="font-weight:900;color:var(--gold);">Badge Levels</div>
-          <div class="hint" style="margin-top:8px;">
-            Levels are based on <b>tattoo count</b> (non-deposit-only entries). Highest matching tier wins.
-          </div>
-          <div id="levelsList" style="margin-top:10px;"></div>
-          <div class="actions-row">
-            <button type="button" onclick="addBadgeLevel()">+ Add Badge Level</button>
-          </div>
+      <details open>
+        <summary>Discount Tiers</summary>
+        <div class="hint" style="margin-top:8px;">
+          Discounts are also based on tattoo count. Highest matching tier wins.
         </div>
-      </div>
+        <div id="discountsList" style="margin-top:10px;"></div>
+        <div class="actions-row">
+          <button type="button" onclick="addDiscountTier()">+ Add Discount Tier</button>
+        </div>
+      </details>
 
       <div class="actions-row">
         <button type="button" onclick="saveRewards()">Save Rewards</button>
@@ -1203,7 +1193,7 @@
 
 <!-- Filters Modal -->
 <div id="filtersModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="filtersModalTitle">
-  <div class="modalBox">
+  <div id="filtersBox" class="modal-box">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;">
       <div id="filtersModalTitle" class="modal-title" style="margin:0;">Filters</div>
       <button type="button" class="secondarybtn" onclick="closeFiltersModal()">Close</button>
