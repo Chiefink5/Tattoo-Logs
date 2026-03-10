@@ -2208,7 +2208,57 @@ if(typeof window.closeClientsPage !== "function") window.closeClientsPage = clos
   }
 })();
 
+// ================= EXPENSES + PAGE NAV =================
+let expenses = JSON.parse(localStorage.getItem("expenses") || "[]");
+let activePage = "log";
 let expenseFilter = "All";
+
+function expenseTodayKey(){
+  const d = new Date();
+  return formatYYYYMMDD(d);
+}
+
+function openExpenseModal(){
+  const modal = document.getElementById("expenseModal");
+  if(!modal) return;
+  const dateEl = document.getElementById("expDate");
+  const amountEl = document.getElementById("expAmount");
+  const vendorEl = document.getElementById("expVendor");
+  const notesEl = document.getElementById("expNotes");
+  const catEl = document.getElementById("expCategory");
+  if(dateEl) dateEl.value = expenseTodayKey();
+  if(amountEl) amountEl.value = "";
+  if(vendorEl) vendorEl.value = "";
+  if(notesEl) notesEl.value = "";
+  if(catEl) catEl.selectedIndex = 0;
+  modal.style.display = "flex";
+}
+window.openExpenseModal = openExpenseModal;
+
+function closeExpenseModal(){
+  const modal = document.getElementById("expenseModal");
+  if(modal) modal.style.display = "none";
+}
+window.closeExpenseModal = closeExpenseModal;
+
+function saveExpense(){
+  const date = safeVal("expDate");
+  const amount = Number(safeVal("expAmount") || 0);
+  const category = safeVal("expCategory") || "Other";
+  const vendor = safeVal("expVendor") || "";
+  const notes = safeVal("expNotes") || "";
+
+  if(!date || !(amount > 0)){
+    alert("Expense needs a date and amount.");
+    return;
+  }
+
+  expenses.push({ id: Date.now(), date, amount, category, vendor, notes });
+  localStorage.setItem("expenses", JSON.stringify(expenses));
+  closeExpenseModal();
+  renderExpenses();
+}
+window.saveExpense = saveExpense;
 
 function setExpenseFilter(cat,btn){
   expenseFilter = cat;
@@ -2216,64 +2266,143 @@ function setExpenseFilter(cat,btn){
   if(btn) btn.classList.add("active");
   renderExpenses();
 }
-
-function groupExpenses(expenses){
-  const groups = {};
-  expenses.forEach(e=>{
-    const d = new Date(e.date);
-    const key = d.getFullYear()+"-"+(d.getMonth()+1);
-    if(!groups[key]) groups[key] = [];
-    groups[key].push(e);
-  });
-  return groups;
-}
+window.setExpenseFilter = setExpenseFilter;
 
 function renderExpenses(){
   const listEl = document.getElementById("expenseList");
   if(!listEl) return;
 
-  let data = expenses.slice();
+  const todayEl = document.getElementById("expToday");
+  const monthEl = document.getElementById("expMonth");
+  const yearEl = document.getElementById("expYear");
+  const topEl = document.getElementById("expTop");
 
+  const todayKey = expenseTodayKey();
+  const now = new Date();
+
+  let today = 0, month = 0, year = 0;
+  const catTotals = {};
+
+  expenses.forEach(e=>{
+    const amt = Number(e.amount || 0);
+    const d = parseLocalDate(e.date);
+    if(!d) return;
+
+    if(e.date === todayKey) today += amt;
+    if(d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) month += amt;
+    if(d.getFullYear() === now.getFullYear()) year += amt;
+
+    const cat = e.category || "Other";
+    catTotals[cat] = (catTotals[cat] || 0) + amt;
+  });
+
+  if(todayEl) todayEl.textContent = money(today);
+  if(monthEl) monthEl.textContent = money(month);
+  if(yearEl) yearEl.textContent = money(year);
+  const topCat = Object.entries(catTotals).sort((a,b)=> b[1]-a[1])[0];
+  if(topEl) topEl.textContent = topCat ? `${topCat[0]} (${money(topCat[1])})` : "—";
+
+  let data = expenses.slice();
   if(expenseFilter !== "All"){
     data = data.filter(e => e.category === expenseFilter);
   }
-
   data.sort((a,b)=> new Date(b.date) - new Date(a.date));
 
-  const groups = groupExpenses(data);
+  const groups = {};
+  data.forEach(e=>{
+    const d = parseLocalDate(e.date);
+    if(!d) return;
+    const key = `${d.getFullYear()}-${d.getMonth()+1}`;
+    if(!groups[key]) groups[key] = [];
+    groups[key].push(e);
+  });
 
   const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
   let html = "";
-
   Object.keys(groups).sort((a,b)=> b.localeCompare(a)).forEach(key=>{
-    const [year,month] = key.split("-");
+    const [yearNum, monthNum] = key.split("-");
     const items = groups[key];
-
-    let total = items.reduce((sum,i)=> sum + Number(i.amount||0),0);
+    const total = items.reduce((sum,i)=> sum + Number(i.amount||0), 0);
 
     html += `
       <div class="month-header">
-        <div>${monthNames[month-1]} ${year}</div>
-        <div class="month-pill">$${total.toFixed(2)}</div>
+        <div>${monthNames[Number(monthNum)-1]} ${yearNum}</div>
+        <div class="month-pill">${money(total)}</div>
       </div>
     `;
 
     items.forEach(e=>{
       html += `
         <div class="expense-card">
-          <div class="expense-amount">$${Number(e.amount).toFixed(2)} <span class="client-badge">${e.category}</span></div>
+          <div class="expense-amount">${money(e.amount)} <span class="client-badge" style="max-width:none;">${e.category || "Other"}</span></div>
           <div>${e.vendor || ""}</div>
           <div style="opacity:.7;font-size:12px;">${e.notes || ""}</div>
-          <div style="opacity:.6;font-size:12px;">${e.date}</div>
+          <div style="opacity:.6;font-size:12px;">${e.date || ""}</div>
         </div>
       `;
     });
   });
 
   if(!html){
-    html = "<p style='opacity:.6;margin-top:10px;'>No expenses yet.</p>";
+    html = "<p style='opacity:.65; padding: 10px 2px;'>No expenses yet.</p>";
   }
 
   listEl.innerHTML = html;
 }
+window.renderExpenses = renderExpenses;
+
+function showPage(page){
+  activePage = (page === "expenses") ? "expenses" : "log";
+
+  const inkPage = document.getElementById("inkLogPage");
+  const expensesPage = document.getElementById("expensesPage");
+  const inkStats = document.getElementById("inkStats");
+  const billsBtn = document.getElementById("inkBtnBills");
+  const rewardsBtn = document.getElementById("inkBtnRewards");
+  const clientsBtn = document.getElementById("inkBtnClients");
+  const depositBtn = document.getElementById("inkActionsDeposit");
+  const bammerBtn = document.getElementById("inkActionsBammer");
+  const entryBtn = document.getElementById("inkActionsEntry");
+  const expenseBtn = document.getElementById("expenseAddBtn");
+  const brandTop = document.getElementById("brandTop");
+  const brandBottom = document.getElementById("brandBottom");
+  const navHome = document.getElementById("navHome");
+  const navLog = document.getElementById("navLog");
+  const navExpenses = document.getElementById("navExpenses");
+
+  if(inkPage) inkPage.style.display = activePage === "log" ? "block" : "none";
+  if(expensesPage) expensesPage.style.display = activePage === "expenses" ? "block" : "none";
+  if(inkStats) inkStats.style.display = activePage === "log" ? "block" : "none";
+
+  if(billsBtn) billsBtn.style.display = activePage === "log" ? "" : "none";
+  if(rewardsBtn) rewardsBtn.style.display = activePage === "log" ? "" : "none";
+  if(clientsBtn) clientsBtn.style.display = activePage === "log" ? "" : "none";
+  if(depositBtn) depositBtn.style.display = activePage === "log" ? "" : "none";
+  if(bammerBtn) bammerBtn.style.display = activePage === "log" ? "" : "none";
+  if(entryBtn) entryBtn.style.display = activePage === "log" ? "" : "none";
+  if(expenseBtn) expenseBtn.style.display = activePage === "expenses" ? "" : "none";
+
+  if(brandTop) brandTop.textContent = "Globber’s";
+  if(brandBottom) brandBottom.textContent = activePage === "expenses" ? "Expenses" : "Ink Log";
+
+  if(navHome) navHome.classList.toggle("active", activePage === "log");
+  if(navLog) navLog.classList.toggle("active", activePage === "log");
+  if(navExpenses) navExpenses.classList.toggle("active", activePage === "expenses");
+
+  if(activePage === "expenses") renderExpenses();
+}
+window.showPage = showPage;
+
+(function wireExpenseModal(){
+  const modal = document.getElementById("expenseModal");
+  const box = document.getElementById("expenseBox");
+  if(!modal) return;
+  modal.addEventListener("click",(e)=>{ if(e.target === modal) closeExpenseModal(); });
+  if(box) box.addEventListener("click",(e)=> e.stopPropagation());
+})();
+
+document.addEventListener("DOMContentLoaded", ()=>{
+  showPage("log");
+  renderExpenses();
+});
