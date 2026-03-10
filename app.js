@@ -3016,3 +3016,22 @@ function exportFinancialSummary(mode){
   }, 1000);
 }
 window.exportFinancialSummary = exportFinancialSummary;
+
+const EXPENSE_CATEGORY_COLORS = {
+  "Ink":"#ff8c42",
+  "Needles":"#e74c3c",
+  "Gloves":"#20b2aa",
+  "Booth Rent":"#d4af37",
+  "Rent":"#d4af37",
+  "Supplies":"#a66cff",
+  "Equipment":"#2a5bd7",
+  "Software":"#1f6f50",
+  "Travel":"#f9a825",
+  "Other":"#7f8c8d"
+};
+
+function getExpenseCategoryColor(cat){
+  if(!cat) return EXPENSE_CATEGORY_COLORS["Other"];
+  const key = Object.keys(EXPENSE_CATEGORY_COLORS).find(k=>k.toLowerCase()===String(cat).toLowerCase());
+  return key ? EXPENSE_CATEGORY_COLORS[key] : "#888";
+}
