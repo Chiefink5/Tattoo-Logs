@@ -2213,6 +2213,15 @@ let expenses = JSON.parse(localStorage.getItem("expenses") || "[]");
 let activePage = "log";
 let expenseEditingId = null;
 let expenseFilter = "All";
+let expenseFilters = {
+  search: "",
+  category: "all",
+  vendor: "",
+  deductible: "all",
+  from: "",
+  to: "",
+  sort: "newest"
+};
 
 function expenseTodayKey(){
   const d = new Date();
@@ -2361,6 +2370,133 @@ function setExpenseFilter(cat,btn){
 }
 window.setExpenseFilter = setExpenseFilter;
 
+function openExpenseFiltersModal(){
+  hydrateExpenseFiltersUI();
+  populateExpenseCategoryFilter();
+  const m = document.getElementById("expenseFiltersModal");
+  if(m) m.style.display = "flex";
+}
+window.openExpenseFiltersModal = openExpenseFiltersModal;
+
+function closeExpenseFiltersModal(){
+  const m = document.getElementById("expenseFiltersModal");
+  if(m) m.style.display = "none";
+}
+window.closeExpenseFiltersModal = closeExpenseFiltersModal;
+
+function hydrateExpenseFiltersUI(){
+  const searchEl = document.getElementById("expFilterSearch");
+  const catEl = document.getElementById("expFilterCategory");
+  const vendorEl = document.getElementById("expFilterVendor");
+  const dedEl = document.getElementById("expFilterDeductible");
+  const fromEl = document.getElementById("expFilterFrom");
+  const toEl = document.getElementById("expFilterTo");
+  const sortEl = document.getElementById("expFilterSort");
+
+  if(searchEl) searchEl.value = expenseFilters.search || "";
+  if(catEl) catEl.value = expenseFilters.category || "all";
+  if(vendorEl) vendorEl.value = expenseFilters.vendor || "";
+  if(dedEl) dedEl.value = expenseFilters.deductible || "all";
+  if(fromEl) fromEl.value = expenseFilters.from || "";
+  if(toEl) toEl.value = expenseFilters.to || "";
+  if(sortEl) sortEl.value = expenseFilters.sort || "newest";
+}
+
+function populateExpenseCategoryFilter(){
+  const catEl = document.getElementById("expFilterCategory");
+  if(!catEl) return;
+  const current = expenseFilters.category || "all";
+  const cats = Array.from(new Set(expenses.map(e => e.category).filter(Boolean))).sort((a,b)=> String(a).localeCompare(String(b), undefined, { sensitivity:"base" }));
+  catEl.innerHTML = '<option value="all">All Categories</option>' + cats.map(c => `<option value="${c}">${c}</option>`).join("");
+  catEl.value = current;
+}
+
+function applyExpenseFilters(){
+  const searchEl = document.getElementById("expFilterSearch");
+  const catEl = document.getElementById("expFilterCategory");
+  const vendorEl = document.getElementById("expFilterVendor");
+  const dedEl = document.getElementById("expFilterDeductible");
+  const fromEl = document.getElementById("expFilterFrom");
+  const toEl = document.getElementById("expFilterTo");
+  const sortEl = document.getElementById("expFilterSort");
+
+  expenseFilters.search = searchEl ? (searchEl.value || "") : "";
+  expenseFilters.category = catEl ? (catEl.value || "all") : "all";
+  expenseFilters.vendor = vendorEl ? (vendorEl.value || "") : "";
+  expenseFilters.deductible = dedEl ? (dedEl.value || "all") : "all";
+  expenseFilters.from = fromEl ? (fromEl.value || "") : "";
+  expenseFilters.to = toEl ? (toEl.value || "") : "";
+  expenseFilters.sort = sortEl ? (sortEl.value || "newest") : "newest";
+
+  renderExpenses();
+}
+window.applyExpenseFilters = applyExpenseFilters;
+
+function clearExpenseFilters(){
+  expenseFilters = {
+    search: "",
+    category: "all",
+    vendor: "",
+    deductible: "all",
+    from: "",
+    to: "",
+    sort: "newest"
+  };
+  expenseFilter = "All";
+  document.querySelectorAll("#expenseFilters .chip").forEach(c=>c.classList.remove("active"));
+  const allChip = document.querySelector('#expenseFilters .chip');
+  if(allChip) allChip.classList.add("active");
+  hydrateExpenseFiltersUI();
+  populateExpenseCategoryFilter();
+  renderExpenses();
+}
+window.clearExpenseFilters = clearExpenseFilters;
+
+function expenseMatchesFilters(e){
+  const search = String(expenseFilters.search || "").toLowerCase().trim();
+  const vendor = String(expenseFilters.vendor || "").toLowerCase().trim();
+
+  if(expenseFilter !== "All" && e.category !== expenseFilter) return false;
+  if(expenseFilters.category && expenseFilters.category !== "all" && e.category !== expenseFilters.category) return false;
+  if(expenseFilters.deductible === "yes" && e.deductible === false) return false;
+  if(expenseFilters.deductible === "no" && e.deductible !== false) return false;
+
+  if(search){
+    const blob = [e.category, e.vendor, e.notes, e.date].filter(Boolean).join(" ").toLowerCase();
+    if(!blob.includes(search)) return false;
+  }
+
+  if(vendor){
+    const vend = String(e.vendor || "").toLowerCase();
+    if(!vend.includes(vendor)) return false;
+  }
+
+  if(expenseFilters.from){
+    const from = parseLocalDate(expenseFilters.from);
+    const d = parseLocalDate(e.date);
+    if(from && d && d < from) return false;
+  }
+
+  if(expenseFilters.to){
+    const to = parseLocalDate(expenseFilters.to);
+    const d = parseLocalDate(e.date);
+    if(to && d && d > to) return false;
+  }
+
+  return true;
+}
+
+(function wireExpenseFiltersModal(){
+  const m = document.getElementById("expenseFiltersModal");
+  const box = document.getElementById("expenseFiltersBox");
+  if(!m) return;
+  m.addEventListener("click",(e)=>{ if(e.target === m) closeExpenseFiltersModal(); });
+  if(box) box.addEventListener("click",(e)=> e.stopPropagation());
+  document.addEventListener("keydown",(e)=>{
+    if(e.key === "Escape" && m.style.display === "flex") closeExpenseFiltersModal();
+  });
+})();
+
 function renderExpenses(){
   const listEl = document.getElementById("expenseList");
   if(!listEl) return;
@@ -2396,11 +2532,12 @@ function renderExpenses(){
   const topCat = Object.entries(catTotals).sort((a,b)=> b[1]-a[1])[0];
   if(topEl) topEl.textContent = topCat ? `${topCat[0]} (${money(topCat[1])}) • Deductible ${money(deductibleYear)}` : `Deductible ${money(deductibleYear)}`;
 
-  let data = expenses.slice();
-  if(expenseFilter !== "All"){
-    data = data.filter(e => e.category === expenseFilter);
+  let data = expenses.slice().filter(expenseMatchesFilters);
+  if((expenseFilters.sort || "newest") === "oldest"){
+    data.sort((a,b)=> new Date(a.date) - new Date(b.date));
+  } else {
+    data.sort((a,b)=> new Date(b.date) - new Date(a.date));
   }
-  data.sort((a,b)=> new Date(b.date) - new Date(a.date));
 
   const groups = {};
   data.forEach(e=>{
@@ -2457,6 +2594,8 @@ function showPage(page){
   const clientsBtn = document.getElementById("inkBtnClients");
   const inkExportBtn = document.getElementById("inkExportBtn");
   const expenseExportBtn = document.getElementById("expenseExportBtn");
+  const inkFiltersBtn = document.getElementById("inkFiltersBtn");
+  const expenseFiltersBtn = document.getElementById("expenseFiltersBtn");
   const depositBtn = document.getElementById("inkActionsDeposit");
   const bammerBtn = document.getElementById("inkActionsBammer");
   const entryBtn = document.getElementById("inkActionsEntry");
@@ -2476,6 +2615,8 @@ function showPage(page){
   if(clientsBtn) clientsBtn.style.display = activePage === "log" ? "" : "none";
   if(inkExportBtn) inkExportBtn.style.display = activePage === "log" ? "" : "none";
   if(expenseExportBtn) expenseExportBtn.style.display = activePage === "expenses" ? "" : "none";
+  if(inkFiltersBtn) inkFiltersBtn.style.display = activePage === "log" ? "" : "none";
+  if(expenseFiltersBtn) expenseFiltersBtn.style.display = activePage === "expenses" ? "" : "none";
   if(depositBtn) depositBtn.style.display = activePage === "log" ? "" : "none";
   if(bammerBtn) bammerBtn.style.display = activePage === "log" ? "" : "none";
   if(entryBtn) entryBtn.style.display = activePage === "log" ? "" : "none";

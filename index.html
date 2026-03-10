@@ -755,7 +755,8 @@
         <button id="inkExportBtn" class="smallbtn" type="button" onclick="openExport()">Export</button>
         <button id="expenseExportBtn" class="smallbtn" type="button" onclick="exportExpensesCSV()" style="display:none;">Export Expenses</button>
         <button id="inkBtnRewards" class="smallbtn" type="button" onclick="openRewards()">Rewards</button>
-        <button class="smallbtn" type="button" onclick="openFiltersModal()">Filters</button>
+        <button id="inkFiltersBtn" class="smallbtn" type="button" onclick="openFiltersModal()">Filters</button>
+        <button id="expenseFiltersBtn" class="smallbtn" type="button" onclick="openExpenseFiltersModal()" style="display:none;">Expense Filters</button>
 <button id="inkBtnClients" class="smallbtn" type="button" onclick="openClientsPage()">Clients</button>
       </div>
 
@@ -1349,6 +1350,78 @@
 
   <div class="modal" id="expenseViewModal">
     <div class="modal-box" id="expenseViewBox"></div>
+  </div>
+
+
+  <div id="expenseFiltersModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="expenseFiltersModalTitle">
+    <div id="expenseFiltersBox" class="modal-box">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;">
+        <div id="expenseFiltersModalTitle" class="modal-title" style="margin:0;">Expense Filters</div>
+        <button type="button" class="secondarybtn" onclick="closeExpenseFiltersModal()">Close</button>
+      </div>
+
+      <div class="filterbar" style="padding:0;border:none;box-shadow:none;background:transparent;margin:0;">
+        <div class="row">
+          <div class="field">
+            <label>Search</label>
+            <input id="expFilterSearch" type="text" placeholder="">
+          </div>
+
+          <div class="field">
+            <label>Category</label>
+            <select id="expFilterCategory">
+              <option value="all">All Categories</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label>Deductible</label>
+            <select id="expFilterDeductible">
+              <option value="all">All</option>
+              <option value="yes">Deductible Only</option>
+              <option value="no">Non-Deductible Only</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:10px;">
+          <div class="field">
+            <label>Vendor</label>
+            <input id="expFilterVendor" type="text" placeholder="">
+          </div>
+
+          <div class="field">
+            <label>From</label>
+            <input id="expFilterFrom" type="date">
+          </div>
+
+          <div class="field">
+            <label>To</label>
+            <input id="expFilterTo" type="date">
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:10px;">
+          <div class="field">
+            <label>Sort</label>
+            <select id="expFilterSort">
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+            </select>
+          </div>
+          <div class="field"></div>
+          <div class="field"></div>
+        </div>
+
+        <div class="filter-actions" style="padding-top:12px;">
+          <div class="hint">These only affect the Expenses page.</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
+            <button type="button" class="secondarybtn" onclick="clearExpenseFilters()">Clear</button>
+            <button type="button" onclick="applyExpenseFilters(); closeExpenseFiltersModal();">Apply</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div id="toasts"></div>
