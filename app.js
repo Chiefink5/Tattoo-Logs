@@ -2744,7 +2744,10 @@ function renderDashboard(){
   const customToEl = document.getElementById("homeCustomTo");
   const customWrap = document.getElementById("homeCustomRangeWrap");
 
-  if(customWrap) customWrap.style.display = range === "custom" ? "block" : "none";
+  if(customWrap){
+    customWrap.style.display = range === "custom" ? "block" : "none";
+    customWrap.classList.toggle("show", range === "custom");
+  }
 
   function inRange(date){
     if(range === "all") return true;
@@ -3104,7 +3107,10 @@ function handleDashboardRangeChange(){
 
   const range = rangeEl.value || "year";
 
-  if(wrap) wrap.style.display = range === "custom" ? "block" : "none";
+  if(wrap){
+    wrap.style.display = range === "custom" ? "block" : "none";
+    wrap.classList.toggle("show", range === "custom");
+  }
 
   if(range === "custom"){
     const now = new Date();

@@ -842,6 +842,15 @@
   stroke-width:1;
 }
 
+
+#homeCustomRangeWrap{
+  display:none;
+  width:100%;
+}
+#homeCustomRangeWrap.show{
+  display:block !important;
+}
+
 </style>
 </head>
 
@@ -920,9 +929,9 @@
     </div>
 
     <div class="summary-box" style="margin-top:12px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
         <div style="font-weight:900;color:var(--gold);">Dashboard Chart</div>
-        <div class="field" style="max-width:260px;margin:0;">
+        <div class="field" style="max-width:520px;width:100%;margin:0;">
           
 <select id="homeDateRange" onchange="handleDashboardRangeChange()" style="margin-right:10px;">
 <option value="month">This Month</option>
