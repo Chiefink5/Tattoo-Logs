@@ -2252,15 +2252,7 @@ function saveExpense(){
     return;
   }
 
-  expenses.push({
-    id: Date.now(),
-    date,
-    amount,
-    category,
-    vendor,
-    notes
-  });
-
+  expenses.push({ id: Date.now(), date, amount, category, vendor, notes });
   localStorage.setItem("expenses", JSON.stringify(expenses));
   closeExpenseModal();
   renderExpenses();
@@ -2298,58 +2290,27 @@ function renderExpenses(){
   if(todayEl) todayEl.textContent = money(today);
   if(monthEl) monthEl.textContent = money(month);
   if(yearEl) yearEl.textContent = money(year);
-
   const topCat = Object.entries(catTotals).sort((a,b)=> b[1]-a[1])[0];
   if(topEl) topEl.textContent = topCat ? `${topCat[0]} (${money(topCat[1])})` : "—";
 
-  const grouped = {};
-  expenses.slice().sort((a,b)=> b.id - a.id).forEach(e=>{
-    const d = parseLocalDate(e.date);
-    if(!d) return;
-    const y = d.getFullYear();
-    const m = d.getMonth();
-    const day = d.getDate();
-    grouped[y] = grouped[y] || {};
-    grouped[y][m] = grouped[y][m] || {};
-    grouped[y][m][day] = grouped[y][m][day] || [];
-    grouped[y][m][day].push(e);
-  });
-
-  const years = Object.keys(grouped).sort((a,b)=> Number(b)-Number(a));
-  if(!years.length){
+  const sorted = expenses.slice().sort((a,b)=> b.id-a.id);
+  if(!sorted.length){
     listEl.innerHTML = "<p style='opacity:.65; padding: 10px 2px;'>No expenses yet.</p>";
     return;
   }
 
-  let html = "";
-  years.forEach(year=>{
-    html += `<div class="accordion"><div class="accordion-header"><div class="accordion-title">${year}</div></div><div class="accordion-content" style="display:block;">`;
-    Object.keys(grouped[year]).sort((a,b)=> Number(b)-Number(a)).forEach(monthIdx=>{
-      html += `<div class="accordion" style="margin-top:10px;"><div class="accordion-header"><div class="accordion-title">${monthName(Number(year), Number(monthIdx))}</div></div><div class="accordion-content" style="display:block;">`;
-      Object.keys(grouped[year][monthIdx]).sort((a,b)=> Number(b)-Number(a)).forEach(dayNum=>{
-        const dateLabel = `${year}-${pad2(Number(monthIdx)+1)}-${pad2(dayNum)}`;
-        html += `<div class="accordion" style="margin-top:10px;"><div class="accordion-header"><div class="accordion-title">${dateLabel}</div></div><div class="accordion-content" style="display:block;">`;
-        grouped[year][monthIdx][dayNum].forEach(e=>{
-          html += `
-            <div class="entry" style="border-left-color:#a94442;">
-              <div class="entry-left">
-                <div class="entry-name" style="color:#ffb3b1;">${money(e.amount)} <span class="client-badge" style="max-width:none;">${e.category || "Other"}</span></div>
-                <div class="entry-sub">
-                  <div class="sub-row">${e.vendor || ""}</div>
-                  <div class="sub-row clamp2">${e.notes || ""}</div>
-                </div>
-              </div>
-            </div>
-          `;
-        });
-        html += `</div></div>`;
-      });
-      html += `</div></div>`;
-    });
-    html += `</div></div>`;
-  });
-
-  listEl.innerHTML = html;
+  listEl.innerHTML = sorted.map(e => `
+    <div class="entry" style="border-left-color:#a94442;">
+      <div class="entry-left">
+        <div class="entry-name" style="color:#ffb3b1;">${money(e.amount)} <span class="client-badge" style="max-width:none;">${e.category || "Other"}</span></div>
+        <div class="entry-sub">
+          <div class="sub-row">${e.vendor || ""}</div>
+          <div class="sub-row clamp2">${e.notes || ""}</div>
+          <div class="sub-row">${e.date || ""}</div>
+        </div>
+      </div>
+    </div>
+  `).join("");
 }
 window.renderExpenses = renderExpenses;
 
@@ -2364,6 +2325,9 @@ function showPage(page){
   const expenseBtn = document.getElementById("expenseAddBtn");
   const brandTop = document.getElementById("brandTop");
   const brandBottom = document.getElementById("brandBottom");
+  const navHome = document.getElementById("navHome");
+  const navLog = document.getElementById("navLog");
+  const navExpenses = document.getElementById("navExpenses");
 
   if(inkPage) inkPage.style.display = activePage === "log" ? "block" : "none";
   if(expensesPage) expensesPage.style.display = activePage === "expenses" ? "block" : "none";
@@ -2375,6 +2339,10 @@ function showPage(page){
 
   if(brandTop) brandTop.textContent = "Globber’s";
   if(brandBottom) brandBottom.textContent = activePage === "expenses" ? "Expenses" : "Ink Log";
+
+  if(navHome) navHome.classList.toggle("active", activePage === "log");
+  if(navLog) navLog.classList.toggle("active", activePage === "log");
+  if(navExpenses) navExpenses.classList.toggle("active", activePage === "expenses");
 
   if(activePage === "expenses") renderExpenses();
 }

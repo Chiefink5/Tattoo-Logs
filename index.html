@@ -644,22 +644,60 @@
   font-size:.85rem;
   white-space:nowrap;
 }
+  
+    .top-nav{
+      display:flex;
+      justify-content:center;
+      gap:10px;
+      padding:
+        calc(10px + env(safe-area-inset-top))
+        calc(14px + env(safe-area-inset-right))
+        10px
+        calc(14px + env(safe-area-inset-left));
+      border-bottom:1px solid rgba(212,175,55,.22);
+      position:sticky;
+      top:0;
+      z-index:1000;
+      background:linear-gradient(160deg,#0e1512,#081a14);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+    .top-nav .navbtn{
+      background:rgba(0,0,0,.14);
+      border:1px solid rgba(212,175,55,.20);
+      color:var(--text);
+      padding:10px 16px;
+      border-radius:999px;
+      cursor:pointer;
+      font-weight:900;
+      letter-spacing:.01em;
+    }
+    .top-nav .navbtn.active{
+      background:rgba(212,175,55,.14);
+      border-color:rgba(212,175,55,.55);
+      color:var(--gold);
+      box-shadow:0 0 0 1px rgba(212,175,55,.18) inset;
+    }
+
   </style>
 </head>
 
 <body>
+  <div class="top-nav">
+    <button id="navHome" class="navbtn" type="button" onclick="showPage('home')">Home</button>
+    <button id="navLog" class="navbtn active" type="button" onclick="showPage('log')">Ink Log</button>
+    <button id="navExpenses" class="navbtn" type="button" onclick="showPage('expenses')">Expenses</button>
+  </div>
+
   <header>
     <div class="topbar">
       <!-- LEFT STACK -->
       <div class="action-stack left">
-        <button class="smallbtn" type="button" onclick="showPage('home')">Home</button>
-        <button class="smallbtn" type="button" onclick="showPage('log')">Ink Log</button>
-        <button class="smallbtn" type="button" onclick="showPage('expenses')">Expenses</button>
         <button class="smallbtn" type="button" onclick="openBills()">Bills</button>
         <button class="smallbtn" type="button" onclick="openExport()">Export</button>
         <button class="smallbtn" type="button" onclick="openRewards()">Rewards</button>
         <button class="smallbtn" type="button" onclick="openFiltersModal()">Filters</button>
-        <button class="smallbtn" type="button" onclick="openClientsPage()">Clients</button>
+<button class="smallbtn" type="button" onclick="openClientsPage()">Clients</button>
       </div>
 
       <!-- CENTER BRAND -->
@@ -1204,49 +1242,23 @@
   <div class="modal" id="expenseModal">
     <div class="modal-box" id="expenseBox">
       <div class="modal-title">Add Expense</div>
-
       <div class="row">
-        <div class="field">
-          <label>Date</label>
-          <input id="expDate" type="date">
-        </div>
-        <div class="field">
-          <label>Amount</label>
-          <input id="expAmount" type="number" min="0" step="0.01">
-        </div>
+        <div class="field"><label>Date</label><input id="expDate" type="date"></div>
+        <div class="field"><label>Amount</label><input id="expAmount" type="number" min="0" step="0.01"></div>
       </div>
-
       <div class="row">
         <div class="field">
           <label>Category</label>
           <select id="expCategory">
-            <option>Ink</option>
-            <option>Needles</option>
-            <option>Gloves</option>
-            <option>Stencil / Prep</option>
-            <option>Equipment</option>
-            <option>Furniture</option>
-            <option>Booth Rent</option>
-            <option>Marketing</option>
-            <option>Software / Subscriptions</option>
-            <option>Licenses / Fees</option>
-            <option>Travel / Gas</option>
-            <option>Meals</option>
-            <option>Education</option>
-            <option>Other</option>
+            <option>Ink</option><option>Needles</option><option>Gloves</option><option>Stencil / Prep</option>
+            <option>Equipment</option><option>Furniture</option><option>Booth Rent</option><option>Marketing</option>
+            <option>Software / Subscriptions</option><option>Licenses / Fees</option><option>Travel / Gas</option><option>Meals</option>
+            <option>Education</option><option>Other</option>
           </select>
         </div>
-        <div class="field">
-          <label>Vendor</label>
-          <input id="expVendor" type="text">
-        </div>
+        <div class="field"><label>Vendor</label><input id="expVendor" type="text"></div>
       </div>
-
-      <div class="field">
-        <label>Notes</label>
-        <textarea id="expNotes"></textarea>
-      </div>
-
+      <div class="field"><label>Notes</label><textarea id="expNotes"></textarea></div>
       <div class="actions-row">
         <button type="button" onclick="saveExpense()">Save Expense</button>
         <button type="button" class="secondarybtn" onclick="closeExpenseModal()">Cancel</button>
