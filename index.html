@@ -816,6 +816,32 @@
   cursor:pointer;
 }
 
+
+.dashboard-pie{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:visible;
+}
+.dashboard-pie svg{
+  width:220px;
+  height:220px;
+  overflow:visible;
+}
+.dashboard-pie-segment{
+  cursor:pointer;
+  transition:filter .15s ease, transform .15s ease;
+  transform-origin:50% 50%;
+}
+.dashboard-pie-segment:hover{
+  filter:brightness(1.08);
+}
+.dashboard-pie-hole{
+  fill:rgba(0,0,0,.32);
+  stroke:rgba(212,175,55,.18);
+  stroke-width:1;
+}
+
 </style>
 </head>
 

@@ -2213,6 +2213,7 @@ let expenses = JSON.parse(localStorage.getItem("expenses") || "[]");
 let activePage = "log";
 let expenseEditingId = null;
 let dashboardSelection = null;
+let currentDashboardData = [];
 let expenseFilter = "All";
 let expenseFilters = {
   search: "",
@@ -2791,23 +2792,28 @@ function renderDashboard(){
 
   const total = data.reduce((s,i)=>s+Number(i.value||0),0);
 
+  currentDashboardData = data.slice();
+
   if(!total){
-    pieEl.style.background = "conic-gradient(rgba(212,175,55,.18) 0deg 360deg)";
+    pieEl.style.background = "none";
     pieEl.classList.remove("clickable");
+    pieEl.innerHTML = `<svg viewBox="0 0 220 220" role="img" aria-label="No data"><circle cx="110" cy="110" r="92" fill="rgba(212,175,55,.18)"></circle><circle class="dashboard-pie-hole" cx="110" cy="110" r="46"></circle></svg>`;
     legendEl.innerHTML = "<div class='hint'>No data yet.</div>";
   }else{
     let start = 0;
-    const parts = [];
     const legend = [];
+    const slices = [];
 
     data.forEach((item,i)=>{
       const val = Number(item.value||0);
       const ang = (val/total)*360;
       const end = start+ang;
       const color = palette[i%palette.length];
-      parts.push(`${color} ${start}deg ${end}deg`);
+      const path = describePieSlice(110, 110, 92, start, end);
+
+      slices.push(`<path class="dashboard-pie-segment" d="${path}" fill="${color}" onclick="handleDashboardSelectionByIndex(${i})"></path>`);
       legend.push(`
-        <div class="dashboard-legend-row clickable" onclick='handleDashboardSelection(${JSON.stringify(item).replace(/'/g, "&apos;")})'>
+        <div class="dashboard-legend-row clickable" onclick="handleDashboardSelectionByIndex(${i})">
           <div class="dashboard-legend-left">
             <span class="dashboard-swatch clickable" style="background:${color};"></span>
             <span>${item.label}</span>
@@ -2818,8 +2824,9 @@ function renderDashboard(){
       start=end;
     });
 
-    pieEl.style.background=`conic-gradient(${parts.join(",")})`;
+    pieEl.style.background = "none";
     pieEl.classList.add("clickable");
+    pieEl.innerHTML = `<svg viewBox="0 0 220 220" role="img" aria-label="Dashboard pie chart">${slices.join("")}<circle class="dashboard-pie-hole" cx="110" cy="110" r="46"></circle></svg>`;
     legendEl.innerHTML=legend.join("");
   }
 
@@ -3042,3 +3049,27 @@ function getExpenseCategoryColor(cat){
   }
   return EXPENSE_CATEGORY_COLORS["Other"];
 }
+
+
+function polarToCartesian(cx, cy, r, angleDeg){
+  const rad = (angleDeg - 90) * Math.PI / 180;
+  return { x: cx + (r * Math.cos(rad)), y: cy + (r * Math.sin(rad)) };
+}
+
+function describePieSlice(cx, cy, r, startAngle, endAngle){
+  const start = polarToCartesian(cx, cy, r, endAngle);
+  const end = polarToCartesian(cx, cy, r, startAngle);
+  const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
+  return [
+    "M", cx, cy,
+    "L", start.x, start.y,
+    "A", r, r, 0, largeArcFlag, 0, end.x, end.y,
+    "Z"
+  ].join(" ");
+}
+
+function handleDashboardSelectionByIndex(idx){
+  const item = currentDashboardData[idx];
+  if(item) handleDashboardSelection(item);
+}
+window.handleDashboardSelectionByIndex = handleDashboardSelectionByIndex;
