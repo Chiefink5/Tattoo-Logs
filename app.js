@@ -2838,7 +2838,7 @@ function renderDashboard(){
 
   const recentEntries = entries.slice().sort((a,b)=>b.id-a.id).slice(0,5);
   recentTattoosEl.innerHTML = recentEntries.length ? recentEntries.map(e=>`
-    <div class="dashboard-mini-card">
+    <div class="dashboard-mini-card" onclick="viewEntry(${e.id})" style="cursor:pointer;">
       <div style="font-weight:900;color:var(--gold);">${e.client || "Client"} — ${money(totalForTotalsNet(e))}</div>
       <div class="hint">${e.date || ""}</div>
     </div>
@@ -2846,7 +2846,7 @@ function renderDashboard(){
 
   const recentExp = expenses.slice().sort((a,b)=>b.id-a.id).slice(0,5);
   recentExpensesEl.innerHTML = recentExp.length ? recentExp.map(e=>`
-    <div class="dashboard-mini-card">
+    <div class="dashboard-mini-card" onclick="openExpenseView(${e.id})" style="cursor:pointer;">
       <div style="font-weight:900;color:#ffb3b1;">${money(e.amount)} — ${e.category || "Other"}</div>
       <div class="hint">${e.date || ""}</div>
     </div>
