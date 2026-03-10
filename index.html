@@ -924,10 +924,11 @@
         <div style="font-weight:900;color:var(--gold);">Dashboard Chart</div>
         <div class="field" style="max-width:260px;margin:0;">
           
-<select id="homeDateRange" onchange="renderDashboard()" style="margin-right:10px;">
+<select id="homeDateRange" onchange="handleDashboardRangeChange()" style="margin-right:10px;">
 <option value="month">This Month</option>
 <option value="year" selected>This Year</option>
 <option value="all">All Time</option>
+<option value="custom">Custom Range</option>
 </select>
 <select id="homeChartMode" onchange="renderDashboard()">
 

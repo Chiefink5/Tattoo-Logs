@@ -2657,6 +2657,7 @@ window.showPage = showPage;
 document.addEventListener("DOMContentLoaded", ()=>{
   showPage("home");
   renderExpenses();
+  handleDashboardRangeChange();
   renderDashboard();
 });
 
@@ -2739,11 +2740,29 @@ function renderDashboard(){
 
   const now = new Date();
   const range = rangeEl ? rangeEl.value : "year";
+  const customFromEl = document.getElementById("homeCustomFrom");
+  const customToEl = document.getElementById("homeCustomTo");
+  const customWrap = document.getElementById("homeCustomRangeWrap");
+
+  if(customWrap) customWrap.style.display = range === "custom" ? "block" : "none";
 
   function inRange(date){
     if(range === "all") return true;
     if(range === "year") return date.getFullYear() === now.getFullYear();
     if(range === "month") return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+    if(range === "custom"){
+      const fromVal = customFromEl ? customFromEl.value : "";
+      const toVal = customToEl ? customToEl.value : "";
+      if(fromVal){
+        const fromDate = parseLocalDate(fromVal);
+        if(fromDate && date < fromDate) return false;
+      }
+      if(toVal){
+        const toDate = parseLocalDate(toVal);
+        if(toDate && date > toDate) return false;
+      }
+      return true;
+    }
     return true;
   }
 
@@ -3073,3 +3092,27 @@ function handleDashboardSelectionByIndex(idx){
   if(item) handleDashboardSelection(item);
 }
 window.handleDashboardSelectionByIndex = handleDashboardSelectionByIndex;
+
+
+function handleDashboardRangeChange(){
+  const rangeEl = document.getElementById("homeDateRange");
+  const wrap = document.getElementById("homeCustomRangeWrap");
+  const fromEl = document.getElementById("homeCustomFrom");
+  const toEl = document.getElementById("homeCustomTo");
+
+  if(!rangeEl) return;
+
+  const range = rangeEl.value || "year";
+
+  if(wrap) wrap.style.display = range === "custom" ? "block" : "none";
+
+  if(range === "custom"){
+    const now = new Date();
+    const first = new Date(now.getFullYear(), now.getMonth(), 1);
+    if(fromEl && !fromEl.value) fromEl.value = formatYYYYMMDD(first);
+    if(toEl && !toEl.value) toEl.value = formatYYYYMMDD(now);
+  }
+
+  renderDashboard();
+}
+window.handleDashboardRangeChange = handleDashboardRangeChange;
