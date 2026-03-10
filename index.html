@@ -1420,6 +1420,16 @@
         </div>
         <div id="summaryOut" style="margin-top:10px; opacity:.95;"></div>
       </div>
+
+      <div class="summary-box">
+        <h4 style="margin:0 0 8px 0;">Financial Summary Export</h4>
+        <div class="hint">Combines revenue, expenses, net, deductible totals, and category breakdown.</div>
+        <div class="actions-row">
+          <button type="button" onclick="exportFinancialSummary('range')">Export Financial Summary (Date Range)</button>
+          <button type="button" class="secondarybtn" onclick="exportFinancialSummary('year')">Export Financial Summary (This Year)</button>
+          <button type="button" class="secondarybtn" onclick="exportFinancialSummary('all')">Export Financial Summary (All Time)</button>
+        </div>
+      </div>
     </div>
   </div>
 

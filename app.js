@@ -2909,3 +2909,110 @@ function handleDashboardSelection(item){
   }
 }
 window.handleDashboardSelection = handleDashboardSelection;
+
+
+function exportFinancialSummary(mode){
+  const now = new Date();
+
+  function inDateRange(dateStr){
+    const d = parseLocalDate(dateStr);
+    if(!d) return false;
+
+    if(mode === "year"){
+      return d.getFullYear() === now.getFullYear();
+    }
+    if(mode === "all"){
+      return true;
+    }
+
+    const from = safeVal("exportStart");
+    const to = safeVal("exportEnd");
+
+    if(from){
+      const fd = parseLocalDate(from);
+      if(fd && d < fd) return false;
+    }
+    if(to){
+      const td = parseLocalDate(to);
+      if(td && d > td) return false;
+    }
+    return true;
+  }
+
+  const revenueEntries = entries.filter(e => inDateRange(e.date));
+  const expenseEntries = expenses.filter(e => inDateRange(e.date));
+
+  const totalRevenue = revenueEntries.reduce((sum,e)=> sum + totalForTotalsNet(e), 0);
+  const totalExpenses = expenseEntries.reduce((sum,e)=> sum + Number(e.amount || 0), 0);
+  const deductibleExpenses = expenseEntries.reduce((sum,e)=> sum + (e.deductible !== false ? Number(e.amount || 0) : 0), 0);
+  const nonDeductibleExpenses = totalExpenses - deductibleExpenses;
+  const net = totalRevenue - totalExpenses;
+
+  const expenseCats = {};
+  expenseEntries.forEach(e=>{
+    const cat = e.category || "Other";
+    expenseCats[cat] = (expenseCats[cat] || 0) + Number(e.amount || 0);
+  });
+
+  const topCat = Object.entries(expenseCats).sort((a,b)=> b[1]-a[1])[0];
+  const label = mode === "year"
+    ? `This Year (${now.getFullYear()})`
+    : mode === "all"
+      ? "All Time"
+      : `${safeVal("exportStart") || "Start"} to ${safeVal("exportEnd") || "End"}`;
+
+  const rows = [
+    ["Financial Summary", ""],
+    ["Range", label],
+    ["Revenue", totalRevenue.toFixed(2)],
+    ["Expenses", totalExpenses.toFixed(2)],
+    ["Net", net.toFixed(2)],
+    ["Deductible Expenses", deductibleExpenses.toFixed(2)],
+    ["Non-Deductible Expenses", nonDeductibleExpenses.toFixed(2)],
+    ["Top Expense Category", topCat ? `${topCat[0]} (${Number(topCat[1]).toFixed(2)})` : "—"],
+    ["" ,""],
+    ["Expense Category Breakdown", ""],
+    ["Category", "Amount"]
+  ];
+
+  Object.entries(expenseCats)
+    .sort((a,b)=> b[1]-a[1])
+    .forEach(([cat, amount])=>{
+      rows.push([cat, Number(amount).toFixed(2)]);
+    });
+
+  rows.push(["",""]);
+  rows.push(["Revenue Entry Count", String(revenueEntries.length)]);
+  rows.push(["Expense Entry Count", String(expenseEntries.length)]);
+
+  const csv = rows.map(row =>
+    row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(",")
+  ).join("\n");
+
+  const filename = `globbers-financial-summary_${new Date().toISOString().slice(0,10)}.csv`;
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+
+  try{
+    if(window.File && window.navigator && typeof window.navigator.share === "function"){
+      const file = new File([blob], filename, { type: "text/csv" });
+      const shareData = { files: [file], title: filename };
+      if(typeof window.navigator.canShare === "function" && window.navigator.canShare(shareData)){
+        window.navigator.share(shareData).catch(()=>{});
+        return;
+      }
+    }
+  }catch(err){}
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 1000);
+}
+window.exportFinancialSummary = exportFinancialSummary;
