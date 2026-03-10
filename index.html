@@ -74,6 +74,7 @@
     .smallbtn:hover{ filter:brightness(1.06); }
 
     .brand{
+      /* Responsive brand sizing via CSS vars */
       --logoSize:64px;
       --brandTopSize:1.75rem;
       --brandBottomSize:1.18rem;
@@ -107,8 +108,8 @@
       max-width:100%;
     }
     .brand-logo {
-      filter: drop-shadow(0 0 40px rgba(150,0,200,0.35));
-    }
+  filter: drop-shadow(0 0 40px rgba(150,0,200,0.35));
+}
     .brand-bottom{
       font-size:var(--brandBottomSize);
       letter-spacing:.18em;
@@ -120,11 +121,12 @@
       max-width:100%;
     }
     .brand-wrap {
-      padding: 0;
-      background: none;
-      border: none;
-      box-shadow: none;
-    }
+  padding: 0;
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+    /* plain png logo (no border/shadow) */
     #logoImg{
       width:var(--logoSize);
       height:var(--logoSize);
@@ -138,7 +140,7 @@
     }
     #logoInput{ display:none; }
 
-    /* ===== SPLIT ===== */
+    /* ===== SPLIT (center above stats) ===== */
     .split-row{
       margin-top:12px;
       display:flex;
@@ -163,7 +165,7 @@
     }
     #splitPill b{ color:var(--gold); }
 
-    /* ===== STATS ===== */
+    /* ===== STATS (centered pills) ===== */
     #stats{
       margin-top:12px;
       display:flex;
@@ -224,31 +226,6 @@
       letter-spacing:.01em;
       font-size:.86rem;
       color:rgba(255,255,255,.82);
-    }
-
-    /* ===== Form validation (Apple-style ! markers) ===== */
-    .field.invalid label::after{
-      content:" !";
-      color:var(--danger);
-      font-weight:1000;
-      margin-left:6px;
-    }
-    .field.invalid input,
-    .field.invalid textarea,
-    .field.invalid select{
-      border-color: rgba(169,68,66,.95);
-      box-shadow: 0 0 0 2px rgba(169,68,66,.18);
-    }
-    .field .field-err{
-      display:none;
-      margin-top:6px;
-      font-size:.85rem;
-      color:rgba(255,255,255,.82);
-      opacity:.9;
-    }
-    .field.invalid .field-err{
-      display:block;
-      color: rgba(255,120,120,.95);
     }
 
     input, textarea, select{
@@ -613,8 +590,7 @@
       background:rgba(0,0,0,.18);
       border:1px solid rgba(31,111,80,.55);
     }
-
-    /*EDIT DESKTOP LOGO SIZE HERE*/
+/*EDIT DESKTOP LOGO SIZE HERE*/
     @media (min-width:900px){
       .brand{ --logoSize:160px; --brandTopSize:3.8rem; --brandBottomSize:2rem; }
     }
@@ -624,71 +600,73 @@
       .brand{ --logoSize:108px; --brandTopSize:2.05rem; --brandBottomSize:1.25rem; gap:12px; }
       .stat-pill strong{ font-size:1.85rem; }
     }
-
     /* ===== CLIENTS PAGE ===== */
-    .client-card{
-      background:rgba(0,0,0,.16);
-      border:1px solid rgba(212,175,55,.18);
-      border-left:4px solid rgba(212,175,55,.7);
-      padding:12px;
-      border-radius:14px;
-      cursor:pointer;
-      margin-top:10px;
-    }
-    .client-card:hover{ outline:1px solid rgba(212,175,55,.22); }
-    .client-card .top{
-      display:flex;
-      justify-content:space-between;
-      gap:10px;
-      align-items:flex-start;
-      flex-wrap:wrap;
-    }
-    .client-card .name{
-      font-weight:1000;
-      color:var(--gold);
-      display:flex;
-      align-items:center;
-      gap:10px;
-      flex-wrap:wrap;
-    }
-    .client-card .meta{
-      opacity:.9;
-      margin-top:6px;
-      display:flex;
-      gap:12px;
-      flex-wrap:wrap;
-    }
-    .client-card .pill{
-      display:inline-flex;
-      gap:6px;
-      align-items:center;
-      padding:4px 10px;
-      border-radius:999px;
-      border:1px solid rgba(31,111,80,.55);
-      background:rgba(0,0,0,.14);
-      font-size:.85rem;
-      white-space:nowrap;
-    }
+.client-card{
+  background:rgba(0,0,0,.16);
+  border:1px solid rgba(212,175,55,.18);
+  border-left:4px solid rgba(212,175,55,.7);
+  padding:12px;
+  border-radius:14px;
+  cursor:pointer;
+  margin-top:10px;
+}
+.client-card:hover{ outline:1px solid rgba(212,175,55,.22); }
+.client-card .top{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  align-items:flex-start;
+  flex-wrap:wrap;
+}
+.client-card .name{
+  font-weight:1000;
+  color:var(--gold);
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.client-card .meta{
+  opacity:.9;
+  margin-top:6px;
+  display:flex;
+  gap:12px;
+  flex-wrap:wrap;
+}
+.client-card .pill{
+  display:inline-flex;
+  gap:6px;
+  align-items:center;
+  padding:4px 10px;
+  border-radius:999px;
+  border:1px solid rgba(31,111,80,.55);
+  background:rgba(0,0,0,.14);
+  font-size:.85rem;
+  white-space:nowrap;
+}
   </style>
 </head>
 
 <body>
   <header>
     <div class="topbar">
+      <!-- LEFT STACK -->
       <div class="action-stack left">
         <button class="smallbtn" type="button" onclick="openBills()">Bills</button>
         <button class="smallbtn" type="button" onclick="openExport()">Export</button>
         <button class="smallbtn" type="button" onclick="openRewards()">Rewards</button>
         <button class="smallbtn" type="button" onclick="openFiltersModal()">Filters</button>
-        <button class="smallbtn" type="button" onclick="openClientsPage()">Clients</button>
+<button class="smallbtn" type="button" onclick="openClientsPage()">Clients</button>
       </div>
 
+      <!-- CENTER BRAND -->
       <div class="brand">
         <img id="logoImg" alt="Logo" title="Tap to upload logo">
         <input id="logoInput" type="file" accept="image/png,image/*">
         <div class="brand-title"><span class="brand-top">Globber’s</span><span class="brand-bottom">Ink Log</span></div>
       </div>
 
+      <!-- RIGHT STACK -->
       <div class="action-stack right">
         <button class="smallbtn" type="button" onclick="openDepositQuick()">Deposit</button>
         <button class="smallbtn" type="button" onclick="openBammerQuick()">Bammer</button>
@@ -714,35 +692,35 @@
   </header>
 
   <div class="container">
-    <div id="clientsPage" style="display:none;">
-      <div class="summary-box" style="margin-top:0;">
-        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;">
-          <div style="font-weight:900;color:var(--gold);">Clients</div>
-          <button type="button" class="secondarybtn" onclick="closeClientsPage()">Back</button>
-        </div>
-
-        <div class="row" style="margin-top:10px;">
-          <div class="field">
-            <label>Search Clients</label>
-            <input id="clientsSearch" type="text" placeholder="">
-          </div>
-          <div class="field">
-            <label>Sort</label>
-            <select id="clientsSort">
-              <option value="recent">Most Recent</option>
-              <option value="count">Most Tattoos</option>
-              <option value="net">Highest Net</option>
-              <option value="name">Name (A→Z)</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="hint" style="margin-top:10px;">Tap a client to open their profile.</div>
-      </div>
-
-      <div id="clientsPageList" style="margin-top:12px;"></div>
+    <!-- CLIENTS PAGE -->
+<div id="clientsPage" style="display:none;">
+  <div class="summary-box" style="margin-top:0;">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;">
+      <div style="font-weight:900;color:var(--gold);">Clients</div>
+      <button type="button" class="secondarybtn" onclick="closeClientsPage()">Back</button>
     </div>
 
+    <div class="row" style="margin-top:10px;">
+      <div class="field">
+        <label>Search Clients</label>
+        <input id="clientsSearch" type="text" placeholder="">
+      </div>
+      <div class="field">
+        <label>Sort</label>
+        <select id="clientsSort">
+          <option value="recent">Most Recent</option>
+          <option value="count">Most Tattoos</option>
+          <option value="net">Highest Net</option>
+          <option value="name">Name (A→Z)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="hint" style="margin-top:10px;">Tap a client to open their profile.</div>
+  </div>
+
+  <div id="clientsPageList" style="margin-top:12px;"></div>
+</div>
     <div id="entries"></div>
   </div>
 
@@ -819,6 +797,11 @@
       <div class="field">
         <label>Notes</label>
         <textarea id="notes" placeholder=""></textarea>
+      </div>
+
+      <div class="field">
+        <label>Image</label>
+        <input type="file" id="image" accept="image/*">
       </div>
 
       <div class="actions-row">
@@ -1020,29 +1003,39 @@
     <div class="modal-box" id="rewardsBox">
       <div class="modal-title">Client Rewards Setup</div>
 
-      <details open>
-        <summary>Badge Levels</summary>
-        <div class="hint" style="margin-top:8px;">
-          Levels are based on <b>tattoo count</b> (non-deposit-only entries). Highest matching tier wins.
+      <div class="summary-box" style="margin-top:0;">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <button type="button" id="rewardsTabDiscounts" onclick="switchRewardsTab('discounts')">Discount Tiers</button>
+          <button type="button" id="rewardsTabBadges" class="secondarybtn" onclick="switchRewardsTab('badges')">Badge Levels</button>
         </div>
-        <div id="levelsList" style="margin-top:10px;"></div>
-        <div class="actions-row">
-          <button type="button" onclick="addBadgeLevel()">+ Add Badge Level</button>
-        </div>
-      </details>
+        <div class="hint" style="margin-top:10px;">Discount tiers open first by default.</div>
+      </div>
 
-      <hr>
+      <div id="rewardsDiscountsPanel">
+        <div class="summary-box">
+          <div style="font-weight:900;color:var(--gold);">Discount Tiers</div>
+          <div class="hint" style="margin-top:8px;">
+            Discounts are also based on tattoo count. Highest matching tier wins.
+          </div>
+          <div id="discountsList" style="margin-top:10px;"></div>
+          <div class="actions-row">
+            <button type="button" onclick="addDiscountTier()">+ Add Discount Tier</button>
+          </div>
+        </div>
+      </div>
 
-      <details open>
-        <summary>Discount Tiers</summary>
-        <div class="hint" style="margin-top:8px;">
-          Discounts are also based on tattoo count. Highest matching tier wins.
+      <div id="rewardsBadgesPanel" style="display:none;">
+        <div class="summary-box">
+          <div style="font-weight:900;color:var(--gold);">Badge Levels</div>
+          <div class="hint" style="margin-top:8px;">
+            Levels are based on <b>tattoo count</b> (non-deposit-only entries). Highest matching tier wins.
+          </div>
+          <div id="levelsList" style="margin-top:10px;"></div>
+          <div class="actions-row">
+            <button type="button" onclick="addBadgeLevel()">+ Add Badge Level</button>
+          </div>
         </div>
-        <div id="discountsList" style="margin-top:10px;"></div>
-        <div class="actions-row">
-          <button type="button" onclick="addDiscountTier()">+ Add Discount Tier</button>
-        </div>
-      </details>
+      </div>
 
       <div class="actions-row">
         <button type="button" onclick="saveRewards()">Save Rewards</button>
@@ -1050,20 +1043,18 @@
       </div>
     </div>
   </div>
+    <!-- CLIENTS MODAL -->
+<div class="modal" id="clientsModal">
+  <div class="modal-box" id="clientsBox">
+    <div class="modal-title">Clients</div>
 
-  <!-- CLIENTS MODAL -->
-  <div class="modal" id="clientsModal">
-    <div class="modal-box" id="clientsBox">
-      <div class="modal-title">Clients</div>
+    <div id="clientsList"></div>
 
-      <div id="clientsList"></div>
-
-      <div class="actions-row">
-        <button type="button" class="secondarybtn" onclick="closeClientsPage()">Close</button>
-      </div>
+    <div class="actions-row">
+      <button type="button" class="secondarybtn" onclick="closeClientsPage()">Close</button>
     </div>
   </div>
-
+</div>
   <!-- BILLS MODAL -->
   <div class="modal" id="billsModal">
     <div class="modal-box" id="billsBox">
@@ -1210,68 +1201,68 @@
   <script src="bills.js"></script>
   <script src="app.js"></script>
 
-  <!-- Filters Modal -->
-  <div id="filtersModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="filtersModalTitle">
-    <div class="modalBox">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;">
-        <div id="filtersModalTitle" class="modal-title" style="margin:0;">Filters</div>
-        <button type="button" class="secondarybtn" onclick="closeFiltersModal()">Close</button>
+<!-- Filters Modal -->
+<div id="filtersModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="filtersModalTitle">
+  <div class="modalBox">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;">
+      <div id="filtersModalTitle" class="modal-title" style="margin:0;">Filters</div>
+      <button type="button" class="secondarybtn" onclick="closeFiltersModal()">Close</button>
+    </div>
+
+    <div class="filterbar" style="padding:0;border:none;box-shadow:none;background:transparent;">
+      <div class="row">
+        <div class="field">
+          <label>Search</label>
+          <input id="q" type="text" placeholder="">
+        </div>
+
+        <div class="field">
+          <label>Status</label>
+          <select id="statusFilter">
+            <option value="all">All Status</option>
+            <option value="booked">Booked</option>
+            <option value="paid">Paid</option>
+            <option value="partial">Partial</option>
+            <option value="unpaid">Unpaid</option>
+            <option value="no_show">No Show</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Location</label>
+          <select id="locationFilter"></select>
+        </div>
       </div>
 
-      <div class="filterbar" style="padding:0;border:none;box-shadow:none;background:transparent;">
-        <div class="row">
-          <div class="field">
-            <label>Search</label>
-            <input id="q" type="text" placeholder="">
-          </div>
-
-          <div class="field">
-            <label>Status</label>
-            <select id="statusFilter">
-              <option value="all">All Status</option>
-              <option value="booked">Booked</option>
-              <option value="paid">Paid</option>
-              <option value="partial">Partial</option>
-              <option value="unpaid">Unpaid</option>
-              <option value="no_show">No Show</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label>Location</label>
-            <select id="locationFilter"></select>
-          </div>
+      <div class="row">
+        <div class="field">
+          <label>From</label>
+          <input id="fromDate" type="date" />
+        </div>
+        <div class="field">
+          <label>To</label>
+          <input id="toDate" type="date" />
         </div>
 
-        <div class="row">
-          <div class="field">
-            <label>From</label>
-            <input id="fromDate" type="date" />
-          </div>
-          <div class="field">
-            <label>To</label>
-            <input id="toDate" type="date" />
-          </div>
-
-          <div class="field">
-            <label>Sort</label>
-            <select id="sortFilter">
-              <option value="newest">Newest</option>
-              <option value="oldest">Oldest</option>
-            </select>
-          </div>
+        <div class="field">
+          <label>Sort</label>
+          <select id="sortFilter">
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+          </select>
         </div>
+      </div>
 
-        <div class="filter-actions" style="padding-top:12px;">
-          <div class="hint">Filters affect the accordion + totals shown.</div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
-            <button type="button" class="secondarybtn" onclick="clearFilters()">Clear</button>
-            <button type="button" onclick="applyFilters(); closeFiltersModal();">Apply</button>
-          </div>
+      <div class="filter-actions" style="padding-top:12px;">
+        <div class="hint">Filters affect the accordion + totals shown.</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
+          <button type="button" class="secondarybtn" onclick="clearFilters()">Clear</button>
+          <button type="button" onclick="applyFilters(); closeFiltersModal();">Apply</button>
         </div>
       </div>
     </div>
   </div>
+</div>
 
 </body>
 </html>

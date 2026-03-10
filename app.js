@@ -1552,10 +1552,33 @@ function buildSummary(mode){
 window.buildSummary = buildSummary;
 
 // ================= REWARDS UI =================
+let rewardsActiveTab = "discounts";
+
+function switchRewardsTab(tab){
+  rewardsActiveTab = tab === "badges" ? "badges" : "discounts";
+
+  const discountsPanel = safeEl("rewardsDiscountsPanel");
+  const badgesPanel = safeEl("rewardsBadgesPanel");
+  const discountsBtn = safeEl("rewardsTabDiscounts");
+  const badgesBtn = safeEl("rewardsTabBadges");
+
+  if(discountsPanel) discountsPanel.style.display = rewardsActiveTab === "discounts" ? "block" : "none";
+  if(badgesPanel) badgesPanel.style.display = rewardsActiveTab === "badges" ? "block" : "none";
+
+  if(discountsBtn){
+    discountsBtn.className = rewardsActiveTab === "discounts" ? "" : "secondarybtn";
+  }
+  if(badgesBtn){
+    badgesBtn.className = rewardsActiveTab === "badges" ? "" : "secondarybtn";
+  }
+}
+window.switchRewardsTab = switchRewardsTab;
+
 function openRewards(){
   if(!rewardsModal) return;
   buildRewardsUI();
   rewardsModal.style.display = "flex";
+  switchRewardsTab("discounts");
 }
 function closeRewards(){
   if(!rewardsModal) return;
