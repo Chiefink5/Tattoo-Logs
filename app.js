@@ -2717,6 +2717,7 @@ window.exportExpensesCSV = exportExpensesCSV;
 })();
 
 
+
 function renderDashboard(){
   const revenueEl = document.getElementById("homeRevenue");
   const expensesEl = document.getElementById("homeExpenses");
@@ -2727,72 +2728,76 @@ function renderDashboard(){
   const recentTattoosEl = document.getElementById("homeRecentTattoos");
   const recentExpensesEl = document.getElementById("homeRecentExpenses");
   const modeEl = document.getElementById("homeChartMode");
+  const rangeEl = document.getElementById("homeDateRange");
 
-  if(!revenueEl || !expensesEl || !netEl || !topCatEl || !pieEl || !legendEl || !recentTattoosEl || !recentExpensesEl) return;
+  if(!revenueEl) return;
 
   const now = new Date();
-  let yearRevenue = 0;
-  const yearExpenses = [];
+  const range = rangeEl ? rangeEl.value : "year";
+
+  function inRange(date){
+    if(range === "all") return true;
+    if(range === "year") return date.getFullYear() === now.getFullYear();
+    if(range === "month") return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+    return true;
+  }
+
+  let revenue = 0;
   const expenseCats = {};
+  const filteredExpenses = [];
 
   entries.forEach(e=>{
     const d = parseLocalDate(e.date);
-    if(!d) return;
-    if(d.getFullYear() === now.getFullYear()){
-      yearRevenue += totalForTotalsNet(e);
-    }
+    if(!d || !inRange(d)) return;
+    revenue += totalForTotalsNet(e);
   });
 
   expenses.forEach(e=>{
     const d = parseLocalDate(e.date);
-    if(!d) return;
-    if(d.getFullYear() === now.getFullYear()){
-      yearExpenses.push(e);
-      const cat = e.category || "Other";
-      expenseCats[cat] = (expenseCats[cat] || 0) + Number(e.amount || 0);
-    }
+    if(!d || !inRange(d)) return;
+    filteredExpenses.push(e);
+    const cat = e.category || "Other";
+    expenseCats[cat] = (expenseCats[cat] || 0) + Number(e.amount || 0);
   });
 
-  const yearExpenseTotal = yearExpenses.reduce((sum,e)=> sum + Number(e.amount || 0), 0);
-  const net = yearRevenue - yearExpenseTotal;
-  const topCat = Object.entries(expenseCats).sort((a,b)=> b[1]-a[1])[0];
+  const expenseTotal = filteredExpenses.reduce((s,e)=>s+Number(e.amount||0),0);
+  const net = revenue - expenseTotal;
+  const topCat = Object.entries(expenseCats).sort((a,b)=>b[1]-a[1])[0];
 
-  revenueEl.textContent = money(yearRevenue);
-  expensesEl.textContent = money(yearExpenseTotal);
+  revenueEl.textContent = money(revenue);
+  expensesEl.textContent = money(expenseTotal);
   netEl.textContent = money(net);
   topCatEl.textContent = topCat ? `${topCat[0]} (${money(topCat[1])})` : "—";
 
-  const palette = [
-    "#d4af37","#a94442","#1f6f50","#2a5bd7","#a66cff",
-    "#ff8c42","#20b2aa","#f9a825","#8e44ad","#7f8c8d"
-  ];
+  const palette = ["#d4af37","#a94442","#1f6f50","#2a5bd7","#a66cff","#ff8c42","#20b2aa","#f9a825","#8e44ad","#7f8c8d"];
 
   const mode = modeEl ? modeEl.value : "expensesByCategory";
   let data = [];
+
   if(mode === "incomeVsExpenses"){
     data = [
-      { label: "Income", value: yearRevenue },
-      { label: "Expenses", value: yearExpenseTotal }
+      { label:"Income", value:revenue },
+      { label:"Expenses", value:expenseTotal }
     ];
-  } else {
-    data = Object.entries(expenseCats)
-      .sort((a,b)=> b[1]-a[1])
-      .map(([label,value])=>({ label, value }));
+  }else{
+    data = Object.entries(expenseCats).map(([l,v])=>({label:l,value:v})).sort((a,b)=>b.value-a.value);
   }
 
-  const total = data.reduce((sum,i)=> sum + Number(i.value || 0), 0);
+  const total = data.reduce((s,i)=>s+Number(i.value||0),0);
+
   if(!total){
     pieEl.style.background = "conic-gradient(rgba(212,175,55,.18) 0deg 360deg)";
     legendEl.innerHTML = "<div class='hint'>No data yet.</div>";
-  } else {
+  }else{
     let start = 0;
     const parts = [];
     const legend = [];
-    data.forEach((item, idx)=>{
-      const value = Number(item.value || 0);
-      const angle = (value / total) * 360;
-      const end = start + angle;
-      const color = palette[idx % palette.length];
+
+    data.forEach((item,i)=>{
+      const val = Number(item.value||0);
+      const ang = (val/total)*360;
+      const end = start+ang;
+      const color = palette[i%palette.length];
       parts.push(`${color} ${start}deg ${end}deg`);
       legend.push(`
         <div class="dashboard-legend-row">
@@ -2800,31 +2805,31 @@ function renderDashboard(){
             <span class="dashboard-swatch" style="background:${color};"></span>
             <span>${item.label}</span>
           </div>
-          <strong>${money(value)}</strong>
+          <strong>${money(val)}</strong>
         </div>
       `);
-      start = end;
+      start=end;
     });
-    pieEl.style.background = `conic-gradient(${parts.join(",")})`;
-    legendEl.innerHTML = legend.join("");
+
+    pieEl.style.background=`conic-gradient(${parts.join(",")})`;
+    legendEl.innerHTML=legend.join("");
   }
 
-  const recentEntries = entries.slice().sort((a,b)=> b.id - a.id).slice(0,5);
+  const recentEntries = entries.slice().sort((a,b)=>b.id-a.id).slice(0,5);
   recentTattoosEl.innerHTML = recentEntries.length ? recentEntries.map(e=>`
     <div class="dashboard-mini-card">
       <div style="font-weight:900;color:var(--gold);">${e.client || "Client"} — ${money(totalForTotalsNet(e))}</div>
-      <div style="opacity:.82;">${e.description || e.location || ""}</div>
-      <div class="hint">${e.date || ""} • ${(e.status || "").toUpperCase()}</div>
+      <div class="hint">${e.date || ""}</div>
     </div>
   `).join("") : "<div class='hint'>No tattoo entries yet.</div>";
 
-  const recentExp = expenses.slice().sort((a,b)=> b.id - a.id).slice(0,5);
+  const recentExp = expenses.slice().sort((a,b)=>b.id-a.id).slice(0,5);
   recentExpensesEl.innerHTML = recentExp.length ? recentExp.map(e=>`
     <div class="dashboard-mini-card">
       <div style="font-weight:900;color:#ffb3b1;">${money(e.amount)} — ${e.category || "Other"}</div>
-      <div style="opacity:.82;">${e.vendor || e.notes || ""}</div>
-      <div class="hint">${e.date || ""}${e.deductible !== false ? " • Deductible" : ""}</div>
+      <div class="hint">${e.date || ""}</div>
     </div>
   `).join("") : "<div class='hint'>No expenses yet.</div>";
 }
 window.renderDashboard = renderDashboard;
+

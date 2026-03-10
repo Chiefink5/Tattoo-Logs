@@ -873,7 +873,14 @@
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
         <div style="font-weight:900;color:var(--gold);">Dashboard Chart</div>
         <div class="field" style="max-width:260px;margin:0;">
-          <select id="homeChartMode" onchange="renderDashboard()">
+          
+<select id="homeDateRange" onchange="renderDashboard()" style="margin-right:10px;">
+<option value="month">This Month</option>
+<option value="year" selected>This Year</option>
+<option value="all">All Time</option>
+</select>
+<select id="homeChartMode" onchange="renderDashboard()">
+
             <option value="expensesByCategory">Expenses by Category</option>
             <option value="incomeVsExpenses">Income vs Expenses</option>
           </select>
